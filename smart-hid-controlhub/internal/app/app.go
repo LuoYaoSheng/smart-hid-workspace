@@ -3,10 +3,9 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -15,6 +14,7 @@ import (
 	pahomqtt "github.com/eclipse/paho.mqtt.golang"
 
 	"smart-hid-controlhub/internal/api"
+	"smart-hid-controlhub/internal/apikey"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/config"
 	"smart-hid-controlhub/internal/device"
@@ -32,16 +32,6 @@ func Run(cfgPath string) error {
 	}
 	log := logging.NewLogger(cfg.LogLevel).With("component", "controlhub")
 
-	// API Key：留空则随机生成并打印（Phase 1 开发期可接受）
-	apiKey := cfg.APIKey
-	if apiKey == "" {
-		apiKey, err = generateAPIKey(32)
-		if err != nil {
-			return fmt.Errorf("generate api key: %w", err)
-		}
-	}
-	log.Info("api key", "key", apiKey, "note", "set http.api_key in config.yaml to override")
-
 	// SQLite
 	dbPath := filepath.Join(cfg.DataDir, "controlhub.db")
 	store, err := storage.New(dbPath, log.With("component", "storage"))
@@ -49,6 +39,27 @@ func Run(cfgPath string) error {
 		return err
 	}
 	defer store.Close()
+
+	// API Key（CH-P2）：apikey.Store 持久化；首次启动生成 + 写文件 + 日志一次。
+	keys := apikey.New(store.DB, log.With("component", "apikey"))
+	initialKeyPath := filepath.Join(cfg.DataDir, "initial-api-key.txt")
+	if raw, err := keys.EnsureInitial("initial"); err != nil {
+		return fmt.Errorf("init api key: %w", err)
+	} else if raw != "" {
+		// 首次启动：明文落盘 + 日志一次
+		_ = os.WriteFile(initialKeyPath, []byte(raw+"\n"), 0o600)
+		log.Info("api key generated (first run)",
+			"key", raw,
+			"saved_to", initialKeyPath,
+			"note", "delete this file after saving the key; rotate via POST /api/v1/api-keys/rotate")
+	} else {
+		// 后续启动：不打印明文 key；只读已有路径
+		if _, err := os.Stat(initialKeyPath); err == nil {
+			log.Info("api key ready", "initial_key_file", initialKeyPath, "note", "still present; delete after saving")
+		} else {
+			log.Info("api key ready (loaded from store)")
+		}
+	}
 
 	// Device Manager
 	dm, err := device.New(store, log.With("component", "device"))
@@ -98,7 +109,7 @@ func Run(cfgPath string) error {
 	log.Info("subscribed", "ack_topic", ackSub, "status_topic", statusSub)
 
 	// HTTP API server
-	apiSrv := api.New(engine, dm, apiKey, log.With("component", "api"))
+	apiSrv := api.New(engine, dm, keys, log.With("component", "api"))
 
 	// 信号处理
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -123,12 +134,4 @@ func Run(cfgPath string) error {
 	_ = apiSrv.Shutdown(shutdownCtx)
 	log.Info("controlhub stopped")
 	return nil
-}
-
-func generateAPIKey(bytes int) (string, error) {
-	b := make([]byte, bytes)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return "chk_" + hex.EncodeToString(b), nil
 }

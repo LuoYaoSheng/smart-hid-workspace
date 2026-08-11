@@ -1,6 +1,13 @@
 // Package api 实现 ControlHub HTTP API。
-// Phase 1：GET /health（无鉴权）+ POST /devices/{id}/commands（Bearer）+ GET /devices + GET /devices/{id} + GET /commands/{request_id}。
-// Entitlement 门控 Phase 1 跳过（passthrough），Phase 6 接入。
+//
+// Phase 1：GET /health（无鉴权）+ POST /devices/{id}/commands（Bearer）+
+//
+//	GET /devices + GET /devices/{id} + GET /commands/{request_id}。
+//
+// Phase 4（CH-P2）：API key 持久化（apikey.Store 替代 ephemeral string）+
+//
+//	POST /api-keys/rotate（A12）+ GET /api-keys。
+//	Entitlement 门控 Phase 6 接入（CH-P6）。
 package api
 
 import (
@@ -12,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"smart-hid-controlhub/internal/apikey"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/device"
 	"smart-hid-controlhub/internal/web"
@@ -19,19 +27,19 @@ import (
 
 // Server 持有所有依赖。
 type Server struct {
-	engine   *command.Engine
-	devices  *device.Manager
-	apiKey   string
-	log      *slog.Logger
-	httpSrv  *http.Server
+	engine  *command.Engine
+	devices *device.Manager
+	keys    *apikey.Store
+	log     *slog.Logger
+	httpSrv *http.Server
 }
 
-// New 构造 Server（不启动）。
-func New(engine *command.Engine, dm *device.Manager, apiKey string, log *slog.Logger) *Server {
+// New 构造 Server（不启动）。keys 用于所有受保护路由的 Bearer 校验 + 轮换。
+func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, log *slog.Logger) *Server {
 	return &Server{
 		engine:  engine,
 		devices: dm,
-		apiKey:  apiKey,
+		keys:    keys,
 		log:     log,
 	}
 }
@@ -46,11 +54,16 @@ func (s *Server) Routes() http.Handler {
 	protected.HandleFunc("/api/v1/devices", s.handleDevicesList)
 	protected.HandleFunc("/api/v1/devices/", s.handleDeviceOrCommand) // /devices/{id} 与 /devices/{id}/commands
 	protected.HandleFunc("/api/v1/commands/", s.handleCommandQuery)
+	protected.HandleFunc("/api/v1/api-keys", s.handleAPIKeysList)          // GET list
+	protected.HandleFunc("/api/v1/api-keys/rotate", s.handleAPIKeysRotate) // POST 轮换（A12）
 
 	// 用一个 wrapper 给 protected 套鉴权
-	mux.Handle("/api/v1/devices", s.authMiddleware(protected))
-	mux.Handle("/api/v1/devices/", s.authMiddleware(protected))
-	mux.Handle("/api/v1/commands/", s.authMiddleware(protected))
+	auth := s.authMiddleware(protected)
+	mux.Handle("/api/v1/devices", auth)
+	mux.Handle("/api/v1/devices/", auth)
+	mux.Handle("/api/v1/commands/", auth)
+	mux.Handle("/api/v1/api-keys", auth)
+	mux.Handle("/api/v1/api-keys/rotate", auth)
 
 	// Web 管理界面（内嵌静态资源，本身不鉴权；控制调用由前端带 Bearer 请求 /api/v1/*）。
 	// 注册在 "/" 兜底：/api/v1/* 更具体会优先生效，其余路径交给 FileServer。
@@ -79,17 +92,17 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpSrv.Shutdown(ctx)
 }
 
-// authMiddleware 校验 Authorization: Bearer <key>。
+// authMiddleware 校验 Authorization: Bearer <key>，通过 apikey.Store 查表。
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// /health 不走这里
 		auth := r.Header.Get("Authorization")
 		const prefix = "Bearer "
 		if !strings.HasPrefix(auth, prefix) {
 			writeJSON(w, http.StatusUnauthorized, errBody{"unauthorized", "missing bearer token"})
 			return
 		}
-		if strings.TrimPrefix(auth, prefix) != s.apiKey {
+		rawKey := strings.TrimPrefix(auth, prefix)
+		if !s.keys.Verify(rawKey) {
 			writeJSON(w, http.StatusUnauthorized, errBody{"unauthorized", "invalid api key"})
 			return
 		}

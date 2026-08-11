@@ -14,13 +14,15 @@ import (
 
 	pahomqtt "github.com/eclipse/paho.mqtt.golang"
 
+	"smart-hid-controlhub/internal/apikey"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/device"
 	"smart-hid-controlhub/internal/protocol"
 	"smart-hid-controlhub/internal/storage"
 )
 
-const testAPIKey = "test-api-key"
+// testAPIKey 必须符合生产 key 格式：chk_ + 64 hex chars（见 apikey.KeyPrefix / keyBytes）。
+const testAPIKey = "chk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 // ---------- mock MQTT（仅 Publish，供 engine.Send 用） ----------
 
@@ -99,7 +101,12 @@ func newTestServer(t *testing.T, client pahomqtt.Client) (base string, dm *devic
 		t.Fatalf("new device manager: %v", err)
 	}
 	engine = command.New(client, dm, store, log)
-	srv := New(engine, dm, testAPIKey, log)
+	// CH-P2：API key 持久化（apikey.Store）；seed 一个测试 key
+	keys := apikey.New(store.DB, log)
+	if err := keys.InsertTesting(testAPIKey, "test"); err != nil {
+		t.Fatalf("seed api key: %v", err)
+	}
+	srv := New(engine, dm, keys, log)
 	ts := httptest.NewServer(srv.Routes())
 	t.Cleanup(ts.Close)
 	return ts.URL, dm, store, engine
