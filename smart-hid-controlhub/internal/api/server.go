@@ -14,6 +14,7 @@ import (
 
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/device"
+	"smart-hid-controlhub/internal/web"
 )
 
 // Server 持有所有依赖。
@@ -50,6 +51,10 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("/api/v1/devices", s.authMiddleware(protected))
 	mux.Handle("/api/v1/devices/", s.authMiddleware(protected))
 	mux.Handle("/api/v1/commands/", s.authMiddleware(protected))
+
+	// Web 管理界面（内嵌静态资源，本身不鉴权；控制调用由前端带 Bearer 请求 /api/v1/*）。
+	// 注册在 "/" 兜底：/api/v1/* 更具体会优先生效，其余路径交给 FileServer。
+	mux.Handle("/", web.Handler())
 
 	return s.logMiddleware(mux)
 }

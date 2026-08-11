@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart HID ControlHub</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Smart HID <span class="thin">ControlHub</span></h1>
+      <span id="health-dot" class="dot unknown" title="未连接"></span>
+      <span id="health-info" class="muted">连接中…</span>
+    </div>
+    <form id="auth-form" class="auth">
+      <input id="api-key" type="password" placeholder="API Key (chk_…)" autocomplete="off" spellcheck="false">
+      <button type="submit" id="save-key">保存</button>
+    </form>
+  </header>
+
+  <main>
+    <!-- 设备列表 -->
+    <section class="card">
+      <div class="section-head">
+        <h2>设备</h2>
+        <span id="device-count" class="muted"></span>
+        <button id="refresh-devices" class="ghost">刷新</button>
+      </div>
+      <div class="table-wrap">
+        <table id="devices-table">
+          <thead>
+            <tr><th>Device ID</th><th>Boot ID</th><th>在线</th><th>USB HID</th><th>固件</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="6" class="muted center">输入 API Key 后显示设备</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 发送命令 -->
+    <section id="composer" class="card" hidden>
+      <div class="section-head">
+        <h2>发送命令</h2>
+        <span id="composer-device" class="muted"></span>
+        <button id="close-composer" class="ghost">关闭</button>
+      </div>
+      <div class="composer-grid">
+        <label>类型 <select id="cmd-type"></select></label>
+        <label>动作 <select id="cmd-action"></select></label>
+        <label>TTL (ms) <input id="cmd-ttl" type="number" value="3000" min="100" max="10000"></label>
+      </div>
+      <div id="payload-fields" class="composer-grid"></div>
+      <div class="composer-actions">
+        <button id="send-cmd" class="primary">发送命令</button>
+        <span id="send-hint" class="muted"></span>
+      </div>
+      <div id="cmd-result"></div>
+    </section>
+
+    <!-- 命令查询 -->
+    <section class="card">
+      <div class="section-head"><h2>查询命令状态</h2></div>
+      <form id="lookup-form" class="lookup">
+        <input id="lookup-id" type="text" placeholder="request_id（如 web_... 或 test_...）" spellcheck="false">
+        <button type="submit">查询</button>
+      </form>
+      <div id="lookup-result"></div>
+    </section>
+  </main>
+
+  <!-- 键盘按键建议列表（供 key 字段 datalist 引用） -->
+  <datalist id="keys-list">
+    <option value="ENTER"><option value="ESC"><option value="TAB"><option value="SPACE">
+    <option value="BACKSPACE"><option value="UP"><option value="DOWN"><option value="LEFT"><option value="RIGHT">
+    <option value="HOME"><option value="END"><option value="PAGE_UP"><option value="PAGE_DOWN">
+    <option value="INSERT"><option value="DELETE">
+    <option value="CTRL"><option value="SHIFT"><option value="ALT"><option value="GUI">
+    <option value="F1"><option value="F2"><option value="F3"><option value="F4">
+    <option value="F5"><option value="F6"><option value="F7"><option value="F8">
+    <option value="F9"><option value="F10"><option value="F11"><option value="F12">
+  </datalist>
+
+  <script src="/app.js"></script>
+</body>
+</html>
