@@ -21,11 +21,11 @@
       <li><a href="#how">工作原理</a></li>
       <li><a href="#features">键鼠能力</a></li>
       <li><a href="#components">系统组成</a></li>
-      <li><a href="#why">为什么选</a></li>
-      <li><a href="#start">开始使用</a></li>
+      <li><a href="#docs">文档</a></li>
+      <li><a href="#download">下载</a></li>
     </ul>
     <div class="nav-cta">
-      <a class="btn btn-primary btn-sm" href="#start">快速开始</a>
+      <a class="btn btn-primary btn-sm" href="docs/quick-start.html">快速开始</a>
     </div>
     <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
       <span></span><span></span><span></span>
@@ -45,8 +45,8 @@
         转换为标准物理键盘 / 鼠标操作。实时控制纯本地，不依赖互联网。
       </p>
       <div class="hero-cta">
-        <a class="btn btn-primary btn-lg" href="#start">开始使用</a>
-        <a class="btn btn-ghost btn-lg" href="#how">了解原理 →</a>
+        <a class="btn btn-primary btn-lg" href="docs/quick-start.html">5 分钟快速开始</a>
+        <a class="btn btn-ghost btn-lg" href="#download">下载软件</a>
       </div>
       <div class="hero-tags">
         <span>HTTP API</span><span>MQTT</span><span>USB HID</span><span>ESP32-S3</span><span>离线验签</span>
@@ -242,16 +242,158 @@
   </div>
 </section>
 
+<!-- ============ DOCS / TUTORIALS ============ -->
+<section class="section docs" id="docs">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">DOCS</span>
+      <h2>文档与教程</h2>
+      <p class="lead">从上手到对接，全在这里。API 文档可在线交互，本地起 ControlHub 后直接 Try it out。</p>
+    </div>
+
+    <div class="doc-cards">
+      <a class="doc-card feature" href="docs/quick-start.html">
+        <div class="dc-ico">🚀</div>
+        <h3>快速开始</h3>
+        <p>5 分钟跑通：烧录固件 → 启动 ControlHub → 配网配对 → 发送第一条 HID 命令。</p>
+        <span class="dc-link">阅读教程 →</span>
+      </a>
+
+      <a class="doc-card feature" href="api-docs.html">
+        <div class="dc-ico">📘</div>
+        <h3>API 文档</h3>
+        <p>OpenAPI 3.0 交互式参考。全端点、字段、状态机一目了然，支持在线调试。</p>
+        <span class="dc-link">打开 Swagger →</span>
+      </a>
+
+      <a class="doc-card" href="../docs/01_PRODUCT_PRD.md">
+        <div class="dc-ico">📋</div>
+        <h3>产品 PRD</h3>
+        <p>能力边界、目标用户、V1 范围与明确不做项。</p>
+        <span class="dc-link">查看 →</span>
+      </a>
+
+      <a class="doc-card" href="../docs/02_SYSTEM_ARCHITECTURE.md">
+        <div class="dc-ico">🏗️</div>
+        <h3>系统架构</h3>
+        <p>五组件、仓库边界、协议事实源与运行依赖。</p>
+        <span class="dc-link">查看 →</span>
+      </a>
+
+      <a class="doc-card" href="../protocols/schemas/">
+        <div class="dc-ico">🧩</div>
+        <h3>协议 Schema</h3>
+        <p>Command / Ack / Status JSON Schema 与示例。</p>
+        <span class="dc-link">查看 →</span>
+      </a>
+
+      <a class="doc-card" href="../docs/09_LOCAL_DEVELOPMENT_ROADMAP.md">
+        <div class="dc-ico">🗺️</div>
+        <h3>开发路线</h3>
+        <p>Phase 划分与当前进度。</p>
+        <span class="dc-link">查看 →</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DOWNLOAD ============ -->
+<section class="section download" id="download">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">DOWNLOAD</span>
+      <h2>获取软件</h2>
+      <p class="lead">开发构建 <code>v0.1.0-scaffold</code>，已附 SHA256 校验。生产签名版后续随 Release 发布。</p>
+    </div>
+
+    <div class="dl-grid">
+      <div class="dl-card">
+        <header>
+          <span class="dl-ico">🖥️</span>
+          <div>
+            <h3>ControlHub</h3>
+            <span class="dl-sub">Windows / macOS · 本地控制核心</span>
+          </div>
+        </header>
+        <ul class="dl-files">
+          <li>
+            <a href="downloads/controlhub/controlhub-windows-amd64.exe" download>
+              <span class="dl-name">controlhub-windows-amd64.exe</span>
+              <span class="dl-meta">Windows x86_64 · ~12 MB</span>
+            </a>
+          </li>
+          <li>
+            <a href="downloads/controlhub/controlhub-darwin-arm64" download>
+              <span class="dl-name">controlhub-darwin-arm64</span>
+              <span class="dl-meta">macOS Apple Silicon · ~11 MB</span>
+            </a>
+          </li>
+        </ul>
+        <div class="dl-foot">
+          <a href="downloads/controlhub/SHA256SUMS">SHA256</a>
+          <a href="downloads/controlhub/README.md">运行说明</a>
+        </div>
+      </div>
+
+      <div class="dl-card">
+        <header>
+          <span class="dl-ico">📦</span>
+          <div>
+            <h3>固件烧录包</h3>
+            <span class="dl-sub">ESP32-S3 · bootloader + 分区 + 应用</span>
+          </div>
+        </header>
+        <ul class="dl-files">
+          <li>
+            <a href="downloads/firmware/smart-hid-firmware.bin" download>
+              <span class="dl-name">smart-hid-firmware.bin</span>
+              <span class="dl-meta">应用 · 921 KB · @0x10000</span>
+            </a>
+          </li>
+          <li>
+            <a href="downloads/firmware/flash.sh">
+              <span class="dl-name">flash.sh</span>
+              <span class="dl-meta">一键烧录脚本（esptool）</span>
+            </a>
+          </li>
+          <li class="dl-more">另含 bootloader / partition-table / ota_data</li>
+        </ul>
+        <div class="dl-foot">
+          <a href="downloads/firmware/SHA256SUMS">SHA256</a>
+          <a href="downloads/firmware/README.md">烧录指南</a>
+        </div>
+      </div>
+
+      <div class="dl-card dl-card-wide">
+        <header>
+          <span class="dl-ico">🔨</span>
+          <div>
+            <h3>从源码构建</h3>
+            <span class="dl-sub">自行交叉编译 / 重新构建固件</span>
+          </div>
+        </header>
+        <pre><code># 一键重建全部发布资产（ControlHub 双平台 + 固件包 + API 契约）
+./downloads/build-releases.sh</code></pre>
+        <div class="dl-foot">
+          <a href="downloads/build-releases.sh">build-releases.sh</a>
+          <a href="../smart-hid-controlhub/README.md">ControlHub 源码</a>
+          <a href="../smart-hid-firmware/README.md">固件源码</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ============ CTA ============ -->
-<section class="section cta-band" id="start">
+<section class="section cta-band">
   <div class="container cta-inner">
     <div>
       <h2>准备好开始了吗</h2>
       <p>本地闭环：ControlHub + ESP32-S3 固件，几分钟跑通第一条命令。</p>
     </div>
     <div class="cta-actions">
-      <a class="btn btn-light btn-lg" href="../smart-hid-controlhub/README.md">ControlHub 文档</a>
-      <a class="btn btn-outline btn-lg" href="../smart-hid-firmware/README.md">固件文档</a>
+      <a class="btn btn-light btn-lg" href="docs/quick-start.html">快速开始</a>
+      <a class="btn btn-outline btn-lg" href="api-docs.html">API 文档</a>
     </div>
   </div>
 </section>
@@ -269,16 +411,25 @@
         <a href="#how">工作原理</a>
         <a href="#features">键鼠能力</a>
         <a href="#components">系统组成</a>
+        <a href="#why">设计原则</a>
       </div>
       <div>
-        <h4>开发</h4>
-        <a href="../smart-hid-controlhub/docs/openapi.yaml">HTTP API 契约</a>
-        <a href="../protocols/schemas/">协议 Schema</a>
-        <a href="../docs/">设计文档</a>
+        <h4>文档</h4>
+        <a href="docs/quick-start.html">快速开始</a>
+        <a href="api-docs.html">API 文档</a>
+        <a href="../docs/01_PRODUCT_PRD.md">产品 PRD</a>
+        <a href="../docs/02_SYSTEM_ARCHITECTURE.md">系统架构</a>
+      </div>
+      <div>
+        <h4>下载</h4>
+        <a href="downloads/controlhub/README.md">ControlHub</a>
+        <a href="downloads/firmware/README.md">固件烧录包</a>
+        <a href="downloads/build-releases.sh">构建脚本</a>
+        <a href="#download">全部资源</a>
       </div>
       <div>
         <h4>状态</h4>
-        <a href="#start">脚手架阶段 v1.0</a>
+        <a href="#download">v0.1.0-scaffold</a>
         <a href="../docs/09_LOCAL_DEVELOPMENT_ROADMAP.md">开发路线</a>
       </div>
     </div>

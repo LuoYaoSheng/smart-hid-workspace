@@ -38,3 +38,9 @@ smart-hid-web/.output
 
 # Logs
 *.log
+
+# 发布资产例外：smart-hid-web/downloads/ 下的二进制是有意提交的发行物
+# （上面的 *.exe 规则用于忽略 Go 构建产物，这里对 downloads 放行）
+!smart-hid-web/downloads/
+!smart-hid-web/downloads/**/
+!smart-hid-web/downloads/**/*.exe

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart HID — API 文档</title>
+  <meta name="description" content="Smart HID ControlHub HTTP API 交互式文档（OpenAPI 3.0）。本地启动 ControlHub 后可直接 Try it out。">
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <style>
+    :root { --primary:#2563eb; --hero-bg:#0b1020; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+    /* 顶栏 —— 与落地页一致 */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 12px 24px; color: #fff;
+      background: var(--hero-bg); border-bottom: 1px solid rgba(255,255,255,.08);
+      position: sticky; top: 0; z-index: 20;
+    }
+    .topbar a { color: #c7d2fe; }
+    .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 17px; color: #fff; }
+    .brand .mark { font-size: 19px; }
+    .brand .tag { font-weight: 400; color: #93a0bd; font-size: 13px; margin-left: 4px; }
+    .back { font-size: 14px; font-weight: 600; color: #c7d2fe; }
+    .back:hover { color: #fff; }
+    /* API key 提示条 */
+    .authbar {
+      background: #fff7ed; color: #92400e; border-bottom: 1px solid #fed7aa;
+      font-size: 13.5px; padding: 9px 24px; line-height: 1.5;
+    }
+    .authbar code { background: #fef3c7; color: #92400e; padding: 1px 5px; border-radius: 4px; }
+    /* Swagger UI 容器微调 */
+    .swagger-ui .topbar { display: none; }            /* 隐藏 swagger 自带顶栏 */
+    .swagger-ui .info { margin-top: 24px; }
+    .swagger-ui .scheme-container { box-shadow: none; }
+    .swagger-ui .opblock.opblock-post { background: rgba(37,99,235,.04); }
+    /* 加载态 */
+    #loading { padding: 60px 24px; text-align: center; color: #6b7280; }
+    .loader-dot { display: inline-block; width: 8px; height: 8px; margin: 0 3px; background: var(--primary); border-radius: 50%; animation: bounce 1.2s infinite ease-in-out; }
+    .loader-dot:nth-child(2){ animation-delay: .15s; }
+    .loader-dot:nth-child(3){ animation-delay: .3s; }
+    @keyframes bounce { 0%,80%,100%{transform:scale(0.6);opacity:.5} 40%{transform:scale(1);opacity:1} }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="mark">⚡</span> Smart HID
+    <span class="tag">/ ControlHub HTTP API</span>
+  </div>
+  <a class="back" href="index.html">← 返回落地页</a>
+</div>
+
+<div class="authbar">
+  🔑 所有端点（除 <code>GET /health</code>）需要 <code>Authorization: Bearer chk_&lt;your_api_key&gt;</code>。
+  本地启动 ControlHub 后，在下方点 <strong>Authorize</strong> 填入 API Key 即可在线 <strong>Try it out</strong>。
+  默认服务器：<code>http://127.0.0.1:17890/api/v1</code>。
+</div>
+
+<div id="loading">
+  正在加载 OpenAPI 规范
+  <span class="loader-dot"></span><span class="loader-dot"></span><span class="loader-dot"></span>
+</div>
+<div id="swagger-ui"></div>
+
+<script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-bundle.js" crossorigin></script>
+<script>
+  (function () {
+    if (!window.SwaggerUIBundle) {
+      document.getElementById("loading").innerHTML =
+        '<p>⚠️ Swagger UI 加载失败（需要联网拉取 CDN）。</p>' +
+        '<p>规范文件本身在 <code>api/openapi.yaml</code>，可离线查看或导入任意 OpenAPI 编辑器。</p>';
+      return;
+    }
+    window.ui = SwaggerUIBundle({
+      url: "api/openapi.yaml",
+      dom_id: "#swagger-ui",
+      deepLinking: true,
+      docExpansion: "list",
+      defaultModelsExpandDepth: 1,
+      defaultModelExpandDepth: 1,
+      presets: [SwaggerUIBundle.presets.apis],
+      plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+      layout: "BaseLayout",
+      persistAuthorization: true
+    });
+    // 规范加载完成后隐藏 loading
+    var t = setInterval(function () {
+      if (document.querySelector(".swagger-ui .info")) {
+        document.getElementById("loading").style.display = "none";
+        clearInterval(t);
+      }
+    }, 200);
+  })();
+</script>
+</body>
+</html>
