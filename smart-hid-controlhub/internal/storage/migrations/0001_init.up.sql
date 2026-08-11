@@ -1,7 +1,7 @@
--- Smart HID ControlHub 初始 schema
--- Phase 1：devices + commands 两表；后续里程碑（Pairing/Trial/License）追加。
+-- Migration 0001: 初始 schema（Phase 1）
+-- devices + commands 两表；后续里程碑在更高级 migration 追加。
+-- 来源：原 001_init.sql，迁入版本化 migration 体系（CH-P1）。
 
--- devices：ControlHub 已知的设备（通过 status topic 或配对流程注册）。
 CREATE TABLE IF NOT EXISTS devices (
     device_id        TEXT PRIMARY KEY,          -- ^HID-[A-Z0-9]{8}$
     boot_id          TEXT NOT NULL DEFAULT '',  -- 当前 boot_id（每次启动变化）
@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS devices (
     created_at       INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
--- commands：每条命令的请求与 ACK 记录（用于 /commands/{request_id} 查询与审计）。
 CREATE TABLE IF NOT EXISTS commands (
     request_id       TEXT PRIMARY KEY,
     device_id        TEXT NOT NULL,
