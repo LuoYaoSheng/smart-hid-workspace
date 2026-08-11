@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart HID — 本地优先的网络 HID 控制系统</title>
+  <meta name="description" content="把第三方软件的 HTTP API 指令，经 ControlHub → MQTT → ESP32-S3 → USB HID 转换为真实物理键盘/鼠标输入。实时控制纯本地，无需联网。">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav class="nav" id="nav">
+  <div class="container nav-inner">
+    <a class="logo" href="#top">
+      <span class="logo-mark">⚡</span>
+      <span class="logo-text">Smart&nbsp;HID</span>
+    </a>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="#how">工作原理</a></li>
+      <li><a href="#features">键鼠能力</a></li>
+      <li><a href="#components">系统组成</a></li>
+      <li><a href="#why">为什么选</a></li>
+      <li><a href="#start">开始使用</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a class="btn btn-primary btn-sm" href="#start">快速开始</a>
+    </div>
+    <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="top">
+  <div class="hero-grid container">
+    <div class="hero-copy">
+      <span class="eyebrow">本地优先 · 开发者向 · v1.0</span>
+      <h1>把 <span class="hl">HTTP&nbsp;API</span> 调用<br>变成真实的<span class="hl">键鼠输入</span></h1>
+      <p class="hero-lead">
+        Smart HID 将第三方程序的 HTTP 指令，经
+        <strong>ControlHub → MQTT → ESP32-S3 → USB&nbsp;HID</strong>
+        转换为标准物理键盘 / 鼠标操作。实时控制纯本地，不依赖互联网。
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="#start">开始使用</a>
+        <a class="btn btn-ghost btn-lg" href="#how">了解原理 →</a>
+      </div>
+      <div class="hero-tags">
+        <span>HTTP API</span><span>MQTT</span><span>USB HID</span><span>ESP32-S3</span><span>离线验签</span>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <img src="assets/hero.png" alt="Smart HID 硬件设备" loading="eager">
+      <div class="hero-glow"></div>
+    </div>
+  </div>
+  <div class="hero-wave" aria-hidden="true"></div>
+</header>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="section how" id="how">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">WORKFLOW</span>
+      <h2>一条链路，全是标准协议</h2>
+      <p class="lead">不发明新协议——HTTP、MQTT、USB&nbsp;HID 都是业界标准。任何能发 HTTP 请求的程序都能驱动它。</p>
+    </div>
+
+    <div class="flow">
+      <div class="flow-node">
+        <div class="flow-ico">🧩</div>
+        <div class="flow-title">第三方程序</div>
+        <div class="flow-sub">脚本 · 自动化 · 联动</div>
+      </div>
+      <div class="flow-arrow"><span>HTTP</span></div>
+      <div class="flow-node accent">
+        <div class="flow-ico">🖥️</div>
+        <div class="flow-title">ControlHub</div>
+        <div class="flow-sub">Windows 本地 · :17890</div>
+      </div>
+      <div class="flow-arrow"><span>MQTT</span></div>
+      <div class="flow-node accent">
+        <div class="flow-ico">📦</div>
+        <div class="flow-title">ESP32-S3</div>
+        <div class="flow-sub">USB 键鼠 · Wi-Fi</div>
+      </div>
+      <div class="flow-arrow"><span>USB&nbsp;HID</span></div>
+      <div class="flow-node">
+        <div class="flow-ico">💻</div>
+        <div class="flow-title">目标电脑</div>
+        <div class="flow-sub">无需装驱动</div>
+      </div>
+    </div>
+
+    <div class="how-note">
+      <img src="assets/concept.png" alt="Smart HID 控制流概念图" loading="lazy">
+      <ul class="note-list">
+        <li><strong>目标电脑零侵入</strong>——它看到的就是一把普通 USB 键盘和鼠标，无需安装任何控制端或专用驱动。</li>
+        <li><strong>实时控制本地优先</strong>——指令不经过云，ControlHub 内嵌 MQTT Broker，局域网内毫秒级往返。</li>
+        <li><strong>标准可对接</strong>——一个 <code>POST</code> 即可发命令，<code>chk_</code> 前缀的 API Key 鉴权，OpenAPI 契约完备。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section class="section features" id="features">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">CAPABILITIES</span>
+      <h2>V1 键鼠能力</h2>
+      <p class="lead">覆盖键鼠自动化的核心动作。V1 明确不做任意文本输入、宏脚本、Shell、远程桌面与截屏。</p>
+    </div>
+
+    <div class="feature-grid">
+      <article class="feature-card">
+        <header><span class="fc-ico">⌨️</span><h3>键盘 Keyboard</h3></header>
+        <ul>
+          <li><code>tap</code> — 单键敲击</li>
+          <li><code>hotkey</code> — 组合键（如 Ctrl+C）</li>
+          <li><code>key_down</code> / <code>key_up</code> — 按住 / 松开（带 lease）</li>
+        </ul>
+      </article>
+
+      <article class="feature-card">
+        <header><span class="fc-ico">🖱️</span><h3>鼠标 Mouse</h3></header>
+        <ul>
+          <li><code>move</code> — 相对移动</li>
+          <li><code>click</code> — 单/双击</li>
+          <li><code>button_down</code> / <code>button_up</code> — 按住 / 松开</li>
+          <li><code>wheel</code> — 滚轮</li>
+        </ul>
+      </article>
+
+      <article class="feature-card">
+        <header><span class="fc-ico">🛡️</span><h3>系统 System</h3></header>
+        <ul>
+          <li><code>release_all</code> — 释放所有按住的键鼠</li>
+          <li>会话级安全保障，异常时一键归零</li>
+        </ul>
+      </article>
+
+      <article class="feature-card">
+        <header><span class="fc-ico">🔐</span><h3>可靠性</h3></header>
+        <ul>
+          <li>每命令带 <code>request_id</code>，环形去重</li>
+          <li><code>ttl_ms</code> 超时自动过期</li>
+          <li>ACK 状态机：received → executing → executed</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="code-demo">
+      <div class="code-tab">curl · 发送一次回车</div>
+<pre><code>curl -X POST http://localhost:17890/api/v1/devices/HID-A1B2C3D4/commands \
+  -H "Authorization: Bearer chk_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "protocol": "1.0",
+    "request_id": "req-20260811-0001",
+    "device_id": "HID-A1B2C3D4",
+    "type": "keyboard",
+    "action": "tap",
+    "ttl_ms": 3000,
+    "payload": { "key": "ENTER" }
+  }'</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ COMPONENTS ============ -->
+<section class="section components" id="components">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">ARCHITECTURE</span>
+      <h2>五个组件，各司其职</h2>
+      <p class="lead">实时控制链路与账号授权链路解耦。设备控制永远不需要云端参与。</p>
+    </div>
+
+    <div class="comp-grid">
+      <div class="comp-card">
+        <div class="comp-tag">硬件</div>
+        <h3>ESP32-S3 Smart HID</h3>
+        <p>USB Keyboard + Mouse + Wi-Fi + MQTT + BLE 配网。执行命令、上报状态、维护 Device Identity 与 Boot ID。</p>
+      </div>
+      <div class="comp-card highlight">
+        <div class="comp-tag">本地核心</div>
+        <h3>ControlHub</h3>
+        <p>Windows 本地程序。HTTP API + 内嵌 MQTT Broker + 设备管理 + 命令引擎 + 试用 + License 离线验签 + 托盘 + 本地 Web 控制台。</p>
+      </div>
+      <div class="comp-card">
+        <div class="comp-tag">配网</div>
+        <h3>BLE Toolkit+</h3>
+        <p>微信小程序。BLE 搜索 Smart HID → 配网 → 设置 Wi-Fi → ControlHub 配对 → 诊断。开源个人小程序，无支付无会员。</p>
+      </div>
+      <div class="comp-card">
+        <div class="comp-tag">门户</div>
+        <h3>Smart HID Web</h3>
+        <p>账号、套餐、订单、License、设备授权、离线 License 下载。支付状态以服务端回调为准。</p>
+      </div>
+      <div class="comp-card">
+        <div class="comp-tag">云端</div>
+        <h3>Smart HID Cloud</h3>
+        <p>User / Plan / Order / Payment / License / Activation。License 云端签名，ControlHub 本地验签。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHY ============ -->
+<section class="section why" id="why">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">PRINCIPLES</span>
+      <h2>为什么这样设计</h2>
+    </div>
+    <div class="why-grid">
+      <div class="why-item">
+        <div class="why-ico">🏠</div>
+        <h3>本地优先</h3>
+        <p>实时控制永远不经过云。ControlHub 内嵌 Broker，断网也能用。云侧只持授权关系，不伪造设备在线状态。</p>
+      </div>
+      <div class="why-item">
+        <div class="why-ico">⏱️</div>
+        <h3>免费试用不阉割</h3>
+        <p>键盘、鼠标、HTTP API、本地 MQTT 全部可用。仅按"累计有效控制时间"计费——无操作不消耗，配置/诊断免费。</p>
+      </div>
+      <div class="why-item">
+        <div class="why-ico">🗝️</div>
+        <h3>离线授权</h3>
+        <p>License 云端签名、本地验签，主绑 ESP32 Device ID。激活后无需联网即可验证，稳定可靠。</p>
+      </div>
+      <div class="why-item">
+        <div class="why-ico">🔌</div>
+        <h3>零侵入目标</h3>
+        <p>目标电脑看到的是标准 USB 键鼠，无需驱动、无需控制端。适合自动化测试与受控环境联动。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<section class="section cta-band" id="start">
+  <div class="container cta-inner">
+    <div>
+      <h2>准备好开始了吗</h2>
+      <p>本地闭环：ControlHub + ESP32-S3 固件，几分钟跑通第一条命令。</p>
+    </div>
+    <div class="cta-actions">
+      <a class="btn btn-light btn-lg" href="../smart-hid-controlhub/README.md">ControlHub 文档</a>
+      <a class="btn btn-outline btn-lg" href="../smart-hid-firmware/README.md">固件文档</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="logo-mark">⚡</span> Smart HID
+      <p>本地优先的网络 HID 控制系统</p>
+    </div>
+    <div class="footer-cols">
+      <div>
+        <h4>产品</h4>
+        <a href="#how">工作原理</a>
+        <a href="#features">键鼠能力</a>
+        <a href="#components">系统组成</a>
+      </div>
+      <div>
+        <h4>开发</h4>
+        <a href="../smart-hid-controlhub/docs/openapi.yaml">HTTP API 契约</a>
+        <a href="../protocols/schemas/">协议 Schema</a>
+        <a href="../docs/">设计文档</a>
+      </div>
+      <div>
+        <h4>状态</h4>
+        <a href="#start">脚手架阶段 v1.0</a>
+        <a href="../docs/09_LOCAL_DEVELOPMENT_ROADMAP.md">开发路线</a>
+      </div>
+    </div>
+  </div>
+  <div class="container footer-bottom">
+    <span>© 2026 Smart HID · 本资料为本地开发包，非最终发行版</span>
+    <span class="footer-meta">ESP32-S3 · Go · MQTT · USB HID</span>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
