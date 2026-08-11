@@ -43,6 +43,8 @@ smart-hid-web/
 ├── style.css               # 落地页样式（单文件，零构建）
 ├── app.js                  # 落地页交互（移动端菜单 / 滚动渐现）
 ├── api-docs.html           # API 文档（Swagger UI，加载 api/openapi.yaml，可在线 Try it out）
+├── video.html              # 演示视频中心（配置驱动：B 站嵌入 + 多平台跳转，见页内 VIDEO_CONFIG）
+├── license.html            # 授权与套餐（试用 + 设备授权 + 激活流程 + License 载荷 + FAQ）
 ├── assets/                 # 落地页图片（ChatGPT2API 生成）
 │   ├── hero.png            # 硬件主视觉（1536×1024）
 │   └── concept.png         # 控制流概念图（1536×1024）
@@ -80,6 +82,8 @@ API 文档页（`api-docs.html`）的 Swagger UI 渲染器走 CDN，需联网；
 - ✅ **API 文档**：Swagger UI 交互式，对齐 `smart-hid-controlhub/docs/openapi.yaml`。
 - ✅ **教程**：快速开始端到端指南。
 - ✅ **下载**：ControlHub 双平台二进制 + 固件烧录包（开发构建 `v0.1.0-scaffold`，附 SHA256）。
+- ✅ **演示视频中心**：`video.html`，配置驱动。视频首发 B 站，同步抖音 / YouTube；页面内 `VIDEO_CONFIG` 填入链接即自动渲染（B 站 bvid 填入即嵌入播放器）。当前为"制作中"占位态。
+- ✅ **授权与套餐**：`license.html`，试用 + 设备授权 + 7 步激活流 + License 载荷 + FAQ。
 - ⚠️ **用户门户 / 管理后台**：脚手架阶段，未实现功能代码。详见 `../docs/07_SMART_HID_WEB_PRD_V1.0.md`。
 
 ## 图片资产说明
