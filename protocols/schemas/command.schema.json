@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmartHidCommand",
+  "type": "object",
+  "required": [
+    "protocol",
+    "request_id",
+    "device_id",
+    "target_boot_id",
+    "type",
+    "action",
+    "ttl_ms",
+    "payload"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "1.0"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 96
+    },
+    "device_id": {
+      "type": "string",
+      "pattern": "^HID-[A-Z0-9]{8}$"
+    },
+    "target_boot_id": {
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "keyboard",
+        "mouse",
+        "system"
+      ]
+    },
+    "action": {
+      "type": "string"
+    },
+    "ttl_ms": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 10000
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

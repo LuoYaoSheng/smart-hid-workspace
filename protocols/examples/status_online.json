@@ -1,0 +1,17 @@
+{
+  "protocol": "1.0",
+  "device_id": "HID-A82F94C1",
+  "online": true,
+  "boot_id": "B-7DB289",
+  "firmware": "1.0.0",
+  "hardware": "S3-01",
+  "hid": {
+    "ready": true,
+    "keyboard": true,
+    "mouse": true
+  },
+  "wifi": {
+    "rssi": -52
+  },
+  "uptime_s": 18
+}

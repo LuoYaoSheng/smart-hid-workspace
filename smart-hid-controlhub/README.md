@@ -1,0 +1,123 @@
+# smart-hid-controlhub
+
+Windows 本地控制程序。接收第三方 HTTP API 指令，通过 MQTT 下发给 ESP32-S3，并管理 Trial / License / 设备配对。
+
+## 角色定位
+
+```text
+第三方程序 ──HTTP──▶ ControlHub ──MQTT──▶ ESP32-S3 ──USB HID──▶ 目标电脑
+```
+
+实时控制不依赖互联网。License 云端签发、本地离线验签（Ed25519）。
+
+## 技术栈（推荐）
+
+- Go
+- `net/http`（HTTP API + Local Web UI）
+- Embedded MQTT Broker（端口 17891）
+- SQLite（持久化）
+- `go:embed`（嵌入 Web 资源）
+- Windows tray
+- Windows DPAPI（敏感数据保护）
+- `crypto/ed25519`（License 验签，只内置 Public Key）
+
+## 建议模块结构
+
+来自资料包 `starter/controlhub`：
+
+```text
+cmd/controlhub
+internal/app
+internal/config
+internal/api
+internal/web
+internal/tray
+internal/pairing
+internal/mqtt
+internal/device
+internal/command
+internal/trial
+internal/license
+internal/entitlement
+internal/storage
+internal/securestore
+internal/logging
+docs/openapi.yaml
+```
+
+## 网络（建议端口）
+
+```text
+17890  Local HTTP / Web          （默认 127.0.0.1）
+17891  MQTT                       （LAN 可达，需认证 + ACL）
+17892  Device Pairing HTTP        （LAN 可达，只接受 Active Pairing Session）
+```
+
+LAN API 必须用户显式开启；除 `/health` 外，控制 API 使用 Bearer API Key。
+
+## 内部模块
+
+```text
+ControlHub.exe
+├── Tray
+├── Local Web UI
+├── HTTP API
+├── Pairing HTTP
+├── Embedded MQTT Broker
+├── Device Manager
+├── Command Engine
+├── Trial Manager
+├── License Manager
+├── Entitlement Manager
+├── Secure Store
+├── SQLite
+└── Logging
+```
+
+## Command Engine 处理顺序
+
+```text
+API Auth → Schema → Device → Device Ready → Entitlement → Rate Limit
+→ Idempotency → Queue → MQTT → ACK → Trial Update → Response
+```
+
+Entitlement 必须在 Publish MQTT 前完成。
+
+## 开发里程碑
+
+| 里程碑 | 内容 |
+|--------|------|
+| CH-01 | App / Config / Logging |
+| CH-02 | SQLite / Migration |
+| CH-03 | HTTP / Web |
+| CH-04 | MQTT |
+| CH-05 | Device Manager |
+| CH-06 | Pairing |
+| CH-07 | Command HTTP → MQTT → ACK |
+| CH-08 | Tray / Single Instance |
+| CH-09 | Trial |
+| CH-10 | License |
+| CH-11 | Installer / Firewall / Signing |
+
+第一里程碑：HTTP → MQTT → ESP32 → ACK。
+
+## 数据目录（Windows）
+
+```text
+%LOCALAPPDATA%\SmartHID\ControlHub\
+├── controlhub.db
+├── license.dat
+├── logs/
+├── cache/
+└── backup/
+```
+
+## 当前状态
+
+⚠️ **脚手架阶段**。仅有目录骨架与文档落位，未实现任何功能代码。详见 `../docs/05_CONTROLHUB_DETAIL_DESIGN_V1.0.md` 与 `../docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md`。
+
+## 相关
+
+- HTTP API 事实源：`./docs/openapi.yaml`（占位）
+- MQTT 协议公开定义：`../../smart-ble/core/protocols/hid-command-schema.ts`
+- 验收清单：`../docs/10_ACCEPTANCE_CHECKLIST.md` §A

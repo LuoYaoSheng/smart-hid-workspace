@@ -1,0 +1,9 @@
+{
+  "protocol": "1.0",
+  "request_id": "cmd_demo_001",
+  "device_id": "HID-A82F94C1",
+  "boot_id": "B-7DB289",
+  "status": "executed",
+  "code": 0,
+  "execution_ms": 6
+}

@@ -1,0 +1,13 @@
+{
+  "protocol": "1.0",
+  "request_id": "cmd_demo_003",
+  "device_id": "HID-A82F94C1",
+  "target_boot_id": "B-7DB289",
+  "type": "mouse",
+  "action": "move",
+  "ttl_ms": 3000,
+  "payload": {
+    "dx": 100,
+    "dy": -50
+  }
+}

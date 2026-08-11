@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmartHidStatus",
+  "type": "object",
+  "required": [
+    "protocol",
+    "device_id",
+    "online"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "1.0"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "online": {
+      "type": "boolean"
+    },
+    "boot_id": {
+      "type": "string"
+    },
+    "firmware": {
+      "type": "string"
+    },
+    "hardware": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

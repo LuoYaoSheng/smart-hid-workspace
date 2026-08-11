@@ -1,0 +1,13 @@
+{
+  "protocol": "1.0",
+  "request_id": "cmd_demo_001",
+  "device_id": "HID-A82F94C1",
+  "target_boot_id": "B-7DB289",
+  "type": "keyboard",
+  "action": "tap",
+  "ttl_ms": 3000,
+  "payload": {
+    "key": "ENTER",
+    "hold_ms": 40
+  }
+}

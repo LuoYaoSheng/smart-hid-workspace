@@ -1,0 +1,17 @@
+{
+  "protocol": "1.0",
+  "request_id": "cmd_demo_002",
+  "device_id": "HID-A82F94C1",
+  "target_boot_id": "B-7DB289",
+  "type": "keyboard",
+  "action": "hotkey",
+  "ttl_ms": 3000,
+  "payload": {
+    "keys": [
+      "CTRL",
+      "SHIFT",
+      "S"
+    ],
+    "hold_ms": 50
+  }
+}

@@ -1,0 +1,125 @@
+# ControlHub HTTP API — OpenAPI 占位
+#
+# 事实源：本文件。协议公开定义（MQTT Command）在 smart-ble/core/protocols/hid-command-schema.ts。
+# 依据：docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md §9-11
+#
+# 状态：脚手架占位，仅列出 V1 端点签名，未填完整 schema/examples。
+# 后续 CH-03（HTTP/Web）里程碑落地时补全。
+#
+# Base URL: http://127.0.0.1:{port}/api/v1
+# Auth: 除 /health 外，控制 API 使用 Bearer API Key。默认只监听 127.0.0.1。
+#       LAN API 必须用户显式开启。
+
+openapi: 3.0.3
+info:
+  title: Smart HID ControlHub HTTP API
+  version: 1.0.0
+  description: |
+    ControlHub 本地控制 HTTP API。实时控制本地优先，不经过云。
+    Entitlement 必须在 Publish MQTT 前完成（见资料包 §11 Trial / License Gate）。
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "17890"
+        description: Local HTTP / Web 端口（默认 17890）
+
+components:
+  securitySchemes:
+    BearerApiKey:
+      type: http
+      scheme: bearer
+      description: ControlHub 本地 API Key（可重新生成）
+
+paths:
+  /health:
+    get:
+      summary: 健康检查（无需鉴权）
+      responses:
+        '200':
+          description: OK
+
+  /devices:
+    get:
+      summary: 设备列表
+      security:
+        - BearerApiKey: []
+      responses:
+        '200':
+          description: OK
+
+  /devices/{device_id}:
+    get:
+      summary: 设备详情
+      security:
+        - BearerApiKey: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^HID-[A-Z0-9]{8}$'
+      responses:
+        '200':
+          description: OK
+
+  /devices/{device_id}/commands:
+    post:
+      summary: 下发 HID Command（同步返回 executed/rejected/timeout）
+      security:
+        - BearerApiKey: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^HID-[A-Z0-9]{8}$'
+      responses:
+        '200':
+          description: Command 已执行（executed）
+        '202':
+          description: Command 已入队
+        '4xx/5xx':
+          description: rejected / expired / timeout
+      description: |
+        请求体为 SmartHidCommand envelope（见 hid-command-schema.ts）。
+        type ∈ keyboard | mouse | system；V1 不支持 shell/script/file transfer 等。
+
+  /commands/{request_id}:
+    get:
+      summary: 查询 Command 状态
+      security:
+        - BearerApiKey: []
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ACK 状态（received/executing/executed/rejected/expired/duplicate）
+
+  /license:
+    get:
+      summary: 当前 License 信息
+      security:
+        - BearerApiKey: []
+      responses:
+        '200':
+          description: License 元数据与验签状态
+
+  /usage:
+    get:
+      summary: Trial 使用情况
+      security:
+        - BearerApiKey: []
+      responses:
+        '200':
+          description: Trial 累计有效控制时间 / Session 信息
+
+# V1 不支持：Shell / Script / Process launch / File transfer / Clipboard read /
+# Screen capture / Key logging / Arbitrary code execution。

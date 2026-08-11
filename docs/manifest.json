@@ -1,0 +1,12 @@
+{
+  "name": "smart-hid-development-pack",
+  "version": "1.0",
+  "date": "2026-08-11",
+  "notes": [
+    "微信小程序不含商业功能",
+    "Smart HID 设备当前无二维码",
+    "ControlHub 动态 Pairing QR 保留",
+    "实时控制本地优先",
+    "资料包用于本地开发，不修改线上仓库"
+  ]
+}

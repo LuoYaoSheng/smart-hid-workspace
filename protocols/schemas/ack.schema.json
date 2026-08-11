@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmartHidAck",
+  "type": "object",
+  "required": [
+    "protocol",
+    "request_id",
+    "device_id",
+    "boot_id",
+    "status",
+    "code"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "1.0"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "boot_id": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "received",
+        "executing",
+        "executed",
+        "rejected",
+        "expired",
+        "duplicate"
+      ]
+    },
+    "code": {
+      "type": "integer"
+    },
+    "execution_ms": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": true
+}
