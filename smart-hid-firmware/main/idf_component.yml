@@ -1,0 +1,8 @@
+## IDF Component Manager Manifest File
+## 智能 HID 固件依赖
+##
+## esp_tinyusb: ESP-IDF v5.x 的 USB Device 栈 managed component。
+## 提供 tinyusb_driver_install / tusb.h / class/hid/hid_device.h。
+## 用于实现 Composite HID（Keyboard + Mouse）。
+dependencies:
+  espressif/esp_tinyusb: "^2.2.0"

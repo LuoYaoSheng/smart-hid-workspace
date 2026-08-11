@@ -22,6 +22,8 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include "smart_hid_protocol.h"
 
 #ifdef __cplusplus
@@ -46,7 +48,7 @@ int command_engine_init(void);
  * @param topic       收到时的 topic（仅用于日志）
  * @param payload     MQTT payload 字节
  * @param payload_len 字节长度
- * @param immediate_ack_out 输出：即时 ack（duplicate/rejected/*），由调用方直接 publish
+ * @param immediate_ack_out 输出：即时 ack（duplicate / rejected / etc），由调用方直接 publish
  * @return true 表示已填 immediate_ack_out（需立即 publish）；
  *         false 表示已入队，由 worker 异步 publish ack
  */

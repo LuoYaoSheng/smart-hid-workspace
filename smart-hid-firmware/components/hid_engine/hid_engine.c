@@ -25,6 +25,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include "sdkconfig.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -33,15 +34,18 @@
 
 #include "tusb.h"
 #include "class/hid/hid_device.h"
-#include "device/usbd.h"
+#include "tinyusb.h"
 
 static const char *TAG = "hid_engine";
 
 /* ----------------------------------------------------------------
  * USB 描述符：Composite Keyboard + Mouse
  *
- * 通过 TinyUSB 的 tusb_hid_descriptor_device_cb 提供配置描述符。
- * F1/F2 阶段直接使用 TinyUSB HID class device 接口。
+ * 通过 esp_tinyusb 的 tinyusb_driver_install 注册：
+ *   - Device Descriptor（VID/PID/字符串索引）
+ *   - Configuration Descriptor（2 个 Interface：Keyboard + Mouse，各占 1 个 IN EP）
+ *   - Report Descriptor（Composite，含 report ID）
+ *   - String Descriptors
  * ---------------------------------------------------------------- */
 
 #define EPNUM_KEYBOARD   0x81  /* EP1 IN */
@@ -50,79 +54,99 @@ static const char *TAG = "hid_engine";
 #define REPORT_ID_KEYBOARD  CONFIG_SMART_HID_USB_HID_KEYBOARD_REPORT_ID
 #define REPORT_ID_MOUSE     CONFIG_SMART_HID_USB_HID_MOUSE_REPORT_ID
 
-/* HID Report Descriptor（Composite，含 report ID） */
+/* 端点大小（HID IN 端点） */
+#define CFG_TUD_HID_EP_BUFSIZE 64
+
+/* Configuration Descriptor 总长度：
+ *   1 config (9) + 2 interface(9 each) = 9 + 9 + 9 = 27
+ *   使用 TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN * 2 */
+#define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN * 2)
+
+/* HID Report Descriptor（Composite，含 report ID）
+ *
+ * 使用 TinyUSB 官方模板宏 TUD_HID_REPORT_DESC_KEYBOARD / TUD_HID_REPORT_DESC_MOUSE，
+ * 通过可变参数注入 Report ID（HID_REPORT_ID 宏）。
+ * 两个 report 共享一个 interface（TinyUSB 单 interface composite），
+ * 由 report ID 区分 keyboard / mouse。
+ */
 static const uint8_t kHidReportDescriptor[] = {
     /* Keyboard Report (ID = REPORT_ID_KEYBOARD) */
-    0x85, REPORT_ID_KEYBOARD,        /*   Report ID */
-    HID_USAGE_PAGE ( HID_USAGE_PAGE_DESKTOP     ),
-    HID_USAGE      ( HID_USAGE_DESKTOP_KEYBOARD ),
-    HID_COLLECTION ( HID_COLLECTION_APPLICATION ),
-        HID_REPORT_ID   ( REPORT_ID_KEYBOARD            ),
-        HID_USAGE_PAGE  ( HID_USAGE_PAGE_KEYBOARD        ),
-          0x19, 0xE0,  /*   Usage Minimum (0xE0 Left Control) */
-          0x29, 0xE7,  /*   Usage Maximum (0xE7 Right GUI)    */
-          0x15, 0x00,  /*   Logical Minimum (0)               */
-          0x25, 0x01,  /*   Logical Maximum (1)               */
-          0x75, 0x01,  /*   Report Size (1)                   */
-          0x95, 0x08,  /*   Report Count (8)                  */
-          0x81, 0x02,  /*   Input (Data,Var,Abs)              */
-          0x95, 0x01,  /*   Report Count (1)                  */
-          0x75, 0x08,  /*   Report Size (8)                   */
-          0x81, 0x03,  /*   Input (Const,Var,Abs) [reserved]  */
-          0x95, 0x05,  /*   Report Count (5)                  */
-          0x75, 0x01,  /*   Report Size (1)                   */
-          0x05, 0x08,  /*   Usage Page (LEDs)                 */
-          0x19, 0x01,  /*   Usage Minimum                     */
-          0x29, 0x05,  /*   Usage Maximum                     */
-          0x91, 0x02,  /*   Output (Data,Var,Abs)             */
-          0x95, 0x01,  /*   Report Count (1)                  */
-          0x75, 0x03,  /*   Report Size (3)                   */
-          0x91, 0x03,  /*   Output (Const,Var,Abs)            */
-          0x95, 0x06,  /*   Report Count (6)                  */
-          0x75, 0x08,  /*   Report Size (8)                   */
-          0x15, 0x00,  /*   Logical Minimum (0)               */
-          0x25, 0xE7,  /*   Logical Maximum (231)             */
-          0x05, 0x07,  /*   Usage Page (Keyboard)             */
-          0x19, 0x00,  /*   Usage Minimum                     */
-          0x29, 0xE7,  /*   Usage Maximum                     */
-          0x81, 0x00,  /*   Input (Data,Array,Abs)            */
-    HID_COLLECTION_END,
+    TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(REPORT_ID_KEYBOARD)),
 
     /* Mouse Report (ID = REPORT_ID_MOUSE) */
-    0x85, REPORT_ID_MOUSE,           /*   Report ID */
-    HID_USAGE_PAGE  ( HID_USAGE_PAGE_DESKTOP   ),
-    HID_USAGE       ( HID_USAGE_DESKTOP_MOUSE  ),
-    HID_COLLECTION  ( HID_COLLECTION_APPLICATION),
-        HID_REPORT_ID    ( REPORT_ID_MOUSE             ),
-        HID_USAGE        ( HID_USAGE_DESKTOP_POINTER    ),
-        HID_COLLECTION   ( HID_COLLECTION_PHYSICAL      ),
-            HID_USAGE_PAGE  ( HID_USAGE_PAGE_BUTTON ),
-              0x19, 0x01,  /*   Usage Minimum (1)             */
-              0x29, 0x03,  /*   Usage Maximum (3)             */
-              0x15, 0x00,  /*   Logical Minimum (0)           */
-              0x25, 0x01,  /*   Logical Maximum (1)           */
-              0x95, 0x03,  /*   Report Count (3)              */
-              0x75, 0x01,  /*   Report Size (1)               */
-              0x81, 0x02,  /*   Input (Data,Var,Abs)          */
-              0x95, 0x01,  /*   Report Count (1)              */
-              0x75, 0x05,  /*   Report Size (5)               */
-              0x81, 0x03,  /*   Input (Const,Var,Abs) [pad]   */
-            HID_USAGE_PAGE  ( HID_USAGE_PAGE_DESKTOP ),
-              0x09, 0x30,  /*   Usage (X)                     */
-              0x09, 0x31,  /*   Usage (Y)                     */
-              0x09, 0x38,  /*   Usage (Wheel)                 */
-              0x15, 0x81,  /*   Logical Minimum (-127)        */
-              0x25, 0x7F,  /*   Logical Maximum (127)         */
-              0x75, 0x08,  /*   Report Size (8)               */
-              0x95, 0x03,  /*   Report Count (3)              */
-              0x81, 0x06,  /*   Input (Data,Var,Rel)          */
-        HID_COLLECTION_END,
-    HID_COLLECTION_END,
+    TUD_HID_REPORT_DESC_MOUSE(HID_REPORT_ID(REPORT_ID_MOUSE)),
 };
 
 /* ----------------------------------------------------------------
- * TinyUSB HID device 回调（描述符 + 报告长度）
+ * USB Device Descriptor（tusb_desc_device_t）
+ * VID/PID 用 Espressif 默认值，可在 menuconfig 覆盖。
  * ---------------------------------------------------------------- */
+static const tusb_desc_device_t s_device_descriptor = {
+    .bLength            = sizeof(tusb_desc_device_t),
+    .bDescriptorType    = TUSB_DESC_DEVICE,
+    .bcdUSB             = 0x0200,
+    .bDeviceClass       = 0x00,
+    .bDeviceSubClass    = 0x00,
+    .bDeviceProtocol    = 0x00,
+    .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
+    .idVendor           = 0x303A,   /* Espressif VID */
+    .idProduct          = 0x4001,   /* 自定义 PID */
+    .bcdDevice          = 0x0100,
+    .iManufacturer      = 0x01,
+    .iProduct           = 0x02,
+    .iSerialNumber      = 0x03,
+    .bNumConfigurations = 0x01
+};
+
+/* ----------------------------------------------------------------
+ * String Descriptors
+ * ---------------------------------------------------------------- */
+static const char *s_string_descriptors[5] = {
+    "",                     /* 0: 支持的语言（由 lang_id 描述符提供） */
+    "Espressif",            /* 1: Manufacturer */
+    "Smart HID Device",     /* 2: Product */
+    "SMARTHID0001",         /* 3: Serial Number */
+    "Smart HID Config",     /* 4: Configuration */
+};
+
+/* ----------------------------------------------------------------
+ * Configuration Descriptor：2 Interface（Keyboard + Mouse）
+ *   Interface 0: Keyboard (EP1 IN)
+ *   Interface 1: Mouse (EP2 IN)
+ * ---------------------------------------------------------------- */
+static const uint8_t s_configuration_descriptor[] = {
+    /* Config number, interface count, string index, total length, attribute, power in mA */
+    TUD_CONFIG_DESCRIPTOR(1, /* interfaces */ 2, /* str idx */ 0,
+                          CONFIG_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
+
+    /* Interface 0: Keyboard */
+    TUD_HID_DESCRIPTOR(/* itf */ 0, /* str */ 0, HID_ITF_PROTOCOL_NONE,
+                       /* desc len */ sizeof(kHidReportDescriptor),
+                       /* EP IN */ EPNUM_KEYBOARD, /* EP size */ CFG_TUD_HID_EP_BUFSIZE,
+                       /* poll interval */ 10),
+
+    /* Interface 1: Mouse */
+    TUD_HID_DESCRIPTOR(/* itf */ 1, /* str */ 0, HID_ITF_PROTOCOL_NONE,
+                       /* desc len */ sizeof(kHidReportDescriptor),
+                       /* EP IN */ EPNUM_MOUSE, /* EP size */ CFG_TUD_HID_EP_BUFSIZE,
+                       /* poll interval */ 10),
+};
+
+/* tinyusb_driver 配置（esp_tinyusb 2.x：tinyusb_config_t）*/
+static const tinyusb_config_t s_tusb_drv_cfg = {
+    .port                      = TINYUSB_PORT_FULL_SPEED_0,
+    .phy.skip_setup           = false,        /* 让 esp_tinyusb 自动配置内部 PHY */
+    .phy.self_powered         = false,
+    .task.size                = 4096,
+    .task.priority            = 5,
+    .task.xCoreID             = -1,           /* 不绑核 */
+    .descriptor.device        = &s_device_descriptor,
+    .descriptor.string        = (const char **)s_string_descriptors,
+    .descriptor.string_count  = sizeof(s_string_descriptors) / sizeof(s_string_descriptors[0]),
+    .descriptor.full_speed_config = s_configuration_descriptor,
+};
+
+
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance) {
     (void)instance;
     return kHidReportDescriptor;
@@ -234,6 +258,18 @@ static void pressed_keys_flush_report(void) {
  * ---------------------------------------------------------------- */
 int hid_engine_init(void) {
     if (s_inited) return 0;
+
+    /* 注册 USB Device 栈（esp_tinyusb）：自动完成 USB PHY / tusb_init /
+     * Device/Config/String Descriptor 安装 / USB task 启动。*/
+    if (!tusb_inited()) {
+        esp_err_t rc = tinyusb_driver_install(&s_tusb_drv_cfg);
+        if (rc != ESP_OK) {
+            ESP_LOGE(TAG, "tinyusb_driver_install failed: %s", esp_err_to_name(rc));
+            return -1;
+        }
+        ESP_LOGI(TAG, "tinyusb_driver_install ok (composite HID: keyboard+mouse)");
+    }
+
     s_lock = xSemaphoreCreateMutex();
     if (s_lock == NULL) {
         ESP_LOGE(TAG, "create mutex failed");

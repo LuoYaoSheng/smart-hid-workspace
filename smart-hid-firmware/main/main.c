@@ -23,8 +23,6 @@
 #include "esp_netif.h"
 #include "esp_event.h"
 
-#include "tusb.h"
-
 #include "smart_hid_protocol.h"
 #include "device_identity.h"
 #include "hid_engine.h"
@@ -52,22 +50,9 @@ void app_mqtt_on_command(const char *topic, const char *payload, int len) {
 }
 
 /* ----------------------------------------------------------------
- * TinyUSB 板级初始化（ESP32-S3 USB-OTG，需启用内部 PHY）
- *
- * 注：ESP-IDF v5.x 提供 esp_tinyusb 组件统一管理 USB 初始化。
- *     F1/F2 这里直接调用 tusb_init；板级 pinmux 由 esp_tinyusb 在
- *     CONFIG_TINYUSB_TASK_STACK_SIZE 启用后自动处理。
+ * USB 初始化由 hid_engine_init 内部完成（tinyusb_driver_install）。
+ * main.c 不直接接触 TinyUSB API。
  * ---------------------------------------------------------------- */
-static void usb_init(void) {
-    /* 由 esp_tinyusb 组件通过 board_init() 完成 PHY 初始化（在 menuconfig 启用）。
-     * 这里仅确保 tusb_init 已调。 */
-    if (!tusb_inited()) {
-        esp_err_t rc = (esp_err_t)tusb_init(0, TUSB_ROLE_DEVICE);
-        if (rc != 0) {
-            ESP_LOGE(TAG, "tusb_init failed: %d", rc);
-        }
-    }
-}
 
 /* ----------------------------------------------------------------
  * app_main
@@ -94,8 +79,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    /* 4. USB + hid_engine */
-    usb_init();
+    /* 4. USB + hid_engine（hid_engine_init 内部调 tinyusb_driver_install 完成 USB 栈注册）*/
     hid_engine_init();
 
     /* 5. command_engine（queue + worker + lease tick + dedup） */

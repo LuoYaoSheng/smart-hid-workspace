@@ -7,6 +7,7 @@
  * 字段顺序与 TS interface 对齐；新增字段时务必同步本文件 + TS。
  */
 #include "smart_hid_protocol.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

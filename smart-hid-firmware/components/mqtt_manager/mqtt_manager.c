@@ -9,6 +9,7 @@
 #include "hid_engine.h"
 
 #include <string.h>
+#include <time.h>
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "sdkconfig.h"

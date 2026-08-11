@@ -3,6 +3,6 @@
 # 任何字段/常量变更必须先改 TS 事实源，再同步本组件。
 idf_component_register(
     SRCS "smart_hid_protocol.c"
-    INCLUDE_DIRS "."
+    INCLUDE_DIRS "include"
     REQUIRES json
 )

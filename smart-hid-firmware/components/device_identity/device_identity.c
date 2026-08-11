@@ -6,6 +6,7 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_random.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 
@@ -26,11 +27,10 @@ static char s_boot_id[SMART_HID_BOOT_ID_MAX_LEN]     = {0};
 static void generate_boot_id(char *out, size_t out_size) {
     uint32_t r = esp_random();
     /* 加上启动计数式的额外熵（esp_timer）避免极短时间重启重复 */
-    extern uint64_t esp_timer_get_time(void);
-    uint64_t t = esp_timer_get_time();
+    int64_t t = esp_timer_get_time();
     r ^= (uint32_t)(t >> 4);
     r ^= (uint32_t)(t & 0xFFFFFFFFu);
-    snprintf(out, out_size, "B-%06X", r & 0xFFFFFFu);
+    snprintf(out, out_size, "B-%06X", (unsigned int)(r & 0xFFFFFFu));
 }
 
 /* ----------------------------------------------------------------

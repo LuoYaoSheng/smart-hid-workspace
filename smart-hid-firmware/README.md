@@ -12,13 +12,17 @@ MQTT callback 不直接发 HID Report。
 
 ## 当前状态
 
-✅ **F1+F2 C 源码骨架完成**（2026-08-11）：
-- USB Composite HID（Keyboard + Mouse）报告描述符与发送逻辑
+✅ **F1+F2 C 源码完成 + ESP-IDF v5.4.4 编译通过**（2026-08-11）：
+- USB Composite HID（Keyboard + Mouse）：esp_tinyusb managed component + `tinyusb_driver_install` + 官方 `TUD_HID_REPORT_DESC_*` 模板 + 2 个 HID interface
 - 协议层 JSON 解析/序列化（镜像 smart-ble TS 事实源）
 - command_engine：queue(32) + dedup(256) + boot_id 校验 + TTL + worker task + lease tick
 - mqtt_manager：连接 / 订阅 / LWT / publish ack+status+event
 - wifi_manager / status_manager / device_identity(NVS)
 - main.c 装配全部组件
+
+✅ **`idf.py build` 通过**：产出 `smart-hid-firmware.bin`（921KB，factory 分区 1MB 内）+ bootloader.bin + partition-table.bin。
+- 工具链：ESP-IDF v5.4.4 / xtensa-esp-elf-gcc 14.2 / Python 3.12 / macOS arm64
+- esp_tinyusb 2.x（managed component，`main/idf_component.yml` 声明）
 
 ✅ **F2 可靠性语义已通过 Go 参考实现端到端验证**（`../smart-hid-controlhub/cmd/mock-device` + `scripts/test-loop-f2.sh`，28/28 全过）：
 - request_id 去重（duplicate）
@@ -29,18 +33,20 @@ MQTT callback 不直接发 HID Report。
 - system/release_all 清空所有 pressed keys/buttons
 - MQTT 断开 → release_all
 
-⚠️ **本机无 ESP-IDF 工具链**，C 代码尚未编译/烧录验证。语义对齐由 Go 参考实现保证。
+⚠️ **尚未在真实 ESP32-S3 硬件上烧录验证**（USB 枚举 / HID 实际发送 / Wi-Fi 连接需硬件）。
+   语义对齐由 Go 参考实现保证；编译正确性由 `idf.py build` 通过保证。
 
 ## 目录结构
 
 ```text
 smart-hid-firmware/
 ├── CMakeLists.txt              # 顶层 ESP-IDF 工程
-├── Kconfig.projbuild           # Smart HID 配置项
 ├── partitions.csv              # 含双 OTA + NVS
-├── sdkconfig.defaults          # 默认配置（target=esp32s3, TinyUSB HID）
+├── sdkconfig.defaults          # 默认配置（target=esp32s3, TINYUSB_HID_COUNT=2）
 ├── main/
 │   ├── CMakeLists.txt
+│   ├── Kconfig.projbuild       # Smart HID 配置项（必须在 main/ 下才会被加载）
+│   ├── idf_component.yml       # 声明 esp_tinyusb managed component 依赖
 │   └── main.c                  # app_main 装配
 └── components/
     ├── smart_hid_protocol/     # 协议契约（镜像 TS 事实源）

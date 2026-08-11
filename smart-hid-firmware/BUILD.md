@@ -1,23 +1,26 @@
 # Smart HID Firmware — 编译烧录指南
 
-> 本机（开发 Mac）当前未安装 ESP-IDF，本文件给出的是**目标流程**。
-> 在配好 ESP-IDF 的机器上按本文操作可完成编译与烧录。
+> ✅ **本机已验证编译通过**（2026-08-11）：ESP-IDF v5.4.4 / macOS arm64 / Python 3.12。
+> 产出 `smart-hid-firmware.bin`（921KB）。烧录需真实 ESP32-S3 硬件。
 
-## 1. 环境要求
+## 1. 环境要求（已验证）
 
-- ESP-IDF ≥ v5.0（推荐 v5.2 / v5.3）
-- Python ≥ 3.8
-- 目标芯片：ESP32-S3（建议模组 ESP32-S3-N8R2，带 PSRAM）
+- **ESP-IDF v5.4.4**（推荐 v5.4.x；v5.0+ 亦可，需 esp_tinyusb ≥ 2.0）
+- **Python 3.9–3.12**（3.13+ 暂不受 esp-idf-kconfig 完整支持）
+- 目标芯片：**ESP32-S3**（建议模组 ESP32-S3-N8R2 / N16R8，带 PSRAM）
 - USB 数据线（接 ESP32-S3 的 USB-OTG 口，用于烧录 + USB HID 复用）
+- macOS arm64 / x86_64 / Linux / Windows 均可
 
 ## 2. 安装 ESP-IDF（如未装）
 
 ```bash
 mkdir -p ~/esp && cd ~/esp
-git clone --recurse-submodules -b v5.3 https://github.com/espressif/esp-idf.git
+git clone --recurse-submodules -b v5.4.4 https://github.com/espressif/esp-idf.git
 cd esp-idf && ./install.sh esp32s3
 . ./export.sh   # 每个新终端都要 source
 ```
+
+> 若 GitHub 不通，设 `export IDF_GITHUB_ASSETS=dl.espressif.com/github_assets` 让下载走 Espressif CDN。
 
 ## 3. 配置
 
@@ -98,8 +101,8 @@ F5 启用：
 
 | 里程碑 | 范围 | 当前 |
 |--------|------|------|
-| F1 | USB Keyboard/Mouse + 固定 Wi-Fi/MQTT + ControlHub | ✅ C 代码完成（未硬件验证） |
-| F2 | ACK / request_id / dedup / boot_id / TTL / lease / release_all / queue | ✅ C 代码完成 + Go 参考验证 28/28 |
+| F1 | USB Keyboard/Mouse + 固定 Wi-Fi/MQTT + ControlHub | ✅ C 代码完成 + `idf.py build` 通过（未硬件验证） |
+| F2 | ACK / request_id / dedup / boot_id / TTL / lease / release_all / queue | ✅ C 代码完成 + 编译通过 + Go 参考验证 28/28 |
 | F3 | BLE Provision + Pairing | ⏳ 待开始 |
 | F4 | NVS Security + Trial Anchor + OTA Foundation | ⏳ |
 | F5 | Production Security + Factory Tool | ⏳ |
