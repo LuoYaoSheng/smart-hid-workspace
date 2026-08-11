@@ -50,10 +50,15 @@ smart-hid-web/
 │   └── concept.png         # 控制流概念图（1536×1024）
 ├── api/                    # 自包含 API 契约副本（事实源在 controlhub/docs/openapi.yaml）
 │   └── openapi.yaml
-├── docs/                   # 教程
+├── docs/                   # 文档与教程（自包含，落地页可独立部署）
 │   ├── quick-start.html    # 快速开始（烧录→起 ControlHub→首条命令）
-│   ├── docs.css            # 文档页样式（侧边目录 / 代码块 / callout）
-│   └── docs.js             # 文档页 scrollspy
+│   ├── prd.html            # 产品 PRD（marked.js 运行时渲染 *.md）
+│   ├── architecture.html   # 系统架构
+│   ├── roadmap.html        # 开发路线
+│   ├── protocols.html      # 协议 Schema（Command/Ack/Status，内联 JSON）
+│   ├── markdown-loader.js  # 通用 Markdown 加载器（fetch + marked + 自动 TOC）
+│   ├── docs.css / docs.js  # 文档页样式 + scrollspy（可重入，供 loader 重建）
+│   └── *.md                # PRD/架构/路线 markdown 源（落地页自包含副本）
 ├── downloads/              # 发布资产（有意提交；build-releases.sh 重建）
 │   ├── build-releases.sh   # 一键重建全部资产（ControlHub 双平台 + 固件包 + API 契约）
 │   ├── controlhub/         # ControlHub 预构建二进制（Windows/macOS）+ SHA256
@@ -81,6 +86,7 @@ API 文档页（`api-docs.html`）的 Swagger UI 渲染器走 CDN，需联网；
 - ✅ **产品落地页**（静态）：Hero / 工作原理 / 键鼠能力 / 系统组成 / 设计原则 / 文档 / 下载 / CTA / 页脚，响应式。
 - ✅ **API 文档**：Swagger UI 交互式，对齐 `smart-hid-controlhub/docs/openapi.yaml`。
 - ✅ **教程**：快速开始端到端指南。
+- ✅ **文档中心**：`docs/` 下 PRD / 系统架构 / 开发路线 / 协议 Schema，自包含（markdown 由 marked.js 运行时渲染，带自动侧边目录）。落地页**零跨目录依赖**，可独立部署到任意静态服务器。
 - ✅ **下载**：ControlHub 双平台二进制 + 固件烧录包（开发构建 `v0.1.0-scaffold`，附 SHA256）。
 - ✅ **演示视频中心**：`video.html`，配置驱动。视频首发 B 站，同步抖音 / YouTube；页面内 `VIDEO_CONFIG` 填入链接即自动渲染（B 站 bvid 填入即嵌入播放器）。当前为"制作中"占位态。
 - ✅ **授权与套餐**：`license.html`，试用 + 设备授权 + 7 步激活流 + License 载荷 + FAQ。

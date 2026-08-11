@@ -24,6 +24,9 @@
     .brand .tag { font-weight: 400; color: #93a0bd; font-size: 13px; margin-left: 4px; }
     .back { font-size: 14px; font-weight: 600; color: #c7d2fe; }
     .back:hover { color: #fff; }
+    .topbar-links { display: flex; align-items: center; gap: 20px; }
+    .topbar-links a { font-size: 14px; font-weight: 500; }
+    .topbar-links a:hover { color: #fff; }
     /* API key 提示条 */
     .authbar {
       background: #fff7ed; color: #92400e; border-bottom: 1px solid #fed7aa;
@@ -50,7 +53,12 @@
     <span class="mark">⚡</span> Smart HID
     <span class="tag">/ ControlHub HTTP API</span>
   </div>
-  <a class="back" href="index.html">← 返回落地页</a>
+  <nav class="topbar-links">
+    <a href="video.html">视频</a>
+    <a href="license.html">授权</a>
+    <a href="docs/quick-start.html">快速开始</a>
+    <a class="back" href="index.html">← 返回落地页</a>
+  </nav>
 </div>
 
 <div class="authbar">

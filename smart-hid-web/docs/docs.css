@@ -126,3 +126,30 @@ ol.steps em { color: var(--primary); font-style: normal; font-weight: 600; }
   .toc a { padding: 4px 9px; font-size: 13px; }
   .toc a.active { background: var(--primary-soft); }
 }
+
+/* ---- markdown 渲染补丁（marked.js 输出，.docs-main 作用域）---- */
+.docs-main h3 {
+  font-size: 18px; font-weight: 700; color: var(--ink); margin: 30px 0 10px;
+  letter-spacing: -.01em; scroll-margin-top: 80px;
+}
+.docs-main h4 { font-size: 15.5px; font-weight: 700; color: var(--ink); margin: 22px 0 8px; }
+.docs-main h2 + h3 { margin-top: 18px; }
+.docs-main blockquote {
+  margin: 14px 0; padding: 10px 18px; border-left: 4px solid var(--line);
+  color: var(--muted); background: var(--bg-soft); border-radius: 0 8px 8px 0;
+}
+.docs-main blockquote p { margin: 4px 0; }
+.docs-main hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+.docs-main img { max-width: 100%; border-radius: 8px; margin: 12px 0; }
+/* 裸 markdown 管道表格（区别于手写 .req-table） */
+.docs-main table:not(.req-table) {
+  width: 100%; border-collapse: collapse; margin: 14px 0 20px; font-size: 14.5px;
+  display: block; overflow-x: auto;
+}
+.docs-main table:not(.req-table) th,
+.docs-main table:not(.req-table) td {
+  padding: 9px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top;
+}
+.docs-main table:not(.req-table) th { background: var(--bg-soft); font-weight: 700; color: var(--ink); }
+.docs-main table:not(.req-table) tr:nth-child(even) td { background: rgba(0,0,0,.018); }
+.md-body > :first-child { margin-top: 0; }   /* md 正文首元素去掉多余上边距 */
