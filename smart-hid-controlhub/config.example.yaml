@@ -1,0 +1,24 @@
+# ControlHub 配置示例
+# 复制为 config.yaml 后按需修改；不提供 config.yaml 时使用内置默认值。
+
+# 本地 HTTP API 端口（默认 127.0.0.1）
+http:
+  host: "127.0.0.1"
+  port: 17890
+
+# 嵌入式 MQTT broker
+mqtt:
+  host: "127.0.0.1"
+  port: 17891
+  # Phase 1 仅本机回环，不做 ACL；Phase 4 接入配对时补
+  username: "controlhub"
+  password: "change-me-in-production"
+
+# API Key：留空则启动时随机生成并打印到日志（Phase 1 开发期）
+api_key: ""
+
+# 数据目录（SQLite、日志）
+data_dir: "./data"
+
+# 日志级别：debug / info / warn / error
+log_level: "info"

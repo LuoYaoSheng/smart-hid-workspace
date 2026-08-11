@@ -114,7 +114,36 @@ Entitlement 必须在 Publish MQTT 前完成。
 
 ## 当前状态
 
-⚠️ **脚手架阶段**。仅有目录骨架与文档落位，未实现任何功能代码。详见 `../docs/05_CONTROLHUB_DETAIL_DESIGN_V1.0.md` 与 `../docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md`。
+✅ **Phase 1 已实现并通过端到端验证**（2026-08-11）。
+
+实现里程碑：CH-01 App/Config/Logging、CH-02 SQLite、CH-03 HTTP、CH-04 MQTT、CH-05 Device Manager、CH-07 Command HTTP→MQTT→ACK。
+跳过：CH-06 Pairing（Phase 4）、CH-08 Tray、CH-09 Trial、CH-10 License、CH-11 Installer。
+
+### 运行（本地）
+
+```bash
+cd smart-hid-controlhub
+
+# 构建
+go build -o bin/controlhub ./cmd/controlhub
+go build -o bin/mock-device ./cmd/mock-device
+
+# 端到端验证（启 ControlHub + mock-device + curl ENTER）
+./scripts/test-loop.sh
+```
+
+验证通过的链路：`curl → ControlHub HTTP → MQTT → mock-device → USB HID(模拟) → ACK`
+- `POST /api/v1/devices/HID-00000001/commands` 发 keyboard tap ENTER → HTTP 200 status=executed
+- `GET /api/v1/commands/{request_id}` 查询命令状态
+- 错误 API Key → 401；错误 boot_id → 422 status=rejected（STALE_DEVICE_SESSION）
+
+### 配置
+
+- 默认端口：HTTP 17890 / MQTT 17891
+- API Key：`config.yaml` 未指定时启动随机生成并打印到日志
+- 示例配置：`config.example.yaml`
+
+详见 `../docs/05_CONTROLHUB_DETAIL_DESIGN_V1.0.md` 与 `../docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md`。
 
 ## 相关
 

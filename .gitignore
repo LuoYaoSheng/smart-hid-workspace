@@ -10,6 +10,7 @@ Thumbs.db
 
 # Go (smart-hid-controlhub)
 smart-hid-controlhub/bin/
+smart-hid-controlhub/data/
 smart-hid-controlhub/vendor/
 *.exe
 *.exe~
