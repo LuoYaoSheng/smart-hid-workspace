@@ -1,0 +1,33 @@
+# Smart HID Firmware — 默认 sdkconfig（仅列 Smart HID 相关与关键覆盖项）
+# 完整配置由 `idf.py menuconfig` / `idf.py build` 生成。
+
+# === Target ===
+CONFIG_IDF_TARGET="esp32s3"
+
+# === Partition Table ===
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+
+# === USB TinyUSB ===
+# Composite HID（Keyboard + Mouse）
+CONFIG_TINYUSB_HID_ENABLED=y
+CONFIG_TINYUSB_TASK_STACK_SIZE=4096
+
+# === FreeRTOS ===
+CONFIG_FREERTOS_HZ=1000
+
+# === LWIP / MQTT ===
+CONFIG_MQTT_TASK_STACK_SIZE=6144
+
+# === NVS Encryption ===
+# F4 才启用，F1/F2 保持默认（无加密）
+# CONFIG_NVS_ENCRYPTION=y
+
+# === Logging ===
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# === PSRAM（ESP32-S3-N8R2 模组） ===
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y

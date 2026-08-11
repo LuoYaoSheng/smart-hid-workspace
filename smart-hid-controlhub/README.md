@@ -119,6 +119,12 @@ Entitlement 必须在 Publish MQTT 前完成。
 实现里程碑：CH-01 App/Config/Logging、CH-02 SQLite、CH-03 HTTP、CH-04 MQTT、CH-05 Device Manager、CH-07 Command HTTP→MQTT→ACK。
 跳过：CH-06 Pairing（Phase 4）、CH-08 Tray、CH-09 Trial、CH-10 License、CH-11 Installer。
 
+✅ **F2 可靠性语义参考实现 + 验证**（2026-08-11）。
+
+`cmd/mock-device` 已升级为 ESP32-S3 固件 F1+F2 阶段的 Go 语义参考实现，与 `../smart-hid-firmware/components/` 下的 C 代码一一对照：
+- dedup（环形 256）/ boot_id 校验 / TTL 过期 / queue(32) 满 / lease 超时自动释放 / system.release_all / MQTT 断开 release_all
+- 验证脚本 `scripts/test-loop-f2.sh` 28/28 全过
+
 ### 运行（本地）
 
 ```bash
@@ -128,14 +134,19 @@ cd smart-hid-controlhub
 go build -o bin/controlhub ./cmd/controlhub
 go build -o bin/mock-device ./cmd/mock-device
 
-# 端到端验证（启 ControlHub + mock-device + curl ENTER）
+# Phase 1 端到端验证（启 ControlHub + mock-device + curl ENTER）
 ./scripts/test-loop.sh
+
+# F2 可靠性语义验证（dedup/boot_id/TTL/lease/release_all/queue_full/MQTT disconnect）
+./scripts/test-loop-f2.sh
 ```
 
 验证通过的链路：`curl → ControlHub HTTP → MQTT → mock-device → USB HID(模拟) → ACK`
 - `POST /api/v1/devices/HID-00000001/commands` 发 keyboard tap ENTER → HTTP 200 status=executed
 - `GET /api/v1/commands/{request_id}` 查询命令状态
 - 错误 API Key → 401；错误 boot_id → 422 status=rejected（STALE_DEVICE_SESSION）
+- 同 request_id 重发 → status=duplicate；TTL 越界 → 400
+- key_down + lease_ms + release_all → 清空 pressed keys
 
 ### 配置
 

@@ -1,0 +1,49 @@
+menu "Smart HID"
+
+config SMART_HID_DEVICE_ID
+    string "Device ID（首次烧录后由 NVS 接管）"
+    default "HID-00000001"
+    help
+        仅首次启动使用（NVS 未写入时）。后续 device_id 持久化在 NVS namespace=identity。
+        格式：^HID-[A-Z0-9]{8}$
+
+config SMART_HID_MQTT_BROKER_HOST
+    string "MQTT broker host"
+    default "192.168.1.100"
+    help
+        ControlHub 的 MQTT broker 地址（LAN IP）。
+        F1/F2 阶段固定，F3 后改由 BLE 配网写入 NVS namespace=hub。
+
+config SMART_HID_MQTT_BROKER_PORT
+    int "MQTT broker port"
+    default 17891
+
+config SMART_HID_MQTT_USERNAME
+    string "MQTT username"
+    default "controlhub"
+
+config SMART_HID_MQTT_PASSWORD
+    string "MQTT password"
+    default "change-me-in-production"
+
+config SMART_HID_WIFI_SSID
+    string "Wi-Fi SSID（F1/F2 固定，F3 后由配网写入）"
+    default ""
+
+config SMART_HID_WIFI_PASSWORD
+    string "Wi-Fi Password"
+    default ""
+
+config SMART_HID_USB_HID_MOUSE_REPORT_ID
+    int "USB Mouse HID report ID"
+    default 1
+
+config SMART_HID_USB_HID_KEYBOARD_REPORT_ID
+    int "USB Keyboard HID report ID"
+    default 2
+
+config SMART_HID_STATUS_HEARTBEAT_SEC
+    int "Status 心跳周期（秒）"
+    default 10
+
+endmenu
