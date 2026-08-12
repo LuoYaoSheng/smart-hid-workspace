@@ -78,9 +78,11 @@ func (s *Server) Routes() http.Handler {
 	protected.HandleFunc("/api/v1/usage", s.handleUsage)                     // GET 当前 Trial 用量（CH-P6）
 	protected.HandleFunc("/api/v1/usage/all", s.handleUsageAll)              // GET 所有设备用量
 	if s.licenseMgr != nil {
-		protected.HandleFunc("/api/v1/license", s.handleLicenseStatus)        // GET 当前 license 状态
-		protected.HandleFunc("/api/v1/license/import", s.handleLicenseImport) // POST 离线导入
-		protected.HandleFunc("/api/v1/license/list", s.handleLicenseList)     // GET 所有 license
+		protected.HandleFunc("/api/v1/license", s.handleLicenseStatus)         // GET 当前 license 状态
+		protected.HandleFunc("/api/v1/license/import", s.handleLicenseImport)  // POST 离线导入
+		protected.HandleFunc("/api/v1/license/list", s.handleLicenseList)      // GET 所有 license
+		protected.HandleFunc("/api/v1/license/activate-code", s.handleActivateByCode) // CL-6c POST 激活码在线激活
+		protected.HandleFunc("/api/v1/license/refresh", s.handleRefreshLicense)       // CL-6c POST 在线刷新
 	}
 	if s.pairingMgr != nil {
 		protected.HandleFunc("/api/v1/pairing/sessions", s.handlePairingSessions)        // POST 创建
@@ -101,6 +103,8 @@ func (s *Server) Routes() http.Handler {
 		mux.Handle("/api/v1/license", auth)
 		mux.Handle("/api/v1/license/import", auth)
 		mux.Handle("/api/v1/license/list", auth)
+		mux.Handle("/api/v1/license/activate-code", auth)
+		mux.Handle("/api/v1/license/refresh", auth)
 	}
 	if s.pairingMgr != nil {
 		mux.Handle("/api/v1/pairing/sessions", auth)

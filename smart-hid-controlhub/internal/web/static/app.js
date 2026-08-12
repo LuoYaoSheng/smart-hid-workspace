@@ -85,6 +85,10 @@
     pairHint: $('pair-hint'), pairTimer: $('pair-timer'),
     // CH-P6：Trial 用量
     usageResult: $('usage-result'), refreshUsage: $('refresh-usage'),
+    // CL-6c：License 面板
+    licRefresh: $('lic-refresh'), licStatus: $('lic-status'),
+    licActivateForm: $('lic-activate-form'), licCode: $('lic-code'),
+    licResult: $('lic-result'),
   };
 
   // ---------- API 调用 ----------
@@ -505,6 +509,59 @@
     return d.innerHTML;
   }
 
+  // ---------- License（CL-6c）----------
+  function fmtDate(unixSec) {
+    if (!unixSec) return '—';
+    return new Date(unixSec * 1000).toLocaleString('zh-CN');
+  }
+
+  async function fetchLicenseStatus() {
+    if (!state.apiKey) { el.licStatus.textContent = '输入 API Key 后显示。'; return; }
+    const r = await api('GET', '/license/list');
+    if (!r.ok) { el.licStatus.innerHTML = '<span class="bad">加载失败：' + esc(r.json?.message || r.error || r.status) + '</span>'; return; }
+    const lics = r.json?.licenses || [];
+    if (!lics.length) {
+      el.licStatus.innerHTML = '<span class="muted">暂无 License。在下方输入激活码在线激活，或离线导入 .license 文件。</span>';
+      return;
+    }
+    el.licStatus.innerHTML = lics.map((l) => {
+      const cls = l.status === 'ACTIVE' ? 'ok' : 'bad';
+      const remain = l.time_remaining_seconds != null
+        ? ' · 剩 ' + Math.max(0, Math.floor(l.time_remaining_seconds / 86400)) + ' 天' : '';
+      return '<div class="lic-row"><span class="badge ' + cls + '">' + esc(l.status) + '</span>' +
+        '<span class="muted">' + esc(l.device_id) + '</span>' +
+        '<span class="small muted">到期 ' + fmtDate(l.expires_at) + remain + '</span></div>';
+    }).join('');
+  }
+
+  async function activateByCode(e) {
+    e.preventDefault();
+    el.licResult.textContent = '';
+    const code = el.licCode.value.trim();
+    if (!code) { el.licResult.innerHTML = '<span class="bad">请输入激活码</span>'; return; }
+    el.licResult.innerHTML = '<span class="muted">激活中…</span>';
+    const r = await api('POST', '/license/activate-code', { code });
+    if (!r.ok) {
+      el.licResult.innerHTML = '<span class="bad">激活失败：' + esc(r.json?.message || r.json?.error || r.error || r.status) + '</span>';
+      return;
+    }
+    el.licCode.value = '';
+    el.licResult.innerHTML = '<span class="ok">激活成功（' + esc(r.json?.status || 'ACTIVE') + '）</span>';
+    fetchLicenseStatus();
+  }
+
+  async function refreshLicense() {
+    el.licResult.innerHTML = '<span class="muted">刷新中…</span>';
+    const r = await api('POST', '/license/refresh', {});
+    if (!r.ok) {
+      el.licResult.innerHTML = '<span class="bad">刷新失败：' + esc(r.json?.message || r.json?.error || r.error || r.status) + '</span>';
+      return;
+    }
+    el.licResult.innerHTML = '<span class="ok">刷新完成：' + r.json?.refreshed + ' 成功' +
+      (r.json?.failed ? '，' + r.json.failed + ' 失败' : '') + '</span>';
+    fetchLicenseStatus();
+  }
+
   // ---------- 事件绑定 ----------
   el.authForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -513,6 +570,7 @@
     pollHealth();
     pollDevices();
     fetchLAN();
+    fetchLicenseStatus();
   });
 
   el.refreshDevices.addEventListener('click', pollDevices);
@@ -525,6 +583,8 @@
   el.lanToggle.addEventListener('change', toggleLAN);
   el.pairCreate.addEventListener('click', createPairingSession);
   el.refreshUsage.addEventListener('click', fetchUsage);
+  el.licActivateForm.addEventListener('submit', activateByCode);
+  el.licRefresh.addEventListener('click', refreshLicense);
 
   // ---------- 启动 ----------
   function start() {
@@ -534,6 +594,7 @@
     pollDevices();
     fetchLAN();
     fetchUsage();
+    fetchLicenseStatus();
     // 定时刷新（仅健康与设备；命令状态按需查询）
     state.healthTimer = setInterval(pollHealth, 5000);
     state.deviceTimer = setInterval(() => {

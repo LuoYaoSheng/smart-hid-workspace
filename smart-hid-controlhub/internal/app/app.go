@@ -52,7 +52,9 @@ type App struct {
 	pairingMgr   *pairing.Manager
 	pairingSrv   *pairing.DeviceServer
 	trialMgr     *trial.Manager
-	cloudCli     *cloud.Client // CL-6b：在线激活/刷新；nil = 纯离线
+	cloudCli     *cloud.Client     // CL-6b：在线激活/刷新；nil = 纯离线
+	licenseMgr   *licmgr.Manager   // CL-6c：本地 license 管理（refresher/手动刷新用）
+	refresher    *licmgr.Refresher // CL-6c：后台自动刷新循环；nil = 离线模式
 
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -157,6 +159,12 @@ func Build(cfgPath string) (*App, error) {
 		log.Info("cloud base_url empty — offline mode (no online activation/refresh)")
 	}
 
+	// CL-6c：后台 License 刷新器（仅在线模式启动）
+	var refresher *licmgr.Refresher
+	if cloudCli != nil {
+		refresher = licmgr.NewRefresher(licenseMgr, cloudCli, log.With("component", "refresher"), 0)
+	}
+
 	return &App{
 		cfg:        cfg,
 		log:        log,
@@ -172,6 +180,8 @@ func Build(cfgPath string) (*App, error) {
 		pairingSrv: pairingSrv,
 		trialMgr:   trialMgr,
 		cloudCli:   cloudCli,
+		licenseMgr: licenseMgr,
+		refresher:  refresher,
 	}, nil
 }
 
@@ -235,6 +245,11 @@ func (a *App) Start() error {
 
 		// Trial idle checker（goroutine）
 		a.trialMgr.Start()
+
+		// CL-6c：License 后台刷新循环（仅在线模式）
+		if a.refresher != nil {
+			a.refresher.Start(a.ctx)
+		}
 
 		a.started = true
 		a.log.Info("controlhub started",
@@ -314,6 +329,17 @@ func (a *App) HTTPPort() int { return a.cfg.HTTP.Port }
 // RotateAPIKey 暴露给 tray 菜单调用。
 func (a *App) RotateAPIKey() (string, error) {
 	return a.keys.Rotate("tray")
+}
+
+// RefreshLicense 暴露给 tray 菜单调用（CL-6c）。
+// 立即向 Cloud 刷新全部本地 License。离线模式返 error 提示。
+// 返回 (成功数, 失败数, error)。
+func (a *App) RefreshLicense() (int, int, error) {
+	if a.refresher == nil {
+		return 0, 0, fmt.Errorf("offline mode (cloud base_url not configured)")
+	}
+	ok, failed := a.refresher.RefreshAllNow()
+	return ok, failed, nil
 }
 
 // LANModeEnabled 返回当前 LAN 模式开关状态（从 settings 读，反映持久化值）。
