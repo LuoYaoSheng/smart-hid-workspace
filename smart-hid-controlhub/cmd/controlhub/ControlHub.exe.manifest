@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Smart HID ControlHub Windows app manifest (CH-P8).
+  控件视觉样式、DPI 感知、UAC level。
+
+  关于"无 CMD 黑窗"：那由 Go linker flag `-H windowsgui` 控制（见 packaging/build-windows.sh）。
+  本 manifest 管 DPI / UAC / 视觉样式 / 兼容 OS。
+
+  部署：与 ControlHub.exe 同目录，文件名 ControlHub.exe.manifest（Windows 自动加载）。
+  注：若未来用 rsrc/winres 把 manifest 嵌入 .syso，则此外部文件可删。
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32"
+    name="SmartHID.ControlHub"
+    version="1.0.0.0"
+    processorArchitecture="*"/>
+
+  <!-- 视觉样式（ComCtl32 v6），让 Web View / 对话框用现代主题 -->
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32"
+        name="Microsoft.Windows.Common-Controls"
+        version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df"
+        language="*"/>
+    </dependentAssembly>
+  </dependency>
+
+  <!-- UAC：asInvoker（不弹 UAC，按当前用户权限跑） -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <!-- DPI 感知：让 Web UI 在高 DPI 屏不模糊 -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+
+  <!-- 兼容 OS：Win10 / Win11（Server 2016+） -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+</assembly>
