@@ -2,8 +2,7 @@ package trial
 
 // Anchor 返回当前 ControlHub 实例的 machine anchor 字符串。
 //
-// CH-P6 stub：固定返回 "local-stub"。
-// CH-P7 实装：
+// CH-P7：anchor 由 App 装配时通过 sys.GetMachineAnchor() 获取并传入 New：
 //   - Windows: HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid
 //   - macOS:   IOPlatformUUID（ioreg -d2 -c IOPlatformExpertDevice）
 //   - Linux:   /etc/machine-id

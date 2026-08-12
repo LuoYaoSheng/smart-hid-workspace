@@ -29,6 +29,7 @@ import (
 	"smart-hid-controlhub/internal/protocol"
 	"smart-hid-controlhub/internal/settings"
 	"smart-hid-controlhub/internal/storage"
+	"smart-hid-controlhub/internal/sys"
 	"smart-hid-controlhub/internal/tray"
 	"smart-hid-controlhub/internal/trial"
 )
@@ -124,8 +125,10 @@ func Build(cfgPath string) (*App, error) {
 	// Engine + API server（构造时不启动）
 	engine := command.New(hubClient, dm, store, log.With("component", "engine"))
 
-	// Trial Manager（CH-P6）：先构造（依赖 settings + DB），再注入 Engine
-	trialMgr := trial.New(trial.NewSQLStore(store.DB), setStore, log.With("component", "trial"))
+	// Trial Manager（CH-P6/7）：依赖 settings + DB + machine anchor
+	machineAnchor := sys.GetMachineAnchor()
+	log.Info("machine anchor resolved", "anchor", machineAnchor)
+	trialMgr := trial.New(trial.NewSQLStore(store.DB), setStore, machineAnchor, log.With("component", "trial"))
 	engine.WithEntitlement(trialMgr).WithTrial(trialMgr)
 
 	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, trialMgr, log.With("component", "api"))

@@ -32,7 +32,8 @@ import (
 	"smart-hid-controlhub/internal/settings"
 )
 
-// stubAnchor 占位 machine anchor（CH-P6）；CH-P7 替换为真实 OS GUID。
+// stubAnchor 是历史占位（CH-P6）；CH-P7 起 New 接受真实 anchor 参数。
+// 测试可显式传 "test-anchor" 或此常量。
 const stubAnchor = "local-stub"
 
 // 秒，每这么久检查一次 idle session。
@@ -84,13 +85,17 @@ type Usage struct {
 	MachineAnchor    string  `json:"machine_anchor"`
 }
 
-// New 创建 Manager。Start() 启动 idle checker goroutine。
-func New(db trialStore, setStore *settings.Store, log *slog.Logger) *Manager {
+// New 创建 Manager。anchor 是当前机器的稳定标识符（CH-P7：sys.GetMachineAnchor()），
+// 用于 trial_usage 主键防重装绕过。Start() 启动 idle checker goroutine。
+func New(db trialStore, setStore *settings.Store, anchor string, log *slog.Logger) *Manager {
+	if anchor == "" {
+		anchor = stubAnchor
+	}
 	return &Manager{
 		db:       db,
 		log:      log,
 		settings: setStore,
-		anchor:   stubAnchor,
+		anchor:   anchor,
 		active:   make(map[string]*activeSession),
 		stopCh:   make(chan struct{}),
 	}

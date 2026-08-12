@@ -31,7 +31,7 @@ func newTrialMgr(t *testing.T) (*Manager, *sql.DB) {
 	_ = setStore.SetInt(settings.KeyTrialIdleTimeoutSeconds, 1)
 	_ = setStore.SetInt(settings.KeyTrialQuotaSeconds, 10)
 
-	m := New(NewSQLStore(store.DB), setStore, silentLogger())
+	m := New(NewSQLStore(store.DB), setStore, stubAnchor, silentLogger())
 	return m, store.DB
 }
 
@@ -182,7 +182,7 @@ func TestTrial_PersistsAcrossRestart(t *testing.T) {
 	setStore := settings.New(db)
 	_ = setStore.SetInt(settings.KeyTrialIdleTimeoutSeconds, 1)
 	_ = setStore.SetInt(settings.KeyTrialQuotaSeconds, 10)
-	m2 := New(NewSQLStore(db), setStore, silentLogger())
+	m2 := New(NewSQLStore(db), setStore, stubAnchor, silentLogger())
 
 	u := m2.Usage("HID-AAAA1111")
 	if u.UsedSeconds < 4.9 || u.UsedSeconds > 5.1 {
