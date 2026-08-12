@@ -51,3 +51,15 @@ export function fmtMoney(cents, currency = 'CNY') {
   const sym = currency === 'CNY' ? '¥' : (currency === 'USD' ? '$' : '');
   return sym + (cents / 100).toFixed(2);
 }
+
+// 触发浏览器保存 blob（用于 .license 文件下载）。
+export function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}

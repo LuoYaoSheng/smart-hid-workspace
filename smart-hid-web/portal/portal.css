@@ -140,3 +140,19 @@ hr.divider { border: none; border-top: 1px solid var(--line); margin: 20px 0; }
   .nav-user { display: none; }
   .portal-main { padding: 20px 16px 48px; }
 }
+
+/* ============ 模态对话框 ============ */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(15,23,42,.5);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.modal {
+  width: 100%; max-width: 420px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+}
+.modal h3 { margin: 0 0 6px; color: var(--ink); }
