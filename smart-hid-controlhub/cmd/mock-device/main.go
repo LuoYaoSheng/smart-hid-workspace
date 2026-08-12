@@ -454,6 +454,9 @@ func main() {
 	stale := flag.Bool("stale-boot-id", false, "reject all commands (simulate boot_id mismatch)")
 	execDelay := flag.Int("exec-delay-ms", defaultExecMs, "simulated USB HID execution delay")
 	verbose := flag.Bool("verbose", false, "verbose decision logging")
+	pairURL := flag.String("pair-url", "",
+		"if set, call ControlHub pairing endpoint (e.g. http://127.0.0.1:17892/api/v1/pairing/device) to obtain MQTT credentials before connecting")
+	pairToken := flag.String("pair-token", "", "pairing session token (required with --pair-url)")
 	flag.Parse()
 
 	logLevel := slog.LevelInfo
@@ -473,6 +476,27 @@ func main() {
 	log.Info("mock device starting",
 		"boot_id", dev.BootID(), "stale_mode", *stale, "exec_delay_ms", *execDelay,
 		"queue_size", queueSize, "dedup_size", dedupCacheSize, "firmware", "1.0.0-mock-f2")
+
+	// CH-P5：可选走 ControlHub 配对流程，拿 per-device MQTT 凭据（覆盖 --mqtt-user/--mqtt-pass）
+	if *pairURL != "" {
+		if *pairToken == "" {
+			log.Error("--pair-url requires --pair-token")
+			os.Exit(2)
+		}
+		creds, err := doPair(*pairURL, *pairToken, *deviceID, dev.BootID(), log)
+		if err != nil {
+			log.Error("pairing failed", "err", err)
+			os.Exit(1)
+		}
+		*mqttUser = creds.MQTTUsername
+		*mqttPass = creds.MQTTCredential
+		if creds.MQTTHost != "" {
+			*host = creds.MQTTHost
+		}
+		if creds.MQTTPort != 0 {
+			*port = creds.MQTTPort
+		}
+	}
 
 	/* ----- MQTT 客户端 ----- */
 	opts := pahomqtt.NewClientOptions()

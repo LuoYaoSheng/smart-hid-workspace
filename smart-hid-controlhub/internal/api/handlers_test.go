@@ -109,7 +109,8 @@ func newTestServer(t *testing.T, client pahomqtt.Client) (base string, dm *devic
 	}
 	// CH-P4：settings store
 	setStore := settings.New(store.DB)
-	srv := New(engine, dm, keys, setStore, log)
+	// CH-P5：pairing manager（nil 即不启用配对路由，简化测试）
+	srv := New(engine, dm, keys, setStore, nil, log)
 	ts := httptest.NewServer(srv.Routes())
 	t.Cleanup(ts.Close)
 	return ts.URL, dm, store, engine

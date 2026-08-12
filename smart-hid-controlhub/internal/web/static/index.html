@@ -20,6 +20,19 @@
   </header>
 
   <main>
+    <!-- 配对新设备（CH-P5） -->
+    <section class="card">
+      <div class="section-head">
+        <h2>配对新设备</h2>
+        <span id="pair-timer" class="muted"></span>
+      </div>
+      <div class="pair-row">
+        <button id="pair-create" class="primary">创建配对会话</button>
+        <span id="pair-hint" class="muted">点击生成 5 分钟有效的配对 token，设备 BLE 配网扫描后即可加入。</span>
+      </div>
+      <div id="pair-result" class="pair-result" hidden></div>
+    </section>
+
     <!-- 设备列表 -->
     <section class="card">
       <div class="section-head">

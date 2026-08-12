@@ -231,3 +231,38 @@ button.warning:hover { background: #d97706; }
 }
 .switch input:checked + .slider { background: var(--primary, #2563eb); }
 .switch input:checked + .slider::before { transform: translateX(18px); }
+
+/* ===== CH-P5 配对面板 ===== */
+.pair-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pair-result {
+  margin-top: 14px;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.pair-status {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.pair-line {
+  margin-top: 6px;
+  font-size: 13px;
+  word-break: break-all;
+}
+.pair-token {
+  display: inline-block;
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  user-select: all;
+  margin-left: 6px;
+}

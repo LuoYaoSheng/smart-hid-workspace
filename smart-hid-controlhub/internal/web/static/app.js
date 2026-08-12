@@ -80,6 +80,9 @@
     // CH-P2/P4：设置面板
     rotateKey: $('rotate-key'), rotateResult: $('rotate-result'),
     lanToggle: $('lan-toggle'), lanStatus: $('lan-status'),
+    // CH-P5：配对面板
+    pairCreate: $('pair-create'), pairResult: $('pair-result'),
+    pairHint: $('pair-hint'), pairTimer: $('pair-timer'),
   };
 
   // ---------- API 调用 ----------
@@ -374,6 +377,89 @@
     pollDevices();
   }
 
+  // ---------- 配对面板（CH-P5） ----------
+  let pairPollTimer = null;
+
+  async function createPairingSession() {
+    if (!state.apiKey) { alert('请先输入 API Key'); return; }
+    el.pairCreate.disabled = true;
+    el.pairHint.textContent = '创建中…';
+    const r = await api('POST', '/pairing/sessions');
+    el.pairCreate.disabled = false;
+    if (!r.ok) {
+      el.pairHint.textContent = '创建失败（HTTP ' + r.status + '）';
+      return;
+    }
+    const token = r.json.token;
+    const expiresAt = r.json.expires_at;
+    const qr = r.json.qr_payload;
+    renderPairingResult(token, qr, expiresAt);
+    // 轮询配对状态直到 success 或过期
+    if (pairPollTimer) clearInterval(pairPollTimer);
+    const poll = async () => {
+      const st = await api('GET', '/pairing/sessions/' + token);
+      if (!st.ok) return;
+      const status = st.json.status;
+      const statusTag = el.pairResult.querySelector('.pair-status');
+      if (statusTag) statusTag.textContent = statusLabel(status);
+      if (status === 'success') {
+        clearInterval(pairPollTimer);
+        pairPollTimer = null;
+        el.pairHint.textContent = '配对成功！设备应已上线。';
+        pollDevices(); // 刷新设备列表
+      } else if (status === 'expired' || status === 'revoked') {
+        clearInterval(pairPollTimer);
+        pairPollTimer = null;
+        el.pairHint.textContent = '会话已 ' + status + '，请重新创建。';
+      }
+      updatePairTimer(expiresAt);
+    };
+    pairPollTimer = setInterval(poll, 2000);
+    poll();
+  }
+
+  function statusLabel(s) {
+    return { pending: '等待设备配对…', success: '✓ 已配对', expired: '已过期', revoked: '已撤销' }[s] || s;
+  }
+
+  function renderPairingResult(token, qr, expiresAt) {
+    el.pairResult.hidden = false;
+    el.pairResult.innerHTML = ''; // clear
+    const status = document.createElement('div');
+    status.className = 'pair-status';
+    status.textContent = '等待设备配对…';
+    const tokenLabel = document.createElement('div');
+    tokenLabel.className = 'pair-line';
+    tokenLabel.innerHTML = '<span class="muted">Token:</span> ';
+    const code = document.createElement('code');
+    code.textContent = token;
+    code.className = 'pair-token';
+    tokenLabel.appendChild(code);
+    const qrLabel = document.createElement('div');
+    qrLabel.className = 'pair-line';
+    qrLabel.innerHTML = '<span class="muted">QR / Deep-link:</span> ';
+    const qrCode = document.createElement('code');
+    qrCode.textContent = qr;
+    qrCode.className = 'pair-token';
+    qrLabel.appendChild(qrCode);
+    el.pairResult.appendChild(status);
+    el.pairResult.appendChild(tokenLabel);
+    el.pairResult.appendChild(qrLabel);
+    el.pairHint.textContent = '在 5 分钟内让设备扫描 BLE 配网；本面板会自动轮询。';
+    updatePairTimer(expiresAt);
+  }
+
+  function updatePairTimer(expiresAt) {
+    const remain = expiresAt - Math.floor(Date.now() / 1000);
+    if (remain <= 0) {
+      el.pairTimer.textContent = '已过期';
+      return;
+    }
+    const mm = Math.floor(remain / 60);
+    const ss = remain % 60;
+    el.pairTimer.textContent = '剩余 ' + mm + ':' + (ss < 10 ? '0' + ss : ss);
+  }
+
   // ---------- 事件绑定 ----------
   el.authForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -392,6 +478,7 @@
   el.lookupForm.addEventListener('submit', (e) => { e.preventDefault(); lookupCommand(); });
   el.rotateKey.addEventListener('click', rotateAPIKey);
   el.lanToggle.addEventListener('change', toggleLAN);
+  el.pairCreate.addEventListener('click', createPairingSession);
 
   // ---------- 启动 ----------
   function start() {

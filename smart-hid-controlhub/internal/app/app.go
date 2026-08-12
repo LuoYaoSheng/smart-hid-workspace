@@ -25,6 +25,7 @@ import (
 	"smart-hid-controlhub/internal/device"
 	"smart-hid-controlhub/internal/logging"
 	"smart-hid-controlhub/internal/mqtt"
+	"smart-hid-controlhub/internal/pairing"
 	"smart-hid-controlhub/internal/protocol"
 	"smart-hid-controlhub/internal/settings"
 	"smart-hid-controlhub/internal/storage"
@@ -33,16 +34,18 @@ import (
 
 // App 持有所有运行时依赖与生命周期控制。
 type App struct {
-	cfg       *config.Config
-	log       *slog.Logger
-	store     *storage.Store
-	keys      *apikey.Store
-	settings  *settings.Store
-	dm        *device.Manager
-	broker    *mqtt.Broker
-	hubClient pahomqtt.Client
-	engine    *command.Engine
-	apiSrv    *api.Server
+	cfg          *config.Config
+	log          *slog.Logger
+	store        *storage.Store
+	keys         *apikey.Store
+	settings     *settings.Store
+	dm           *device.Manager
+	broker       *mqtt.Broker
+	hubClient    pahomqtt.Client
+	engine       *command.Engine
+	apiSrv       *api.Server
+	pairingMgr   *pairing.Manager
+	pairingSrv   *pairing.DeviceServer
 
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -102,27 +105,37 @@ func Build(cfgPath string) (*App, error) {
 		log.Info("lan mode enabled (settings); http bind overridden", "host", cfg.HTTP.Host)
 	}
 
-	// MQTT broker（嵌入式）
-	broker := mqtt.NewBroker(cfg.MQTT.Host, cfg.MQTT.Port, cfg.MQTT.Username, cfg.MQTT.Password, log.With("component", "mqtt"))
+	// MQTT broker（嵌入式，CH-P5：启用 per-device auth hook）
+	broker := mqtt.NewBroker(cfg.MQTT.Host, cfg.MQTT.Port, log.With("component", "mqtt")).
+		WithDB(store.DB)
 
 	// ControlHub 自身作为 MQTT client
 	hubClient := mqtt.NewClient(cfg.MQTT.Host, cfg.MQTT.Port, "controlhub-internal", cfg.MQTT.Username, cfg.MQTT.Password)
 
+	// Pairing Manager（CH-P5）
+	pairingMgr := pairing.New(store.DB, cfg.MQTT.Host, cfg.MQTT.Port, pairing.DefaultTTLSec,
+		log.With("component", "pairing"))
+	pairingSrv := pairing.NewDeviceServer(pairingMgr,
+		fmt.Sprintf("0.0.0.0:%d", pairing.DefaultPairingPort),
+		log.With("component", "pairing-server"))
+
 	// Engine + API server（构造时不启动）
 	engine := command.New(hubClient, dm, store, log.With("component", "engine"))
-	apiSrv := api.New(engine, dm, keys, setStore, log.With("component", "api"))
+	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, log.With("component", "api"))
 
 	return &App{
-		cfg:       cfg,
-		log:       log,
-		store:     store,
-		keys:      keys,
-		settings:  setStore,
-		dm:        dm,
-		broker:    broker,
-		hubClient: hubClient,
-		engine:    engine,
-		apiSrv:    apiSrv,
+		cfg:        cfg,
+		log:        log,
+		store:      store,
+		keys:       keys,
+		settings:   setStore,
+		dm:         dm,
+		broker:     broker,
+		hubClient:  hubClient,
+		engine:     engine,
+		apiSrv:     apiSrv,
+		pairingMgr: pairingMgr,
+		pairingSrv: pairingSrv,
 	}, nil
 }
 
@@ -176,10 +189,19 @@ func (a *App) Start() error {
 			}
 		}()
 
+		// Pairing 设备侧 listener（goroutine，端口 17892）
+		go func() {
+			if err := a.pairingSrv.Start(); err != nil {
+				a.log.Error("pairing server error", "err", err)
+				a.Stop()
+			}
+		}()
+
 		a.started = true
 		a.log.Info("controlhub started",
 			"http_addr", fmt.Sprintf("%s:%d", a.cfg.HTTP.Host, a.cfg.HTTP.Port),
-			"mqtt_port", a.cfg.MQTT.Port)
+			"mqtt_port", a.cfg.MQTT.Port,
+			"pairing_port", pairing.DefaultPairingPort)
 	})
 	return startErr
 }
@@ -226,6 +248,11 @@ func (a *App) shutdown() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = a.apiSrv.Shutdown(ctx)
+	if a.pairingSrv != nil {
+		pctx, pcancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = a.pairingSrv.Shutdown(pctx)
+		pcancel()
+	}
 	if a.hubClient != nil && a.hubClient.IsConnected() {
 		a.hubClient.Disconnect(500)
 	}

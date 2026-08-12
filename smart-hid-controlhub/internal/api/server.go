@@ -22,30 +22,32 @@ import (
 	"smart-hid-controlhub/internal/apikey"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/device"
+	"smart-hid-controlhub/internal/pairing"
 	"smart-hid-controlhub/internal/settings"
 	"smart-hid-controlhub/internal/web"
 )
 
 // Server 持有所有依赖。
 type Server struct {
-	engine   *command.Engine
-	devices  *device.Manager
-	keys     *apikey.Store
-	settings *settings.Store
-	log      *slog.Logger
-	httpSrv  *http.Server
+	engine      *command.Engine
+	devices     *device.Manager
+	keys        *apikey.Store
+	settings    *settings.Store
+	pairingMgr  *pairing.Manager
+	log         *slog.Logger
+	httpSrv     *http.Server
 }
 
 // New 构造 Server（不启动）。
-// keys 用于所有受保护路由的 Bearer 校验 + 轮换。
-// settings 用于运行时配置 endpoint（LAN 模式等）。
-func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStore *settings.Store, log *slog.Logger) *Server {
+// pairingMgr 可为 nil（开发/测试场景）；非 nil 时启用配对路由。
+func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStore *settings.Store, pairingMgr *pairing.Manager, log *slog.Logger) *Server {
 	return &Server{
-		engine:   engine,
-		devices:  dm,
-		keys:     keys,
-		settings: setStore,
-		log:      log,
+		engine:     engine,
+		devices:    dm,
+		keys:       keys,
+		settings:   setStore,
+		pairingMgr: pairingMgr,
+		log:        log,
 	}
 }
 
@@ -62,6 +64,10 @@ func (s *Server) Routes() http.Handler {
 	protected.HandleFunc("/api/v1/api-keys", s.handleAPIKeysList)            // GET list
 	protected.HandleFunc("/api/v1/api-keys/rotate", s.handleAPIKeysRotate)   // POST 轮换（A12）
 	protected.HandleFunc("/api/v1/settings/lan-mode", s.handleSettingsLAN)   // GET/POST LAN 模式（A11）
+	if s.pairingMgr != nil {
+		protected.HandleFunc("/api/v1/pairing/sessions", s.handlePairingSessions)        // POST 创建
+		protected.HandleFunc("/api/v1/pairing/sessions/", s.handlePairingSessionsByToken) // GET {token}
+	}
 
 	// 用一个 wrapper 给 protected 套鉴权
 	auth := s.authMiddleware(protected)
@@ -71,6 +77,10 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("/api/v1/api-keys", auth)
 	mux.Handle("/api/v1/api-keys/rotate", auth)
 	mux.Handle("/api/v1/settings/lan-mode", auth)
+	if s.pairingMgr != nil {
+		mux.Handle("/api/v1/pairing/sessions", auth)
+		mux.Handle("/api/v1/pairing/sessions/", auth)
+	}
 
 	// Web 管理界面（内嵌静态资源，本身不鉴权；控制调用由前端带 Bearer 请求 /api/v1/*）。
 	// 注册在 "/" 兜底：/api/v1/* 更具体会优先生效，其余路径交给 FileServer。
