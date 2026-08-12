@@ -83,6 +83,8 @@
     // CH-P5：配对面板
     pairCreate: $('pair-create'), pairResult: $('pair-result'),
     pairHint: $('pair-hint'), pairTimer: $('pair-timer'),
+    // CH-P6：Trial 用量
+    usageResult: $('usage-result'), refreshUsage: $('refresh-usage'),
   };
 
   // ---------- API 调用 ----------
@@ -460,6 +462,49 @@
     el.pairTimer.textContent = '剩余 ' + mm + ':' + (ss < 10 ? '0' + ss : ss);
   }
 
+  // ---------- Trial 用量面板（CH-P6） ----------
+  async function fetchUsage() {
+    if (!state.apiKey) { el.usageResult.textContent = '输入 API Key 后显示。'; return; }
+    el.usageResult.textContent = '加载中…';
+    const r = await api('GET', '/usage/all');
+    if (!r.ok) {
+      el.usageResult.textContent = '加载失败（HTTP ' + r.status + '）';
+      return;
+    }
+    const usages = r.json.usages || [];
+    if (usages.length === 0) {
+      el.usageResult.textContent = '暂无设备（先配对一台设备后再查询）';
+      return;
+    }
+    el.usageResult.innerHTML = '';
+    usages.forEach((u) => {
+      const div = document.createElement('div');
+      div.className = 'usage-row';
+      const pct = u.quota_seconds > 0 ? Math.min(100, Math.round(u.used_seconds / u.quota_seconds * 100)) : 0;
+      const remainingMin = Math.max(0, u.remaining_seconds / 60).toFixed(1);
+      const status = u.expired ? '<span class="tag error">已过期</span>'
+        : (u.session_active ? '<span class="tag pending">Session 中</span>' : '<span class="tag success">可用</span>');
+      const devLabel = document.createElement('div');
+      devLabel.innerHTML = '<code>' + escapeText(u.device_id) + '</code> ' + status;
+      const bar = document.createElement('div');
+      bar.className = 'usage-bar';
+      bar.innerHTML = '<div class="usage-fill' + (u.expired ? ' expired' : '') + '" style="width:' + pct + '%"></div>';
+      const meta = document.createElement('div');
+      meta.className = 'muted small';
+      meta.textContent = '已用 ' + u.used_seconds.toFixed(1) + 's / ' + u.quota_seconds + 's · 剩 ' + remainingMin + ' 分钟';
+      div.appendChild(devLabel);
+      div.appendChild(bar);
+      div.appendChild(meta);
+      el.usageResult.appendChild(div);
+    });
+  }
+
+  function escapeText(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
   // ---------- 事件绑定 ----------
   el.authForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -479,6 +524,7 @@
   el.rotateKey.addEventListener('click', rotateAPIKey);
   el.lanToggle.addEventListener('change', toggleLAN);
   el.pairCreate.addEventListener('click', createPairingSession);
+  el.refreshUsage.addEventListener('click', fetchUsage);
 
   // ---------- 启动 ----------
   function start() {
@@ -487,11 +533,13 @@
     pollHealth();
     pollDevices();
     fetchLAN();
+    fetchUsage();
     // 定时刷新（仅健康与设备；命令状态按需查询）
     state.healthTimer = setInterval(pollHealth, 5000);
     state.deviceTimer = setInterval(() => {
       if (state.apiKey && el.composer.hidden) pollDevices(); // 编辑器打开时暂停刷新，避免选中设备被替换
     }, 4000);
+    state.usageTimer = setInterval(fetchUsage, 15000);
   }
 
   document.addEventListener('DOMContentLoaded', start);

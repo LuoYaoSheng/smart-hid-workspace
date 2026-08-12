@@ -266,3 +266,25 @@ button.warning:hover { background: #d97706; }
   user-select: all;
   margin-left: 6px;
 }
+
+/* ===== CH-P6 Trial 用量 ===== */
+.usage-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.usage-row:last-child { border-bottom: none; }
+.usage-bar {
+  margin: 6px 0;
+  height: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.usage-fill {
+  height: 100%;
+  background: var(--primary, #2563eb);
+  transition: width 0.3s;
+}
+.usage-fill.expired { background: var(--bad, #dc2626); }
+.small { font-size: 12px; }

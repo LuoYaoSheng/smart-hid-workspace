@@ -117,7 +117,6 @@ Entitlement 必须在 Publish MQTT 前完成。
 ✅ **Phase 1 已实现并通过端到端验证**（2026-08-11）。
 
 实现里程碑：CH-01 App/Config/Logging、CH-02 SQLite、CH-03 HTTP、CH-04 MQTT、CH-05 Device Manager、CH-07 Command HTTP→MQTT→ACK。
-跳过：CH-06 Pairing（Phase 4）、CH-08 Tray、CH-09 Trial、CH-10 License、CH-11 Installer。
 
 ✅ **F2 可靠性语义参考实现 + 验证**（2026-08-11）。
 
@@ -130,6 +129,31 @@ Entitlement 必须在 Publish MQTT 前完成。
 - `internal/web/` 内嵌单页 Web UI（设备列表 / 命令编辑器 / 命令查询），经 `go:embed` 打进二进制，零构建步骤
 - `internal/command/` + `internal/device/` 单元测试覆盖校验边界、设备生命周期、命令闭环全路径（`-race` 无竞争，覆盖率 command 89% / device 93%）
 
+✅ **Phase 4 产品化 + Phase 5 Trial（CH-P1 ~ CH-P9）**（2026-08-12）。
+
+9 步增量交付，从脚手架级 CLI 升级为可双击运行的桌面产品形态：
+
+| 步骤 | 内容 | 验收 |
+|---|---|---|
+| CH-P1 | 版本化 SQLite migration + Phase 4/5 schema 扩展（11 张表）| 自动测试 4 用例 |
+| CH-P2 | API key 持久化（hash 入库）+ 重置 endpoint + 单实例锁 | A12 |
+| CH-P3 | Tray（fyne.io/systray）+ app.Run 重构（headless/tray 双模式）| A1/A3，macOS 验证 |
+| CH-P4 | LAN 模式开关（默认 localhost，显式开启 0.0.0.0）+ Web UI 设置面板 | A11 |
+| CH-P5 | Per-device MQTT auth hook + 配对系统 + mock-device --pair 端到端 | A7，真机验证全通 |
+| CH-P6 | Trial Manager + Entitlement gate + `GET /usage` | D1/D2/D3/D4/D5 |
+| CH-P7 | machine_anchor 重装防绕过（Win MachineGuid/Mac UUID/Linux machine-id）| D6 |
+| CH-P8 | Windows 打包资产（manifest + NSIS + Makefile + 交叉编译脚本）| A1/A2，代码完整待 Windows 机验证 |
+| CH-P9 | openapi.yaml 补全（Pairing/Usage/APIKeys/Settings）+ Web UI Trial 面板 | — |
+
+新增端点：`POST /api-keys/rotate`、`GET/POST /settings/lan-mode`、`POST /pairing/sessions`、`GET /pairing/sessions/{token}`、`POST /pairing/device`（设备侧 :17892）、`GET /usage`、`GET /usage/all`。
+
+新增模块：`internal/{apikey, sys, settings, pairing, trial}`。
+
+跳过（待硬件/Windows 测试机/Phase 6）：
+- CH-10 License 验签 + CH-11 Installer 实机构建（Phase 6 Cloud 落地后）
+- Phase 3 固件 Provision Mode（ESP32 真实 BLE 配网，待硬件）
+- Trial e2e 真命令流验证（单测已覆盖 D1-D5，真机 e2e 待硬件）
+
 ### 运行（本地）
 
 ```bash
@@ -139,11 +163,23 @@ cd smart-hid-controlhub
 go build -o bin/controlhub ./cmd/controlhub
 go build -o bin/mock-device ./cmd/mock-device
 
+# Headless 模式（信号循环，向后兼容）
+./bin/controlhub -config config.example.yaml
+
+# Tray 模式（CH-P3，主线程跑 systray 事件循环；macOS 菜单栏出图标）
+./bin/controlhub -tray -config config.example.yaml
+
 # Phase 1 端到端验证（启 ControlHub + mock-device + curl ENTER）
 ./scripts/test-loop.sh
 
 # F2 可靠性语义验证（dedup/boot_id/TTL/lease/release_all/queue_full/MQTT disconnect）
 ./scripts/test-loop-f2.sh
+
+# CH-P5 配对端到端（mock-device 走 ControlHub pairing 拿 dev_ 凭据 → PerDeviceHook 鉴权）
+# 1. 启 ControlHub（含 :17892 设备侧 pairing listener）
+# 2. 通过 Web UI 或 API 创建 pairing session 取 token
+# 3. mock-device --pair-url http://127.0.0.1:17892/api/v1/pairing/device \
+#                --pair-token <token> --device-id HID-AAAA1111
 
 # 单元测试（validator / device / engine，含 -race）
 go test ./internal/command/ ./internal/device/ -race -count=1
