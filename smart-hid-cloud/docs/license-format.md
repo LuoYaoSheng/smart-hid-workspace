@@ -109,10 +109,28 @@ ControlHub `POST /api/v1/license/import`（body = 完整 License JSON）：
 - **轮换**：V1 不支持。若私钥泄漏，需发新版 ControlHub + 重签所有 License。
 - **V2（未规划）**：加 `key_id` 字段，ControlHub 持有多组公钥，支持平滑轮换。
 
-## 9. 续费 / 刷新协议（CL-3b 起接）
+## 9. 续费 / 刷新协议（CL-6 实装）
 
-- 用户在 Web 续费 → 新订单支付 → 创建新 UNUSED License → 用户激活新 License
-- ControlHub `POST /api/v1/license/refresh`：拿当前 device_id 找最新 ACTIVE License → 下载 → 验签 → 覆盖本地
+两种 License 获取路径，均产出同一签名格式：
+
+**A. 激活码在线激活（CL-6 新增）**
+- admin 在后台生成激活码（预创建 UNUSED License + 12 字符 Crockford base32 码）
+- ControlHub 输入码 → `POST /api/v1/activation/consume {code, device_id}`（PUBLIC，码即凭据）
+  → Cloud 校验码（未用/未过期/设备绑定）→ 签发并激活 → 返回签名 License JSON
+- ControlHub `Import`（Decode + VerifyFull + upsert）→ 本地生效
+- 设备绑定双模式：码生成时 device_id 非空 → 消费必须匹配；为空（通用码）→ 消费时绑定
+
+**B. 在线刷新（续期，CL-6 实装；原 §9 设计落地）**
+- admin `POST /admin/licenses/{id}/extend {add_days}` → 同 license_id 重签延长 expires_at（不新建 id）
+- ControlHub `POST /api/v1/license/refresh {license_id}`（PUBLIC，license_id 即凭据）
+  → Cloud 返回最新签名 License JSON → ControlHub 覆盖导入
+- ControlHub 后台自动刷新循环：启动后 + 每 6h best-effort 拉取全部本地 License；离线降级不中断
+- 设备绑定由签名强制：返回的 License 内嵌 device_id，`VerifyFull` 校验，换设备无法冒用
+
+**鉴权说明**：consume/refresh 是 PUBLIC endpoint（不走 JWT）。
+- consume 凭 12 字符激活码（32^12 ≈ 10^18 空间，暴力不可行；类比产品密钥）
+- refresh 凭不可猜测的 license_id（lic_+22hex）；只读返回已属权 License
+- 设备绑定由签名强制，Phase 7 生产安全再上设备证书 / CRL 实时吊销
 
 ## 10. 安全注意事项
 

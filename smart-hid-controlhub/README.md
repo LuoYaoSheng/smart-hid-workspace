@@ -154,6 +154,28 @@ Entitlement 必须在 Publish MQTT 前完成。
 - Phase 3 固件 Provision Mode（ESP32 真实 BLE 配网，待硬件）
 - Trial e2e 真命令流验证（单测已覆盖 D1-D5，真机 e2e 待硬件）
 
+### License 在线激活 / 刷新（CL-6 实装）
+
+Cloud 落地后，ControlHub 接入两个在线闭环（依赖 `cloud.base_url` 配置）：
+
+**激活码在线激活** —— admin 在 Cloud 后台生成激活码后，用户在控制台 License 面板输入码即可在线激活：
+- Web UI「License」面板：状态列表 + 激活码输入框 + 「刷新全部」按钮
+- 本地 API：`POST /api/v1/license/activate-code {code, device_id?}`
+- 流程：ControlHub → Cloud `POST /activation/consume` → 签名 License → 本地 `Import`（验签+upsert）→ ACTIVE
+
+**License 刷新（续期）** —— admin 在 Cloud 续期后，ControlHub 自动拉取最新 License：
+- 后台自动刷新：启动后 + 每 6h best-effort 拉取全部本地 License（离线降级不中断）
+- 手动：托盘「刷新 License」菜单项 / Web UI「刷新全部」/ 本地 API `POST /api/v1/license/refresh {device_id?}`
+- 续期模型：Cloud 同 license_id 重签延长 expires_at（不新建 id），ControlHub 用原 license_id 刷新即拿到新有效期
+
+配置（`config.yaml`）：
+```yaml
+cloud:
+  base_url: "http://127.0.0.1:17880/api/v1"  # 留空 = 纯离线模式（仅支持 .license 文件导入）
+```
+
+离线模式下仍可用原有 `POST /api/v1/license/import`（.license 文件导入）路径，两路径互通（同一签名格式 + 同一 `licmgr.Import` 落点）。
+
 ### 运行（本地）
 
 ```bash

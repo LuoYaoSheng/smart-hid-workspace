@@ -1,5 +1,5 @@
 // 激活码：生成（user+device+plan）+ 列表 + 作废。
-// 注意：消费端（ControlHub 输入码换 license）待 ControlHub 后续支持。
+// 消费端已实装（CL-6）：ControlHub 配 cloud.base_url 后，控制台输入码即可在线激活。
 import { api } from '../api.js';
 import { toast, statusBadge, fmtTime } from '../../portal/ui.js';
 
@@ -23,7 +23,7 @@ async function render(root) {
   root.innerHTML = `
     <div class="page-header">
       <h1 class="page-title">激活码（${list.length}）</h1>
-      <p class="page-sub">生成后预建一张 UNUSED License 并绑定。消费端（ControlHub 输入码换 License）待后续支持。</p>
+      <p class="page-sub">生成后预建一张 UNUSED License 并绑定。消费端已实装：用户在 ControlHub 控制台「License」面板输入码即可在线激活（需 ControlHub 配 cloud.base_url）。</p>
     </div>
 
     <div class="card">
@@ -35,7 +35,7 @@ async function render(root) {
             ${users.map((u) => `<option value="${u.user_id}">${u.email}</option>`).join('')}
           </select>
         </label>
-        <label class="field"><span>设备 ID</span><input name="device_id" required placeholder="HID-AAAAAAAA" style="font-family:monospace"></label>
+        <label class="field"><span>设备 ID（留空=通用码）</span><input name="device_id" placeholder="HID-AAAAAAAA" style="font-family:monospace"></label>
         <label class="field"><span>套餐</span><input name="plan_id" required placeholder="plan_basic_yearly" style="font-family:monospace"></label>
         <div style="grid-column:1/-1"><button type="submit" class="btn btn-primary">生成</button></div>
       </form>
