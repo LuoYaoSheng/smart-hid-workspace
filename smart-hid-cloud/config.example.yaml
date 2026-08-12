@@ -1,0 +1,21 @@
+# Smart HID Cloud 配置示例
+# 复制为 config.yaml 后修改
+
+http:
+  host: 127.0.0.1
+  port: 17880
+
+database:
+  path: ./data/cloud.db
+
+# JWT 签发密钥（生产请改为 64 字节随机）
+jwt_secret: "change-me-to-a-long-random-secret"
+
+# License 私钥路径（用 scripts/gen-keys.sh 生成）
+license_key_path: ./keys/private.key
+
+# ControlHub 调 Cloud 时使用的共享 token（V1 简化鉴权；CL-3b 用到）
+controlhub_token: ""
+
+data_dir: ./data
+log_level: info
