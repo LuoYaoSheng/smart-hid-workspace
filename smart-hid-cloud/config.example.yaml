@@ -24,5 +24,10 @@ license_key_path: ./keys/private.key
 # ControlHub 调 Cloud 时使用的共享 token（V1 简化鉴权；CL-3b 用到）
 controlhub_token: ""
 
+# Admin 引导（CL-5a）：该 email 的用户在启动时被提升为 admin（role='admin'）。
+# 用户需先在 app.html 注册该邮箱；此处仅在已存在时提升。
+# 流程：注册 → 填此字段 → 重启 cloud → 用该账户在 admin.html 登录。
+admin_email: ""
+
 data_dir: ./data
 log_level: info

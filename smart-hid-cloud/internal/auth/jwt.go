@@ -21,9 +21,10 @@ import (
 
 // Claims 是 JWT payload。
 type Claims struct {
-	UserID string `json:"sub"` // user_id (acc_<22hex>)
-	IAT    int64  `json:"iat"` // 签发时间
-	EXP    int64  `json:"exp"` // 过期时间
+	UserID string `json:"sub"`  // user_id (acc_<22hex>)
+	Role   string `json:"role"` // "" | "user" | "admin"（CL-5a；旧 token 无此字段 → ""）
+	IAT    int64  `json:"iat"`  // 签发时间
+	EXP    int64  `json:"exp"`  // 过期时间
 }
 
 const (

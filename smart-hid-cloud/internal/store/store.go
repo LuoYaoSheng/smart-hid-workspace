@@ -32,6 +32,7 @@ type User struct {
 	UserID      string `json:"user_id"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
+	Role        string `json:"role"` // "" | "user" | "admin"（CL-5a）
 	CreatedAt   int64  `json:"created_at"`
 }
 
@@ -104,15 +105,15 @@ func (s *Store) CreateUser(email, password string) (User, error) {
 		// UNIQUE 冲突判断（modernc sqlite error 含 "UNIQUE constraint"）
 		return User{}, fmt.Errorf("%w: %v", ErrDuplicate, err)
 	}
-	return User{UserID: userID, Email: email, CreatedAt: now}, nil
+	return User{UserID: userID, Email: email, Role: "user", CreatedAt: now}, nil
 }
 
 func (s *Store) GetUserByID(userID string) (User, error) {
 	var u User
 	err := s.DB.QueryRow(
-		`SELECT user_id, email, display_name, created_at FROM users WHERE user_id = ?`,
+		`SELECT user_id, email, display_name, role, created_at FROM users WHERE user_id = ?`,
 		userID,
-	).Scan(&u.UserID, &u.Email, &u.DisplayName, &u.CreatedAt)
+	).Scan(&u.UserID, &u.Email, &u.DisplayName, &u.Role, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return User{}, ErrNotFound
 	}
@@ -123,10 +124,10 @@ func (s *Store) VerifyPassword(email, password string) (User, error) {
 	var u User
 	var hash, salt string
 	err := s.DB.QueryRow(
-		`SELECT user_id, email, display_name, created_at, password_hash, password_salt
+		`SELECT user_id, email, display_name, role, created_at, password_hash, password_salt
 		 FROM users WHERE email = ?`,
 		email,
-	).Scan(&u.UserID, &u.Email, &u.DisplayName, &u.CreatedAt, &hash, &salt)
+	).Scan(&u.UserID, &u.Email, &u.DisplayName, &u.Role, &u.CreatedAt, &hash, &salt)
 	if err == sql.ErrNoRows {
 		return User{}, ErrNotFound
 	}
@@ -137,6 +138,20 @@ func (s *Store) VerifyPassword(email, password string) (User, error) {
 		return User{}, fmt.Errorf("invalid credentials")
 	}
 	return u, nil
+}
+
+// PromoteAdmin 将 email 对应用户的 role 设为 'admin'（CL-5a）。
+// 用户不存在时返回 ErrNotFound（调用方决定是 warn 还是报错）。
+func (s *Store) PromoteAdmin(email string) error {
+	res, err := s.DB.Exec(`UPDATE users SET role='admin' WHERE email = ?`, email)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ----- Plan -----

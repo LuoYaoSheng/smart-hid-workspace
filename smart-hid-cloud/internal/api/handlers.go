@@ -67,7 +67,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errBody{"internal", err.Error()})
 		return
 	}
-	tok, _ := auth.Sign(auth.Claims{UserID: user.UserID}, s.jwtSecret)
+	tok, _ := auth.Sign(auth.Claims{UserID: user.UserID, Role: user.Role}, s.jwtSecret)
 	writeJSON(w, http.StatusCreated, authResp{UserID: user.UserID, Email: user.Email, Token: tok})
 }
 
@@ -88,7 +88,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, errBody{"unauthorized", "invalid credentials"})
 		return
 	}
-	tok, _ := auth.Sign(auth.Claims{UserID: user.UserID}, s.jwtSecret)
+	tok, _ := auth.Sign(auth.Claims{UserID: user.UserID, Role: user.Role}, s.jwtSecret)
 	writeJSON(w, http.StatusOK, authResp{UserID: user.UserID, Email: user.Email, Token: tok})
 }
 

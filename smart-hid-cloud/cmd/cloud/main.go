@@ -69,6 +69,18 @@ func main() {
 		log.Info("plans seeded", "count", len(defaultPlans()))
 	}
 
+	// Promote admin（CL-5a）：config.admin_email 指定的用户提升为 admin。
+	// 用户需先在 app.html 注册；此处仅在已存在时提升，否则 warn。
+	if cfg.AdminEmail != "" {
+		if err := bizStore.PromoteAdmin(cfg.AdminEmail); err != nil {
+			log.Warn("promote admin skipped (user not registered yet?)",
+				"admin_email", cfg.AdminEmail, "err", err,
+				"hint", "先在 app.html 注册该邮箱，再重启 cloud")
+		} else {
+			log.Info("admin promoted", "admin_email", cfg.AdminEmail)
+		}
+	}
+
 	// HTTP server
 	srv := api.New(bizStore, []byte(cfg.JWTSecret), privKey, log.With("component", "api"))
 	srv.SetCORS(cfg.HTTP.CORSOrigins)

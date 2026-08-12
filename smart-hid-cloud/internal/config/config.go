@@ -17,6 +17,7 @@ type Config struct {
 	JWTSecret       string         `yaml:"jwt_secret"`
 	LicenseKeyPath  string         `yaml:"license_key_path"`
 	ControlHubToken string         `yaml:"controlhub_token"` // ControlHub 调 Cloud 时的共享密钥（V1 简化鉴权）
+	AdminEmail      string         `yaml:"admin_email"`       // 启动时将该 email 的用户提升为 admin（CL-5a）
 	DataDir         string         `yaml:"data_dir"`
 	LogLevel        string         `yaml:"log_level"`
 }

@@ -73,6 +73,11 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("/api/v1/licenses", authMW)
 	mux.Handle("/api/v1/licenses/", authMW)
 
+	// Admin 路由（需 JWT + role==admin）。CL-5a 起统一命名空间 /api/v1/admin/*。
+	adminMux := http.NewServeMux()
+	s.registerAdminRoutes(adminMux)
+	mux.Handle("/api/v1/admin/", s.AdminAuthMiddleware(adminMux))
+
 	// web_root：非空时 /api/* 走 API，其余走静态文件（门户同源托管）。
 	var handler http.Handler = mux
 	if s.webRoot != "" {
@@ -163,6 +168,30 @@ func (s *Server) JWTAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		// 把 user_id 写入 ctx
+		ctx := WithUserID(r.Context(), claims.UserID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// AdminAuthMiddleware 在 JWTAuth 基础上额外要求 role==admin（CL-5a）。
+// role 来自 JWT Claims（"" 或 "user" 一律 403）。
+func (s *Server) AdminAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+			writeJSON(w, http.StatusUnauthorized, errBody{"unauthorized", "missing bearer token"})
+			return
+		}
+		tok := authHeader[7:]
+		claims, err := auth.Verify(tok, s.jwtSecret)
+		if err != nil {
+			writeJSON(w, http.StatusUnauthorized, errBody{"unauthorized", err.Error()})
+			return
+		}
+		if claims.Role != "admin" {
+			writeJSON(w, http.StatusForbidden, errBody{"forbidden", "admin role required"})
+			return
+		}
 		ctx := WithUserID(r.Context(), claims.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
