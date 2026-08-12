@@ -30,6 +30,7 @@ import (
 	"smart-hid-controlhub/internal/settings"
 	"smart-hid-controlhub/internal/storage"
 	"smart-hid-controlhub/internal/tray"
+	"smart-hid-controlhub/internal/trial"
 )
 
 // App 持有所有运行时依赖与生命周期控制。
@@ -46,6 +47,7 @@ type App struct {
 	apiSrv       *api.Server
 	pairingMgr   *pairing.Manager
 	pairingSrv   *pairing.DeviceServer
+	trialMgr     *trial.Manager
 
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -121,7 +123,12 @@ func Build(cfgPath string) (*App, error) {
 
 	// Engine + API server（构造时不启动）
 	engine := command.New(hubClient, dm, store, log.With("component", "engine"))
-	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, log.With("component", "api"))
+
+	// Trial Manager（CH-P6）：先构造（依赖 settings + DB），再注入 Engine
+	trialMgr := trial.New(trial.NewSQLStore(store.DB), setStore, log.With("component", "trial"))
+	engine.WithEntitlement(trialMgr).WithTrial(trialMgr)
+
+	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, trialMgr, log.With("component", "api"))
 
 	return &App{
 		cfg:        cfg,
@@ -136,6 +143,7 @@ func Build(cfgPath string) (*App, error) {
 		apiSrv:     apiSrv,
 		pairingMgr: pairingMgr,
 		pairingSrv: pairingSrv,
+		trialMgr:   trialMgr,
 	}, nil
 }
 
@@ -197,6 +205,9 @@ func (a *App) Start() error {
 			}
 		}()
 
+		// Trial idle checker（goroutine）
+		a.trialMgr.Start()
+
 		a.started = true
 		a.log.Info("controlhub started",
 			"http_addr", fmt.Sprintf("%s:%d", a.cfg.HTTP.Host, a.cfg.HTTP.Port),
@@ -244,6 +255,10 @@ func (a *App) Close() {
 func (a *App) shutdown() {
 	if !a.started {
 		return
+	}
+	// 先停 Trial（flush 所有 active session 累计量到 trial_usage）
+	if a.trialMgr != nil {
+		a.trialMgr.Close()
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

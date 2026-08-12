@@ -24,6 +24,7 @@ import (
 	"smart-hid-controlhub/internal/device"
 	"smart-hid-controlhub/internal/pairing"
 	"smart-hid-controlhub/internal/settings"
+	"smart-hid-controlhub/internal/trial"
 	"smart-hid-controlhub/internal/web"
 )
 
@@ -34,19 +35,21 @@ type Server struct {
 	keys        *apikey.Store
 	settings    *settings.Store
 	pairingMgr  *pairing.Manager
+	trialMgr    *trial.Manager
 	log         *slog.Logger
 	httpSrv     *http.Server
 }
 
 // New 构造 Server（不启动）。
-// pairingMgr 可为 nil（开发/测试场景）；非 nil 时启用配对路由。
-func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStore *settings.Store, pairingMgr *pairing.Manager, log *slog.Logger) *Server {
+// pairingMgr / trialMgr 可为 nil（开发/测试场景）。
+func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStore *settings.Store, pairingMgr *pairing.Manager, trialMgr *trial.Manager, log *slog.Logger) *Server {
 	return &Server{
 		engine:     engine,
 		devices:    dm,
 		keys:       keys,
 		settings:   setStore,
 		pairingMgr: pairingMgr,
+		trialMgr:   trialMgr,
 		log:        log,
 	}
 }
@@ -64,6 +67,8 @@ func (s *Server) Routes() http.Handler {
 	protected.HandleFunc("/api/v1/api-keys", s.handleAPIKeysList)            // GET list
 	protected.HandleFunc("/api/v1/api-keys/rotate", s.handleAPIKeysRotate)   // POST 轮换（A12）
 	protected.HandleFunc("/api/v1/settings/lan-mode", s.handleSettingsLAN)   // GET/POST LAN 模式（A11）
+	protected.HandleFunc("/api/v1/usage", s.handleUsage)                     // GET 当前 Trial 用量（CH-P6）
+	protected.HandleFunc("/api/v1/usage/all", s.handleUsageAll)              // GET 所有设备用量
 	if s.pairingMgr != nil {
 		protected.HandleFunc("/api/v1/pairing/sessions", s.handlePairingSessions)        // POST 创建
 		protected.HandleFunc("/api/v1/pairing/sessions/", s.handlePairingSessionsByToken) // GET {token}
@@ -77,6 +82,8 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("/api/v1/api-keys", auth)
 	mux.Handle("/api/v1/api-keys/rotate", auth)
 	mux.Handle("/api/v1/settings/lan-mode", auth)
+	mux.Handle("/api/v1/usage", auth)
+	mux.Handle("/api/v1/usage/all", auth)
 	if s.pairingMgr != nil {
 		mux.Handle("/api/v1/pairing/sessions", auth)
 		mux.Handle("/api/v1/pairing/sessions/", auth)
