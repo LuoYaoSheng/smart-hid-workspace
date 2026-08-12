@@ -71,6 +71,11 @@ func main() {
 
 	// HTTP server
 	srv := api.New(bizStore, []byte(cfg.JWTSecret), privKey, log.With("component", "api"))
+	srv.SetCORS(cfg.HTTP.CORSOrigins)
+	if cfg.HTTP.WebRoot != "" {
+		srv.SetWebRoot(cfg.HTTP.WebRoot)
+		log.Info("web root enabled (same-origin portal)", "dir", cfg.HTTP.WebRoot)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()

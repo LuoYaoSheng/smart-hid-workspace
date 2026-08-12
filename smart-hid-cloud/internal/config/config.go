@@ -22,8 +22,10 @@ type Config struct {
 }
 
 type HTTPConfig struct {
-	Host string `yaml:"host"`
-	Port int    `yaml:"port"`
+	Host        string   `yaml:"host"`
+	Port        int      `yaml:"port"`
+	CORSOrigins []string `yaml:"cors_origins"` // 允许跨域的 Origin 白名单；含 "*" 全放行；空表示同源不发 CORS 头
+	WebRoot     string   `yaml:"web_root"`     // 静态门户目录；非空时 /api/* 外的请求走 FileServer（同源托管）
 }
 
 type DatabaseConfig struct {

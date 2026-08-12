@@ -4,6 +4,13 @@
 http:
   host: 127.0.0.1
   port: 17880
+  # 跨域来源白名单。门户与 cloud 不同源时配置，如 ["https://smart-hid.example.com"]。
+  # 含 "*" 全放行（仅开发）。留空（默认）表示同源不发 CORS 头 —— 配合 web_root 使用时无需此字段。
+  cors_origins: []
+  # 静态门户目录。非空时 /api/* 之外的请求走 FileServer 托管该目录，
+  # 实现门户与 API 同源（开发期零 CORS）。指向 smart-hid-web 目录即可。
+  # 例：./../smart-hid-web
+  web_root: ""
 
 database:
   path: ./data/cloud.db

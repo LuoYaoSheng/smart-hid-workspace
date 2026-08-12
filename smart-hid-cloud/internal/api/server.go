@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"smart-hid-cloud/internal/auth"
@@ -19,11 +20,13 @@ import (
 
 // Server 持有所有依赖。
 type Server struct {
-	store      *store.Store
-	jwtSecret  []byte
-	privateKey ed25519.PrivateKey
-	log        *slog.Logger
-	httpSrv    *http.Server
+	store       *store.Store
+	jwtSecret   []byte
+	privateKey  ed25519.PrivateKey
+	log         *slog.Logger
+	httpSrv     *http.Server
+	corsOrigins []string // 允许的跨域来源；空表示同源不发 CORS 头
+	webRoot     string   // 静态门户目录；非空时 / 下非 /api 路径走 FileServer
 }
 
 // New 构造 Server（不启动）。privateKey 为 nil 时 license 签发会失败（开发期可空）。
@@ -35,6 +38,13 @@ func New(st *store.Store, jwtSecret []byte, privateKey ed25519.PrivateKey, log *
 		log:        log,
 	}
 }
+
+// SetCORS 配置允许的跨域来源（CL-4d）。传 ["*"] 允许全部；空切片不发 CORS 头（同源模式）。
+func (s *Server) SetCORS(origins []string) *Server { s.corsOrigins = origins; return s }
+
+// SetWebRoot 配置静态门户目录（CL-4d）。非空时 /api/* 之外的请求走 FileServer，
+// 实现门户与 API 同源托管（开发期零 CORS）。
+func (s *Server) SetWebRoot(dir string) *Server { s.webRoot = dir; return s }
 
 // Routes 返回 http.Handler。
 func (s *Server) Routes() http.Handler {
@@ -63,7 +73,58 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("/api/v1/licenses", authMW)
 	mux.Handle("/api/v1/licenses/", authMW)
 
-	return s.logMiddleware(mux)
+	// web_root：非空时 /api/* 走 API，其余走静态文件（门户同源托管）。
+	var handler http.Handler = mux
+	if s.webRoot != "" {
+		fs := http.FileServer(http.Dir(s.webRoot))
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				mux.ServeHTTP(w, r)
+				return
+			}
+			fs.ServeHTTP(w, r)
+		})
+	}
+
+	return s.corsMiddleware(s.logMiddleware(handler))
+}
+
+// corsMiddleware 按 corsOrigins 放行跨域（CL-4d）。origins 为空时不发 CORS 头（同源不需要）。
+// 包含 "*" 时全放行；否则只放行白名单内的 Origin。预检 OPTIONS 直接 204。
+func (s *Server) corsMiddleware(next http.Handler) http.Handler {
+	allowAll := false
+	allowed := make(map[string]bool, len(s.corsOrigins))
+	for _, o := range s.corsOrigins {
+		if o == "*" {
+			allowAll = true
+			break
+		}
+		allowed[o] = true
+	}
+	if len(s.corsOrigins) == 0 {
+		// 未配置 CORS —— 原样放行（同源模式，浏览器不发预检）。
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			switch {
+			case allowAll:
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			case allowed[origin]:
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Add("Vary", "Origin")
+			}
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Max-Age", "600")
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Start 阻塞启动 HTTP server。
