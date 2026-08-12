@@ -23,6 +23,7 @@ import (
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/config"
 	"smart-hid-controlhub/internal/device"
+	"smart-hid-controlhub/internal/entitle"
 	"smart-hid-controlhub/internal/logging"
 	licmgr "smart-hid-controlhub/internal/license"
 	"smart-hid-controlhub/internal/mqtt"
@@ -130,7 +131,6 @@ func Build(cfgPath string) (*App, error) {
 	machineAnchor := sys.GetMachineAnchor()
 	log.Info("machine anchor resolved", "anchor", machineAnchor)
 	trialMgr := trial.New(trial.NewSQLStore(store.DB), setStore, machineAnchor, log.With("component", "trial"))
-	engine.WithEntitlement(trialMgr).WithTrial(trialMgr)
 
 	// License Manager（CL-3a）：Ed25519 验签 + 公钥 embed
 	licenseMgr, err := licmgr.New(store.DB, log.With("component", "license"))
@@ -138,6 +138,11 @@ func Build(cfgPath string) (*App, error) {
 		_ = store.Close()
 		return nil, fmt.Errorf("init license manager: %w", err)
 	}
+
+	// CL-3c：Entitlement 闸门 = license 优先 + trial 兜底
+	// （engine.WithEntitlement 替换 CH-P6 的 trial 直调）
+	entitleGate := entitle.New(licenseMgr, trialMgr, log.With("component", "entitle"))
+	engine.WithEntitlement(entitleGate).WithTrial(trialMgr)
 
 	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, trialMgr, licenseMgr, log.With("component", "api"))
 
