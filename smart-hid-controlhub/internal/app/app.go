@@ -20,6 +20,7 @@ import (
 
 	"smart-hid-controlhub/internal/api"
 	"smart-hid-controlhub/internal/apikey"
+	"smart-hid-controlhub/internal/cloud"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/config"
 	"smart-hid-controlhub/internal/device"
@@ -51,6 +52,7 @@ type App struct {
 	pairingMgr   *pairing.Manager
 	pairingSrv   *pairing.DeviceServer
 	trialMgr     *trial.Manager
+	cloudCli     *cloud.Client // CL-6b：在线激活/刷新；nil = 纯离线
 
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -146,6 +148,15 @@ func Build(cfgPath string) (*App, error) {
 
 	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, trialMgr, licenseMgr, log.With("component", "api"))
 
+	// CL-6b：Cloud 出站客户端（在线激活/刷新）。base_url 为空 = 纯离线模式（New 返 nil）。
+	cloudCli := cloud.New(cfg.Cloud.BaseURL, log.With("component", "cloud"))
+	if cloudCli != nil {
+		apiSrv.WithCloudClient(cloudCli)
+		log.Info("cloud client enabled (online activation/refresh)", "base_url", cfg.Cloud.BaseURL)
+	} else {
+		log.Info("cloud base_url empty — offline mode (no online activation/refresh)")
+	}
+
 	return &App{
 		cfg:        cfg,
 		log:        log,
@@ -160,6 +171,7 @@ func Build(cfgPath string) (*App, error) {
 		pairingMgr: pairingMgr,
 		pairingSrv: pairingSrv,
 		trialMgr:   trialMgr,
+		cloudCli:   cloudCli,
 	}, nil
 }
 

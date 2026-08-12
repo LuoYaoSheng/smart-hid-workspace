@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"smart-hid-controlhub/internal/apikey"
+	"smart-hid-controlhub/internal/cloud"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/device"
 	"smart-hid-controlhub/internal/license"
@@ -38,6 +39,7 @@ type Server struct {
 	pairingMgr  *pairing.Manager
 	trialMgr    *trial.Manager
 	licenseMgr  *licmgr.Manager
+	cloudCli    *cloud.Client // CL-6b：在线激活/刷新用；nil = 离线模式
 	log         *slog.Logger
 	httpSrv     *http.Server
 }
@@ -56,6 +58,9 @@ func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStor
 		log:        log,
 	}
 }
+
+// WithCloudClient 注入 Cloud 出站客户端（CL-6b）。nil 表示纯离线模式。
+func (s *Server) WithCloudClient(c *cloud.Client) *Server { s.cloudCli = c; return s }
 
 // Routes 返回 http.Handler（带鉴权中间件 + 路由分发）。
 func (s *Server) Routes() http.Handler {
