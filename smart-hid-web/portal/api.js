@@ -53,7 +53,7 @@ export const api = {
   listPlans: () => request('/plans'),
 
   listDevices: () => request('/devices'),
-  registerDevice: (device_id, name) => request('/devices', { method: 'POST', body: { device_id, name } }),
+  registerDevice: (device_id, display_name) => request('/devices', { method: 'POST', body: { device_id, display_name } }),
 
   listOrders: () => request('/orders'),
   createOrder: (plan_id) => request('/orders', { method: 'POST', body: { plan_id } }),
