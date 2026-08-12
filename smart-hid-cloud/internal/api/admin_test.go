@@ -4,7 +4,10 @@ package api
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"smart-hid-cloud/internal/store"
 )
 
 // registerUser 注册一个普通用户，返回 email + 登录 token（role=user）。
@@ -73,7 +76,142 @@ func TestAdmin_PromoteThenAllowed(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("expected 200 for admin, got %d", code)
 	}
-	if j["ok"] != true {
-		t.Fatalf("expected ok=true, got %v", j["ok"])
+	if j["users_total"] == nil {
+		t.Fatalf("expected stats payload with users_total, got %v", j)
+	}
+}
+
+// adminToken 注册一个用户并 promote 成 admin，返回 (adminUserID, adminToken)。
+func adminToken(t *testing.T, ts *httptest.Server, st *store.Store) (string, string) {
+	t.Helper()
+	email, _ := registerUser(t, ts)
+	if err := st.PromoteAdmin(email); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	// 拿 user_id（从 me）
+	u, _ := st.ListAllUsers()
+	var uid string
+	for _, x := range u {
+		if x.Email == email {
+			uid = x.UserID
+		}
+	}
+	return uid, loginUser(t, ts, email)
+}
+
+// TestAdmin_LicenseStatusOps 禁用→恢复→吊销→不可逆。
+func TestAdmin_LicenseStatusOps(t *testing.T) {
+	ts, _, st := newTestServer(t)
+	uid, adminTok := adminToken(t, ts, st)
+
+	// 预置一个 UNUSED license（直接用 store，绕过用户侧流程）
+	lic, err := st.CreateLicense(uid, "plan_test", "", []string{"hid_control"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := lic.LicenseID
+
+	must := func(code int, j map[string]any, label string) {
+		if code != 200 {
+			t.Fatalf("%s: expected 200, got %d %v", label, code, j)
+		}
+	}
+
+	// disable
+	c, j, _ := doReq(t, ts, "POST", "/api/v1/admin/licenses/"+id+"/disable", nil, adminTok)
+	must(c, j, "disable")
+	if j["status"] != "DISABLED" {
+		t.Fatalf("disable: expected DISABLED, got %v", j["status"])
+	}
+	// re-enable
+	c, j, _ = doReq(t, ts, "POST", "/api/v1/admin/licenses/"+id+"/re-enable", nil, adminTok)
+	must(c, j, "re-enable")
+	if j["status"] != "ACTIVE" {
+		t.Fatalf("re-enable: expected ACTIVE, got %v", j["status"])
+	}
+	// revoke
+	c, j, _ = doReq(t, ts, "POST", "/api/v1/admin/licenses/"+id+"/revoke", nil, adminTok)
+	must(c, j, "revoke")
+	if j["status"] != "REVOKED" {
+		t.Fatalf("revoke: expected REVOKED, got %v", j["status"])
+	}
+	// REVOKED 不可逆：再 disable 应 409
+	c, _, _ = doReq(t, ts, "POST", "/api/v1/admin/licenses/"+id+"/disable", nil, adminTok)
+	if c != 409 {
+		t.Fatalf("revoked-then-disable: expected 409, got %d", c)
+	}
+}
+
+// TestAdmin_RefundOrder 支付订单可退款，重复退款 409。
+func TestAdmin_RefundOrder(t *testing.T) {
+	ts, _, st := newTestServer(t)
+	uid, adminTok := adminToken(t, ts, st)
+
+	ord, err := st.CreateOrder(uid, "plan_test", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.MarkOrderPaid(ord.OrderID); err != nil {
+		t.Fatal(err)
+	}
+
+	c, j, _ := doReq(t, ts, "POST", "/api/v1/admin/orders/"+ord.OrderID+"/refund", nil, adminTok)
+	if c != 200 || j["status"] != "refunded" {
+		t.Fatalf("refund: expected 200 refunded, got %d %v", c, j)
+	}
+	// 重复退款 409
+	c, _, _ = doReq(t, ts, "POST", "/api/v1/admin/orders/"+ord.OrderID+"/refund", nil, adminTok)
+	if c != 409 {
+		t.Fatalf("re-refund: expected 409, got %d", c)
+	}
+}
+
+// TestAdmin_ActivationCode 生成激活码（12 字符 + 绑定 license）+ 列表 + 作废。
+func TestAdmin_ActivationCode(t *testing.T) {
+	ts, _, st := newTestServer(t)
+	uid, adminTok := adminToken(t, ts, st)
+
+	// 预置 device（激活码要绑 device）
+	if err := st.CreateDevice(uid, "HID-TEST0001", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// 生成
+	c, j, _ := doReq(t, ts, "POST", "/api/v1/admin/activation-codes",
+		map[string]string{"user_id": uid, "device_id": "HID-TEST0001", "plan_id": "plan_test"}, adminTok)
+	if c != 201 {
+		t.Fatalf("create code: expected 201, got %d %v", c, j)
+	}
+	code, _ := j["code"].(string)
+	licID, _ := j["license_id"].(string)
+	if len(code) != 12 {
+		t.Fatalf("code length: expected 12, got %d (%q)", len(code), code)
+	}
+	if licID == "" {
+		t.Fatalf("expected license_id bound, got empty")
+	}
+	if strings.ContainsAny(code, "ILOU") {
+		t.Fatalf("code should be Crockford base32 (no I/L/O/U): %q", code)
+	}
+
+	// 列表含该码
+	c, j, _ = doReq(t, ts, "GET", "/api/v1/admin/activation-codes", nil, adminTok)
+	if c != 200 {
+		t.Fatalf("list codes: expected 200, got %d", c)
+	}
+	codes, _ := j["codes"].([]any)
+	if len(codes) != 1 {
+		t.Fatalf("expected 1 code, got %d", len(codes))
+	}
+
+	// 作废
+	c, _, _ = doReq(t, ts, "POST", "/api/v1/admin/activation-codes/"+code+"/revoke", nil, adminTok)
+	if c != 200 {
+		t.Fatalf("revoke: expected 200, got %d", c)
+	}
+	// 重复作废 409
+	c, _, _ = doReq(t, ts, "POST", "/api/v1/admin/activation-codes/"+code+"/revoke", nil, adminTok)
+	if c != 409 {
+		t.Fatalf("re-revoke: expected 409, got %d", c)
 	}
 }

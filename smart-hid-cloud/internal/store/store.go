@@ -344,14 +344,18 @@ func (s *Store) MarkOrderPaid(orderID string) error {
 
 // ----- License -----
 
-// CreateLicense 新建 UNUSED license（订单支付后调用）。
+// CreateLicense 新建 UNUSED license（订单支付后调用）。orderID 为空时写 NULL（admin 直开场景）。
 func (s *Store) CreateLicense(userID, planID, orderID string, features []string) (LicenseRow, error) {
 	licenseID := "lic_" + randomHex(11)
 	featuresJSON, _ := json.Marshal(features)
+	var orderArg any = orderID
+	if orderID == "" {
+		orderArg = nil // FK：NULL 不检查，空字符串会触发 orders(order_id) FK 失败
+	}
 	_, err := s.DB.Exec(
 		`INSERT INTO licenses(license_id, user_id, plan_id, order_id, status, features_json)
 		 VALUES(?, ?, ?, ?, 'UNUSED', ?)`,
-		licenseID, userID, planID, orderID, string(featuresJSON),
+		licenseID, userID, planID, orderArg, string(featuresJSON),
 	)
 	if err != nil {
 		return LicenseRow{}, err
@@ -483,6 +487,281 @@ func (s *Store) ActivateLicense(licenseID, deviceID string, validFrom, expiresAt
 	return nil
 }
 
+// ----- Admin：跨用户查询 + 状态操作（CL-5b）-----
+//
+// 这些方法不受 user_id 隔离，仅供 admin endpoint 使用（经 AdminAuthMiddleware 保护）。
+
+// ListAllUsers 列出所有用户（含 role；不含密码哈希）。
+func (s *Store) ListAllUsers() ([]User, error) {
+	rows, err := s.DB.Query(
+		`SELECT user_id, email, display_name, role, created_at FROM users ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.UserID, &u.Email, &u.DisplayName, &u.Role, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, nil
+}
+
+// ListAllOrders 列出所有订单。
+func (s *Store) ListAllOrders() ([]Order, error) {
+	rows, err := s.DB.Query(
+		`SELECT order_id, user_id, plan_id, amount_cents, currency, status, created_at, paid_at
+		 FROM orders ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Order
+	for rows.Next() {
+		var o Order
+		var paidAt sql.NullInt64
+		if err := rows.Scan(&o.OrderID, &o.UserID, &o.PlanID, &o.AmountCents,
+			&o.Currency, &o.Status, &o.CreatedAt, &paidAt); err != nil {
+			return nil, err
+		}
+		if paidAt.Valid {
+			v := paidAt.Int64
+			o.PaidAt = &v
+		}
+		out = append(out, o)
+	}
+	return out, nil
+}
+
+// ListAllLicenses 列出所有 license。
+func (s *Store) ListAllLicenses() ([]LicenseRow, error) {
+	rows, err := s.DB.Query(
+		`SELECT license_id, user_id, plan_id, order_id, status, device_id,
+		        issued_at, valid_from, expires_at, features_json, created_at, activated_at
+		 FROM licenses ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LicenseRow
+	for rows.Next() {
+		var l LicenseRow
+		var featuresJSON string
+		var orderID, deviceID sql.NullString
+		var issuedAt, validFrom, expiresAt, activatedAt sql.NullInt64
+		if err := rows.Scan(&l.LicenseID, &l.UserID, &l.PlanID, &orderID, &l.Status, &deviceID,
+			&issuedAt, &validFrom, &expiresAt, &featuresJSON, &l.CreatedAt, &activatedAt); err != nil {
+			return nil, err
+		}
+		if orderID.Valid {
+			l.OrderID = orderID.String
+		}
+		if deviceID.Valid {
+			l.DeviceID = deviceID.String
+		}
+		if issuedAt.Valid {
+			v := issuedAt.Int64
+			l.IssuedAt = &v
+		}
+		if validFrom.Valid {
+			v := validFrom.Int64
+			l.ValidFrom = &v
+		}
+		if expiresAt.Valid {
+			v := expiresAt.Int64
+			l.ExpiresAt = &v
+		}
+		if activatedAt.Valid {
+			v := activatedAt.Int64
+			l.ActivatedAt = &v
+		}
+		_ = json.Unmarshal([]byte(featuresJSON), &l.Features)
+		out = append(out, l)
+	}
+	return out, nil
+}
+
+// SetLicenseStatus 直接改 license 状态（admin 禁用/吊销/恢复）。
+// 调用方负责合法性（DISABLED 可来自 ACTIVE；REVOKED 不可逆）。
+func (s *Store) SetLicenseStatus(licenseID, status string) error {
+	res, err := s.DB.Exec(`UPDATE licenses SET status = ? WHERE license_id = ?`, status, licenseID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// RefundOrder 把 paid 订单标记为 refunded（仅 paid 可退）。
+func (s *Store) RefundOrder(orderID string) error {
+	res, err := s.DB.Exec(`UPDATE orders SET status = 'refunded' WHERE order_id = ? AND status = 'paid'`, orderID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrInvalidStatus
+	}
+	return nil
+}
+
+// SetPlanActive 上架/下架套餐。
+func (s *Store) SetPlanActive(planID string, active bool) error {
+	a := 0
+	if active {
+		a = 1
+	}
+	res, err := s.DB.Exec(`UPDATE plans SET active = ? WHERE plan_id = ?`, a, planID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpsertPlan 新增或更新套餐（admin 维护）。与 SeedPlans 同 SQL，单条版本。
+func (s *Store) UpsertPlan(p Plan) error {
+	featuresJSON, _ := json.Marshal(p.Features)
+	active := 0
+	if p.Active {
+		active = 1
+	}
+	_, err := s.DB.Exec(
+		`INSERT INTO plans(plan_id, name, description, price_cents, currency, duration_days, features_json, active)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(plan_id) DO UPDATE SET
+		   name=excluded.name, description=excluded.description,
+		   price_cents=excluded.price_cents, currency=excluded.currency,
+		   duration_days=excluded.duration_days, features_json=excluded.features_json, active=excluded.active`,
+		p.PlanID, p.Name, p.Description, p.PriceCents, p.Currency,
+		p.DurationDays, string(featuresJSON), active,
+	)
+	return err
+}
+
+// ----- Activation Codes（CL-5b）-----
+
+// ActivationCode 离线激活码（admin 生成，绑定预创建的 license）。
+type ActivationCode struct {
+	Code      string `json:"code"`
+	LicenseID string `json:"license_id"`
+	UserID    string `json:"user_id"`
+	DeviceID  string `json:"device_id"`
+	ExpiresAt int64  `json:"expires_at"`
+	UsedAt    *int64 `json:"used_at,omitempty"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// CreateActivationCode 为指定 user+device+plan 预建 UNUSED license 并生成 12 字符激活码。
+// expiresAt 为激活码本身的过期时间（非 license 有效期；license 在被消费/激活时才计算有效期）。
+func (s *Store) CreateActivationCode(userID, deviceID, planID string, features []string, expiresAt int64) (ActivationCode, error) {
+	// 1. 建 UNUSED license（无 order，admin 直开）
+	lic, err := s.CreateLicense(userID, planID, "", features)
+	if err != nil {
+		return ActivationCode{}, err
+	}
+	// 2. 生成 12 字符 Crockford base32 码
+	code := randomBase32(12)
+	now := time.Now().Unix()
+	_, err = s.DB.Exec(
+		`INSERT INTO activation_codes(code, license_id, user_id, device_id, expires_at) VALUES(?, ?, ?, ?, ?)`,
+		code, lic.LicenseID, userID, deviceID, expiresAt,
+	)
+	if err != nil {
+		return ActivationCode{}, err
+	}
+	return ActivationCode{
+		Code: code, LicenseID: lic.LicenseID, UserID: userID,
+		DeviceID: deviceID, ExpiresAt: expiresAt, CreatedAt: now,
+	}, nil
+}
+
+// ListActivationCodes 列出所有激活码。
+func (s *Store) ListActivationCodes() ([]ActivationCode, error) {
+	rows, err := s.DB.Query(
+		`SELECT code, license_id, user_id, device_id, expires_at, used_at, created_at
+		 FROM activation_codes ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ActivationCode
+	for rows.Next() {
+		var a ActivationCode
+		var usedAt sql.NullInt64
+		if err := rows.Scan(&a.Code, &a.LicenseID, &a.UserID, &a.DeviceID,
+			&a.ExpiresAt, &usedAt, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		if usedAt.Valid {
+			v := usedAt.Int64
+			a.UsedAt = &v
+		}
+		out = append(out, a)
+	}
+	return out, nil
+}
+
+// RevokeActivationCode 作废激活码（DELETE；仅未消费的码可删）。
+func (s *Store) RevokeActivationCode(code string) error {
+	res, err := s.DB.Exec(`DELETE FROM activation_codes WHERE code = ? AND used_at IS NULL`, code)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrInvalidStatus // 已消费或不存在
+	}
+	return nil
+}
+
+// AdminStats 概览统计（CL-5b）。
+type AdminStats struct {
+	UsersTotal    int64 `json:"users_total"`
+	OrdersTotal   int64 `json:"orders_total"`
+	OrdersPaid    int64 `json:"orders_paid"`
+	RevenueCents  int64 `json:"revenue_cents"`
+	LicensesTotal int64 `json:"licenses_total"`
+	LicensesActive int64 `json:"licenses_active"`
+	CodesUnused   int64 `json:"codes_unused"`
+}
+
+// GetAdminStats 汇总统计。
+func (s *Store) GetAdminStats() (AdminStats, error) {
+	var st AdminStats
+	queries := []struct {
+		sql string
+		dst *int64
+	}{
+		{`SELECT COUNT(*) FROM users`, &st.UsersTotal},
+		{`SELECT COUNT(*) FROM orders`, &st.OrdersTotal},
+		{`SELECT COUNT(*) FROM orders WHERE status='paid'`, &st.OrdersPaid},
+		{`SELECT COALESCE(SUM(amount_cents),0) FROM orders WHERE status IN ('paid','refunded')`, &st.RevenueCents},
+		{`SELECT COUNT(*) FROM licenses`, &st.LicensesTotal},
+		{`SELECT COUNT(*) FROM licenses WHERE status='ACTIVE'`, &st.LicensesActive},
+		{`SELECT COUNT(*) FROM activation_codes WHERE used_at IS NULL`, &st.CodesUnused},
+	}
+	for _, q := range queries {
+		if err := s.DB.QueryRow(q.sql).Scan(q.dst); err != nil {
+			return AdminStats{}, err
+		}
+	}
+	return st, nil
+}
+
 // ----- 内部辅助 -----
 
 func hashPassword(password, salt string) string {
@@ -497,4 +776,15 @@ func randomHex(n int) string {
 		return fmt.Sprintf("%0*x", n*2, time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b)
+}
+
+// randomBase32 生成 n 字符 Crockford base32 随机串（去 I/L/O/U 易混字符）。
+func randomBase32(n int) string {
+	const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	for i := range b {
+		b[i] = alphabet[int(b[i])%len(alphabet)]
+	}
+	return string(b)
 }
