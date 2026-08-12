@@ -20,14 +20,19 @@ Smart HID Web ──HTTPS──▶ Smart HID Cloud
 - Downloads（下载中心）
 - Account（账户）
 
-## 管理后台
+## 管理后台（CL-5，`admin.html` + `admin/`）
 
-- Users
-- Devices
-- Plans
-- Orders
-- Licenses
-- Activations
+独立入口（不经落地页 nav 暴露，直接访问 `admin.html`），独立 admin token。运营可在浏览器里：
+
+- **概览**：用户数 / 订单数 / 收入 / License 数 / 未用激活码
+- **用户**：全用户列表（角色标识；V1 只读，不做禁用）
+- **订单**：全订单列表 + 退款（paid → refunded）
+- **License**：全列表 + 禁用（DISABLED，可恢复）/ 吊销（REVOKED，不可逆）
+- **套餐**：列表 + 新建/编辑（upsert）+ 上下架
+- **激活码**：生成（user+device+plan 预建 UNUSED License + 12 字符码）+ 列表 + 作废
+
+> License 吊销的离线限制：DISABLED/REVOKED 是 cloud 侧状态标记，阻止重新下载/续费；**已导入 ControlHub 的 License 离线仍有效**（本地优先设计）。真正的实时吊销（CRL）属 Phase 7 生产安全。
+> 激活码消费端（ControlHub 输入码换 License）待 ControlHub 后续支持；当前 ControlHub 已有 `.license` 文件导入这条离线路径。
 
 ## 关键约束
 
@@ -41,6 +46,7 @@ Smart HID Web ──HTTPS──▶ Smart HID Cloud
 smart-hid-web/
 ├── index.html              # 产品落地页（静态）
 ├── app.html                # 用户门户 SPA 入口（hash 路由，零构建）
+├── admin.html              # 管理后台 SPA 入口（CL-5，侧边栏布局，独立 admin token）
 ├── style.css               # 落地页样式（单文件，零构建，门户复用其 :root token）
 ├── app.js                  # 落地页交互（移动端菜单 / 滚动渐现）
 ├── portal/                 # 用户门户（CL-4，原生 ES Modules，零构建）
@@ -52,6 +58,10 @@ smart-hid-web/
 │   ├── ui.js               # Toast / DOM helper / 状态徽章 / saveBlob
 │   ├── app.js              # bootstrap
 │   └── views/              # login / dashboard / plans / devices / orders / licenses / account
+├── admin/                  # 管理后台（CL-5，独立 admin token，复用 portal/ui.js）
+│   ├── admin.css           # 侧边栏布局 + 统计卡片
+│   ├── config/store/api/router/app.js  # 与 portal 对称的精简基建
+│   └── views/              # login / stats / users / orders / licenses / plans / activation-codes
 ├── api-docs.html           # API 文档（Swagger UI，加载 api/openapi.yaml，可在线 Try it out）
 ├── video.html              # 演示视频中心（配置驱动：B 站嵌入 + 多平台跳转，见页内 VIDEO_CONFIG）
 ├── license.html            # 授权与套餐（试用 + 设备授权 + 激活流程 + License 载荷 + FAQ）
@@ -76,8 +86,8 @@ smart-hid-web/
 └── README.md
 ```
 
-> 落地页（`index.html`）是**静态展示页**；用户门户（`app.html` + `portal/`）是**零构建 SPA**，调用 Smart HID Cloud API 完成账号/套餐/订单/License 全流程。
-> 管理后台（Admin UI）属独立工作流，尚未实现。
+> 落地页（`index.html`）是**静态展示页**；用户门户（`app.html` + `portal/`）与管理后台（`admin.html` + `admin/`）都是**零构建 SPA**，调用 Smart HID Cloud API。
+> 门户走用户自助（JWT role=user），后台走运营管理（JWT role=admin，独立 token）。
 
 ## 预览
 
@@ -111,6 +121,22 @@ cd ../smart-hid-cloud && go run ./cmd/cloud -config config.yaml
 
 > 门户使用原生 ES Modules（`<script type="module">`），**不能直接 `file://` 打开**，必须经 HTTP 服务器（方式 A 或任意静态服务器均可）。
 
+### 管理后台（需 Cloud + admin 账户）
+
+后台与门户共用 Cloud 同源托管（方式 A）。第一个 admin 的引导：
+
+```bash
+# 1. 先在 app.html 用某邮箱注册（如 admin@example.com）
+# 2. Cloud config 加 admin_email，重启 → 该账户被提升为 admin
+# smart-hid-cloud/config.yaml
+admin_email: admin@example.com
+
+cd ../smart-hid-cloud && go run ./cmd/cloud -config config.yaml
+# 3. 打开 http://127.0.0.1:17880/admin.html，用该账户登录
+```
+
+非 admin 账户登录 `admin.html` 会被拒绝（403，自动登出）。
+
 API 文档页（`api-docs.html`）的 Swagger UI 渲染器走 CDN，需联网；规范文件本身在 `api/openapi.yaml`，可离线查看或导入任意 OpenAPI 编辑器。
 
 ## 当前状态
@@ -123,7 +149,7 @@ API 文档页（`api-docs.html`）的 Swagger UI 渲染器走 CDN，需联网；
 - ✅ **演示视频中心**：`video.html`，配置驱动。视频首发 B 站，同步抖音 / YouTube；页面内 `VIDEO_CONFIG` 填入链接即自动渲染（B 站 bvid 填入即嵌入播放器）。当前为"制作中"占位态。
 - ✅ **授权与套餐**：`license.html`，试用 + 设备授权 + 7 步激活流 + License 载荷 + FAQ。
 - ✅ **用户门户**（CL-4，`app.html` + `portal/`）：零构建原生 ES Module SPA，hash 路由，7 个视图 —— 登录/注册、概览、套餐、设备、订单（含 V1 模拟支付）、License（激活 + 下载 `.license`）、账户。落地页导航已加入「控制台」入口。商业闭环用户侧打通：注册 → 设备 → 选套餐 → 支付 → 激活 → 下载 `.license` → ControlHub 导入。
-- ⚠️ **管理后台**（Admin UI）：未实现，独立工作流。
+- ✅ **管理后台**（CL-5，`admin.html` + `admin/`）：零构建 SPA，侧边栏布局，7 视图 —— 概览统计 / 用户 / 订单（退款）/ License（禁用·吊销·恢复）/ 套餐（新建·上下架）/ 激活码（生成·作废）。独立 admin token + AdminAuthMiddleware（JWT role=admin）。
 
 ## 图片资产说明
 
