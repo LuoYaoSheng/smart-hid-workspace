@@ -111,7 +111,8 @@ func newTestServer(t *testing.T, client pahomqtt.Client) (base string, dm *devic
 	setStore := settings.New(store.DB)
 	// CH-P5：pairing manager（nil 即不启用配对路由，简化测试）
 	// CH-P6：trial manager（nil 即不启用 usage 路由）
-	srv := New(engine, dm, keys, setStore, nil, nil, log)
+	// CL-3a：license manager（nil 即不启用 license 路由）
+	srv := New(engine, dm, keys, setStore, nil, nil, nil, log)
 	ts := httptest.NewServer(srv.Routes())
 	t.Cleanup(ts.Close)
 	return ts.URL, dm, store, engine

@@ -24,6 +24,7 @@ import (
 	"smart-hid-controlhub/internal/config"
 	"smart-hid-controlhub/internal/device"
 	"smart-hid-controlhub/internal/logging"
+	licmgr "smart-hid-controlhub/internal/license"
 	"smart-hid-controlhub/internal/mqtt"
 	"smart-hid-controlhub/internal/pairing"
 	"smart-hid-controlhub/internal/protocol"
@@ -131,7 +132,14 @@ func Build(cfgPath string) (*App, error) {
 	trialMgr := trial.New(trial.NewSQLStore(store.DB), setStore, machineAnchor, log.With("component", "trial"))
 	engine.WithEntitlement(trialMgr).WithTrial(trialMgr)
 
-	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, trialMgr, log.With("component", "api"))
+	// License Manager（CL-3a）：Ed25519 验签 + 公钥 embed
+	licenseMgr, err := licmgr.New(store.DB, log.With("component", "license"))
+	if err != nil {
+		_ = store.Close()
+		return nil, fmt.Errorf("init license manager: %w", err)
+	}
+
+	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, trialMgr, licenseMgr, log.With("component", "api"))
 
 	return &App{
 		cfg:        cfg,

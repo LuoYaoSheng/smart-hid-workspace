@@ -22,6 +22,7 @@ import (
 	"smart-hid-controlhub/internal/apikey"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/device"
+	"smart-hid-controlhub/internal/license"
 	"smart-hid-controlhub/internal/pairing"
 	"smart-hid-controlhub/internal/settings"
 	"smart-hid-controlhub/internal/trial"
@@ -36,13 +37,14 @@ type Server struct {
 	settings    *settings.Store
 	pairingMgr  *pairing.Manager
 	trialMgr    *trial.Manager
+	licenseMgr  *licmgr.Manager
 	log         *slog.Logger
 	httpSrv     *http.Server
 }
 
 // New 构造 Server（不启动）。
-// pairingMgr / trialMgr 可为 nil（开发/测试场景）。
-func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStore *settings.Store, pairingMgr *pairing.Manager, trialMgr *trial.Manager, log *slog.Logger) *Server {
+// pairingMgr / trialMgr / licenseMgr 可为 nil（开发/测试场景）。
+func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStore *settings.Store, pairingMgr *pairing.Manager, trialMgr *trial.Manager, licenseMgr *licmgr.Manager, log *slog.Logger) *Server {
 	return &Server{
 		engine:     engine,
 		devices:    dm,
@@ -50,6 +52,7 @@ func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStor
 		settings:   setStore,
 		pairingMgr: pairingMgr,
 		trialMgr:   trialMgr,
+		licenseMgr: licenseMgr,
 		log:        log,
 	}
 }
@@ -69,6 +72,11 @@ func (s *Server) Routes() http.Handler {
 	protected.HandleFunc("/api/v1/settings/lan-mode", s.handleSettingsLAN)   // GET/POST LAN 模式（A11）
 	protected.HandleFunc("/api/v1/usage", s.handleUsage)                     // GET 当前 Trial 用量（CH-P6）
 	protected.HandleFunc("/api/v1/usage/all", s.handleUsageAll)              // GET 所有设备用量
+	if s.licenseMgr != nil {
+		protected.HandleFunc("/api/v1/license", s.handleLicenseStatus)        // GET 当前 license 状态
+		protected.HandleFunc("/api/v1/license/import", s.handleLicenseImport) // POST 离线导入
+		protected.HandleFunc("/api/v1/license/list", s.handleLicenseList)     // GET 所有 license
+	}
 	if s.pairingMgr != nil {
 		protected.HandleFunc("/api/v1/pairing/sessions", s.handlePairingSessions)        // POST 创建
 		protected.HandleFunc("/api/v1/pairing/sessions/", s.handlePairingSessionsByToken) // GET {token}
@@ -84,6 +92,11 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("/api/v1/settings/lan-mode", auth)
 	mux.Handle("/api/v1/usage", auth)
 	mux.Handle("/api/v1/usage/all", auth)
+	if s.licenseMgr != nil {
+		mux.Handle("/api/v1/license", auth)
+		mux.Handle("/api/v1/license/import", auth)
+		mux.Handle("/api/v1/license/list", auth)
+	}
 	if s.pairingMgr != nil {
 		mux.Handle("/api/v1/pairing/sessions", auth)
 		mux.Handle("/api/v1/pairing/sessions/", auth)
