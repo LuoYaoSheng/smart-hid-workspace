@@ -1,0 +1,142 @@
+/* Smart HID Portal — 门户专用样式，扩展 style.css（复用其 :root token 与 .btn）。
+   单文件、零构建。浅色背景上的应用界面，与落地页 hero 深色形成层次。 */
+
+/* ============ 主区域 ============ */
+.portal-main {
+  min-height: calc(100vh - 64px - 60px);
+  padding: 32px 24px 64px;
+}
+.portal-main > * { width: 100%; max-width: 1080px; margin-left: auto; margin-right: auto; }
+
+/* ============ 排版辅助 ============ */
+.muted { color: var(--muted); }
+.tiny { font-size: 13px; }
+.link { color: var(--primary); font-weight: 600; }
+.link:hover { text-decoration: underline; }
+
+.page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+.page-title { font-size: 26px; font-weight: 700; color: var(--ink); margin: 0; letter-spacing: -.01em; }
+.page-sub { color: var(--muted); margin: 4px 0 0; font-size: 14px; }
+
+/* ============ 卡片 ============ */
+.card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 18px;
+}
+.card h3 { margin: 0 0 6px; font-size: 17px; color: var(--ink); }
+.card .muted { font-size: 14px; }
+
+/* ============ 表单 ============ */
+.form { display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > span { font-size: 13px; font-weight: 600; color: var(--text); }
+.field input, .field select, .field textarea {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+}
+.field input.invalid { border-color: #ef4444; }
+.field-hint { font-size: 12px; color: var(--muted); }
+.field-error { font-size: 12px; color: #dc2626; }
+.btn-block { width: 100%; }
+
+/* ============ 登录/注册卡片 ============ */
+.auth-wrap { display: flex; justify-content: center; padding-top: 24px; }
+.auth-card {
+  width: 100%; max-width: 400px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 32px;
+}
+.auth-card h1 { margin: 0 0 6px; font-size: 22px; color: var(--ink); }
+.auth-card .form { margin-top: 18px; }
+
+/* ============ 表格 ============ */
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th, .table td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.table th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; background: var(--bg-soft); }
+.table tr:last-child td { border-bottom: none; }
+.table td.mono, .table th.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+.table .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ============ 徽章 ============ */
+.badge {
+  display: inline-flex; align-items: center;
+  font-size: 12px; font-weight: 600;
+  padding: 3px 10px; border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.badge-ok { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.badge-warn { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+.badge-bad { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+
+/* ============ 空态 / 加载 / 错误 ============ */
+.empty-state, .loading-state {
+  text-align: center; padding: 56px 24px;
+  background: var(--bg); border: 1px dashed var(--line); border-radius: var(--radius);
+}
+.empty-state h2, .empty-state h3 { margin: 0 0 8px; color: var(--ink); }
+.empty-state .muted { margin: 0; }
+.loading-state { color: var(--muted); }
+
+/* ============ 导航：用户邮箱与按钮 ============ */
+.nav-user { color: rgba(255,255,255,.85); font-size: 13px; margin-right: 4px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#portal-nav a { color: rgba(255,255,255,.78); font-size: 14px; padding: 6px 10px; border-radius: 8px; transition: color .15s, background .15s; }
+#portal-nav a:hover { color: #fff; background: rgba(255,255,255,.08); }
+#portal-nav a.active { color: #fff; background: rgba(255,255,255,.12); }
+
+/* ============ Toast ============ */
+.toast {
+  position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%);
+  background: var(--ink); color: #fff;
+  padding: 12px 20px; border-radius: 10px;
+  font-size: 14px; font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  z-index: 100; max-width: 90vw;
+}
+.toast-success { background: #047857; }
+.toast-error { background: #b91c1c; }
+.toast-info { background: var(--ink); }
+
+/* ============ 通用工具 ============ */
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.row.between { justify-content: space-between; }
+.grow { flex: 1; }
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+.text-center { text-align: center; }
+.nowrap { white-space: nowrap; }
+hr.divider { border: none; border-top: 1px solid var(--line); margin: 20px 0; }
+
+/* 套餐卡片高亮 */
+.plan-card.popular { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), var(--shadow); }
+.plan-card .plan-price { font-size: 28px; font-weight: 700; color: var(--ink); }
+.plan-card .plan-price small { font-size: 14px; font-weight: 500; color: var(--muted); }
+.plan-card .plan-features { list-style: none; padding: 0; margin: 14px 0; display: flex; flex-direction: column; gap: 6px; }
+.plan-card .plan-features li { font-size: 14px; color: var(--text); }
+.plan-card .plan-features li::before { content: "✓ "; color: #10b981; font-weight: 700; }
+
+@media (max-width: 640px) {
+  .nav-user { display: none; }
+  .portal-main { padding: 20px 16px 48px; }
+}
