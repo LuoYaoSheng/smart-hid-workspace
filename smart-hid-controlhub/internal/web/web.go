@@ -13,7 +13,7 @@ import (
 	"net/http"
 )
 
-//go:embed static/index.html static/app.js static/style.css
+//go:embed static/*
 var staticFiles embed.FS
 
 // Handler 返回服务 Web 静态资源的 http.Handler。

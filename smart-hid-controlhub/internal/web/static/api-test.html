@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Playground · Smart HID ControlHub</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Smart HID <span class="thin">API Playground</span></h1>
+      <a href="/" class="ghost">← 返回控制台</a>
+    </div>
+    <form id="auth-form" class="auth">
+      <input id="api-key" type="password" placeholder="API Key (chk_…)" autocomplete="off" spellcheck="false">
+      <button type="submit">保存</button>
+    </form>
+  </header>
+
+  <main class="playground">
+    <!-- 左：endpoint 列表 -->
+    <aside class="pg-endpoints">
+      <h3>Endpoints</h3>
+      <input id="pg-search" type="search" placeholder="搜索 path / method...">
+      <ul id="pg-list"></ul>
+      <div class="pg-hint muted">
+        Tips:<br>
+        · 路径里的 <code>HID-AAAA1111</code> / <code>TOKEN_PLACEHOLDER</code> 可直接改<br>
+        · Body 编辑后会随请求发出<br>
+        · API Key 存 localStorage，与控制台共享
+      </div>
+    </aside>
+
+    <!-- 右：请求 + 响应 -->
+    <section class="pg-main">
+      <div class="pg-request">
+        <div class="pg-line">
+          <select id="pg-method">
+            <option>GET</option>
+            <option>POST</option>
+            <option>PUT</option>
+            <option>DELETE</option>
+          </select>
+          <input id="pg-path" type="text" placeholder="/api/v1/devices" class="pg-path-input" spellcheck="false">
+          <button id="pg-send" class="primary">发送</button>
+        </div>
+        <div id="pg-desc" class="pg-desc muted"></div>
+        <div class="pg-body-section">
+          <label for="pg-body">Request Body (JSON，GET 留空)</label>
+          <textarea id="pg-body" rows="10" spellcheck="false" placeholder='{ "key": "value" }'></textarea>
+        </div>
+      </div>
+
+      <div class="pg-response">
+        <div class="pg-resp-head">
+          <span id="pg-status" class="tag pending">未发送</span>
+          <span id="pg-duration" class="muted"></span>
+          <button id="pg-copy" class="ghost" hidden>复制响应</button>
+          <button id="pg-clear" class="ghost">清空</button>
+        </div>
+        <pre id="pg-resp-body">点击"发送"看响应</pre>
+      </div>
+    </section>
+  </main>
+
+  <script src="/api-test.js"></script>
+</body>
+</html>
