@@ -77,6 +77,9 @@
     sendHint: $('send-hint'), cmdResult: $('cmd-result'),
     closeComposer: $('close-composer'),
     lookupForm: $('lookup-form'), lookupId: $('lookup-id'), lookupResult: $('lookup-result'),
+    // CH-P2/P4：设置面板
+    rotateKey: $('rotate-key'), rotateResult: $('rotate-result'),
+    lanToggle: $('lan-toggle'), lanStatus: $('lan-status'),
   };
 
   // ---------- API 调用 ----------
@@ -322,6 +325,55 @@
     return `<span class="tag ${m[1]}">${m[0]}</span>`;
   }
 
+  // ---------- 设置面板（CH-P2/P4） ----------
+  async function fetchLAN() {
+    if (!state.apiKey) return;
+    const r = await api('GET', '/settings/lan-mode');
+    if (!r.ok) return;
+    el.lanToggle.checked = !!r.json.enabled;
+    el.lanStatus.textContent = r.json.note || '';
+  }
+
+  async function toggleLAN() {
+    const enabled = el.lanToggle.checked;
+    el.lanStatus.textContent = '保存中…';
+    const r = await api('POST', '/settings/lan-mode', { enabled });
+    if (!r.ok) {
+      el.lanToggle.checked = !enabled; // 回滚
+      el.lanStatus.textContent = '失败（HTTP ' + r.status + '）';
+      return;
+    }
+    el.lanStatus.textContent = r.json.note || '已保存';
+  }
+
+  async function rotateAPIKey() {
+    if (!state.apiKey) { alert('请先输入当前 API Key'); return; }
+    if (!confirm('确定重置 API Key？当前 key 会立即失效，所有使用旧 key 的客户端需更新。')) return;
+    el.rotateResult.textContent = '旋转中…';
+    const r = await api('POST', '/api-keys/rotate', {});
+    if (!r.ok) {
+      el.rotateResult.innerHTML = '<span class="tag error">失败 HTTP ' + r.status + '</span>';
+      return;
+    }
+    const newKey = r.json.api_key;
+    // 自动应用新 key 到本会话
+    state.apiKey = newKey;
+    localStorage.setItem('smarthid_apikey', newKey);
+    el.apiKey.value = newKey;
+    // 用 textContent 渲染（避免 XSS），新 key 只显示一次
+    const tag = document.createElement('span');
+    tag.className = 'tag success';
+    tag.textContent = '新 Key 已自动应用：';
+    const code = document.createElement('code');
+    code.textContent = newKey;
+    el.rotateResult.innerHTML = '';
+    el.rotateResult.appendChild(tag);
+    el.rotateResult.appendChild(code);
+    // 重新拉设备（验证新 key 工作）
+    pollHealth();
+    pollDevices();
+  }
+
   // ---------- 事件绑定 ----------
   el.authForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -329,6 +381,7 @@
     localStorage.setItem('smarthid_apikey', state.apiKey);
     pollHealth();
     pollDevices();
+    fetchLAN();
   });
 
   el.refreshDevices.addEventListener('click', pollDevices);
@@ -337,6 +390,8 @@
   el.sendCmd.addEventListener('click', sendCommand);
   el.closeComposer.addEventListener('click', closeComposer);
   el.lookupForm.addEventListener('submit', (e) => { e.preventDefault(); lookupCommand(); });
+  el.rotateKey.addEventListener('click', rotateAPIKey);
+  el.lanToggle.addEventListener('change', toggleLAN);
 
   // ---------- 启动 ----------
   function start() {
@@ -344,6 +399,7 @@
     populateTypes();
     pollHealth();
     pollDevices();
+    fetchLAN();
     // 定时刷新（仅健康与设备；命令状态按需查询）
     state.healthTimer = setInterval(pollHealth, 5000);
     state.deviceTimer = setInterval(() => {

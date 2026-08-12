@@ -26,6 +26,7 @@ import (
 	"smart-hid-controlhub/internal/logging"
 	"smart-hid-controlhub/internal/mqtt"
 	"smart-hid-controlhub/internal/protocol"
+	"smart-hid-controlhub/internal/settings"
 	"smart-hid-controlhub/internal/storage"
 	"smart-hid-controlhub/internal/tray"
 )
@@ -36,6 +37,7 @@ type App struct {
 	log       *slog.Logger
 	store     *storage.Store
 	keys      *apikey.Store
+	settings  *settings.Store
 	dm        *device.Manager
 	broker    *mqtt.Broker
 	hubClient pahomqtt.Client
@@ -91,6 +93,15 @@ func Build(cfgPath string) (*App, error) {
 		return nil, err
 	}
 
+	// Settings store（CH-P4）：LAN 模式开关等运行时可改配置
+	setStore := settings.New(store.DB)
+
+	// 应用 settings 到 cfg（LAN 模式覆盖 HTTP bind host）
+	if setStore.GetBool(settings.KeyLANModeEnabled, false) {
+		cfg.HTTP.Host = "0.0.0.0"
+		log.Info("lan mode enabled (settings); http bind overridden", "host", cfg.HTTP.Host)
+	}
+
 	// MQTT broker（嵌入式）
 	broker := mqtt.NewBroker(cfg.MQTT.Host, cfg.MQTT.Port, cfg.MQTT.Username, cfg.MQTT.Password, log.With("component", "mqtt"))
 
@@ -99,13 +110,14 @@ func Build(cfgPath string) (*App, error) {
 
 	// Engine + API server（构造时不启动）
 	engine := command.New(hubClient, dm, store, log.With("component", "engine"))
-	apiSrv := api.New(engine, dm, keys, log.With("component", "api"))
+	apiSrv := api.New(engine, dm, keys, setStore, log.With("component", "api"))
 
 	return &App{
 		cfg:       cfg,
 		log:       log,
 		store:     store,
 		keys:      keys,
+		settings:  setStore,
 		dm:        dm,
 		broker:    broker,
 		hubClient: hubClient,
@@ -232,6 +244,30 @@ func (a *App) HTTPPort() int { return a.cfg.HTTP.Port }
 // RotateAPIKey 暴露给 tray 菜单调用。
 func (a *App) RotateAPIKey() (string, error) {
 	return a.keys.Rotate("tray")
+}
+
+// LANModeEnabled 返回当前 LAN 模式开关状态（从 settings 读，反映持久化值）。
+func (a *App) LANModeEnabled() bool {
+	return a.settings.GetBool(settings.KeyLANModeEnabled, false)
+}
+
+// SetLANMode 持久化 LAN 模式开关。变更需重启 ControlHub 才能生效
+// （HTTP listener 不支持运行时切换 bind host）。
+// 返回 previous 值，便于调用者判断是否真的变了。
+func (a *App) SetLANMode(enabled bool) error {
+	prev := a.LANModeEnabled()
+	if err := a.settings.SetBool(settings.KeyLANModeEnabled, enabled); err != nil {
+		return err
+	}
+	if prev != enabled {
+		if enabled {
+			a.log.Warn("lan mode enabled; restart ControlHub to expose HTTP API on 0.0.0.0",
+				"port", a.cfg.HTTP.Port)
+		} else {
+			a.log.Info("lan mode disabled; restart ControlHub to bind localhost-only")
+		}
+	}
+	return nil
 }
 
 // --- 顶层入口（保留向后兼容） ---

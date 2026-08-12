@@ -68,6 +68,36 @@
       </form>
       <div id="lookup-result"></div>
     </section>
+
+    <!-- 设置（CH-P2/P4：API Key 管理 + LAN 模式） -->
+    <section class="card">
+      <div class="section-head"><h2>设置</h2></div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-title">重置 API Key</div>
+          <div class="setting-desc">立即撤销当前 key 并生成新 key。新 key 只显示一次。</div>
+        </div>
+        <div class="setting-action">
+          <button id="rotate-key" class="warning">重置 API Key</button>
+          <div id="rotate-result" class="rotate-result"></div>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-title">LAN 模式</div>
+          <div class="setting-desc">开启后 HTTP API 监听 0.0.0.0（局域网可达）；默认仅 localhost。<strong>切换需重启 ControlHub 生效。</strong></div>
+        </div>
+        <div class="setting-action">
+          <label class="switch">
+            <input type="checkbox" id="lan-toggle">
+            <span class="slider"></span>
+          </label>
+          <span id="lan-status" class="muted"></span>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- 键盘按键建议列表（供 key 字段 datalist 引用） -->

@@ -18,6 +18,7 @@ import (
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/device"
 	"smart-hid-controlhub/internal/protocol"
+	"smart-hid-controlhub/internal/settings"
 	"smart-hid-controlhub/internal/storage"
 )
 
@@ -106,7 +107,9 @@ func newTestServer(t *testing.T, client pahomqtt.Client) (base string, dm *devic
 	if err := keys.InsertTesting(testAPIKey, "test"); err != nil {
 		t.Fatalf("seed api key: %v", err)
 	}
-	srv := New(engine, dm, keys, log)
+	// CH-P4：settings store
+	setStore := settings.New(store.DB)
+	srv := New(engine, dm, keys, setStore, log)
 	ts := httptest.NewServer(srv.Routes())
 	t.Cleanup(ts.Close)
 	return ts.URL, dm, store, engine

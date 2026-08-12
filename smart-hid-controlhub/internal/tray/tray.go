@@ -26,11 +26,12 @@ var iconOnline []byte
 var iconOffline []byte
 
 // Controller 由 app.App 实现，tray 通过它驱动业务动作。
-// 后续里程碑（CH-P4 LAN 模式）会扩展此接口。
 type Controller interface {
 	HTTPPort() int                 // 用于"打开控制台" URL
 	Stop()                         // "退出"菜单触发
 	RotateAPIKey() (string, error) // "重置 API Key"菜单触发
+	LANModeEnabled() bool          // LAN 模式 checkbox 当前状态
+	SetLANMode(bool) error         // LAN 模式 toggle（持久化，下次启动生效）
 }
 
 // Run 启动托盘，阻塞直到用户选"退出"。
@@ -55,6 +56,9 @@ func onReady(c Controller, log *slog.Logger) {
 	systray.AddSeparator()
 
 	mRotate := systray.AddMenuItem("重置 API Key", "Rotate API key (will invalidate current key)")
+	mLAN := systray.AddMenuItemCheckbox("LAN 模式",
+		"Allow LAN access to HTTP API (restart required)",
+		c.LANModeEnabled())
 
 	systray.AddSeparator()
 
@@ -79,6 +83,20 @@ func onReady(c Controller, log *slog.Logger) {
 				// 不在托盘显示明文，避免肩窥泄漏；用户需到控制台或 initial-api-key.txt 取新 key
 				log.Info("api key rotated from tray", "key_prefix", raw[:12]+"...")
 				systray.SetTooltip("API key rotated. Open console with the new key.")
+			case <-mLAN.ClickedCh:
+				newState := !c.LANModeEnabled()
+				if err := c.SetLANMode(newState); err != nil {
+					log.Error("set lan mode from tray", "err", err)
+					systray.SetTooltip("LAN toggle failed: " + err.Error())
+					continue
+				}
+				if newState {
+					mLAN.Check()
+					systray.SetTooltip("LAN mode ON (restart to apply). HTTP API will be 0.0.0.0.")
+				} else {
+					mLAN.Uncheck()
+					systray.SetTooltip("LAN mode OFF (restart to apply). HTTP API will be localhost-only.")
+				}
 			case <-mAbout.ClickedCh:
 				_ = openBrowser("https://smart-hid.local/about")
 			case <-mQuit.ClickedCh:
