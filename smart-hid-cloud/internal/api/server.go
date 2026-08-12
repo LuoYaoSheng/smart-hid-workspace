@@ -6,6 +6,7 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -13,31 +14,55 @@ import (
 	"time"
 
 	"smart-hid-cloud/internal/auth"
-	"smart-hid-cloud/internal/storage"
+	"smart-hid-cloud/internal/store"
 )
 
 // Server 持有所有依赖。
 type Server struct {
-	store     *storage.Store
-	jwtSecret []byte
-	log       *slog.Logger
-	httpSrv   *http.Server
+	store      *store.Store
+	jwtSecret  []byte
+	privateKey ed25519.PrivateKey
+	log        *slog.Logger
+	httpSrv    *http.Server
 }
 
-// New 构造 Server（不启动）。
-func New(store *storage.Store, jwtSecret []byte, log *slog.Logger) *Server {
+// New 构造 Server（不启动）。privateKey 为 nil 时 license 签发会失败（开发期可空）。
+func New(st *store.Store, jwtSecret []byte, privateKey ed25519.PrivateKey, log *slog.Logger) *Server {
 	return &Server{
-		store:     store,
-		jwtSecret: jwtSecret,
-		log:       log,
+		store:      st,
+		jwtSecret:  jwtSecret,
+		privateKey: privateKey,
+		log:        log,
 	}
 }
 
-// Routes 返回 http.Handler（带日志中间件 + 路由）。
+// Routes 返回 http.Handler。
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
+
+	// 公开路由
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
-	// CL-2b 在此插入更多 routes
+	mux.HandleFunc("/api/v1/auth/register", s.handleRegister)
+	mux.HandleFunc("/api/v1/auth/login", s.handleLogin)
+	mux.HandleFunc("/api/v1/plans", s.handleListPlans)
+
+	// 受保护路由（需 JWT）
+	protected := http.NewServeMux()
+	protected.HandleFunc("/api/v1/users/me", s.handleMe)
+	protected.HandleFunc("/api/v1/devices", s.handleDevices)
+	protected.HandleFunc("/api/v1/orders", s.handleOrders)
+	protected.HandleFunc("/api/v1/orders/", s.handlePayCallback) // /orders/{id}/pay-callback
+	protected.HandleFunc("/api/v1/licenses", s.handleLicenses)
+	protected.HandleFunc("/api/v1/licenses/", s.handleLicenseAction) // /licenses/{id} 和 /licenses/{id}/{action}
+
+	authMW := s.JWTAuthMiddleware(protected)
+	mux.Handle("/api/v1/users/me", authMW)
+	mux.Handle("/api/v1/devices", authMW)
+	mux.Handle("/api/v1/orders", authMW)
+	mux.Handle("/api/v1/orders/", authMW)
+	mux.Handle("/api/v1/licenses", authMW)
+	mux.Handle("/api/v1/licenses/", authMW)
+
 	return s.logMiddleware(mux)
 }
 

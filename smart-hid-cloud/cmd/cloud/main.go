@@ -5,18 +5,17 @@
 //	cloud                     # 用默认配置
 //	cloud -config config.yaml
 //
-// CL-2a：启动 HTTP server + health endpoint，跑通基础链路。
-// CL-2b 起加业务 endpoint。
+// CL-2b：完整业务 endpoint（auth/plans/devices/orders/licenses）+ License 签发。
 package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -24,6 +23,8 @@ import (
 	"smart-hid-cloud/internal/config"
 	"smart-hid-cloud/internal/logging"
 	"smart-hid-cloud/internal/storage"
+	"smart-hid-cloud/internal/store"
+	"smart-hid-cloud/pkg/license"
 )
 
 func main() {
@@ -37,25 +38,39 @@ func main() {
 	}
 	log := logging.NewLogger(cfg.LogLevel).With("component", "cloud")
 
-	// SQLite
-	store, err := storage.New(cfg.Database.Path, log.With("component", "storage"))
+	// SQLite（migration 自动跑）
+	storageStore, err := storage.New(cfg.Database.Path, log.With("component", "storage"))
 	if err != nil {
 		log.Error("open storage", "err", err)
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer storageStore.Close()
 
-	// 校验 License 私钥可达（CL-2b 实际使用）
-	if _, err := os.Stat(cfg.LicenseKeyPath); err != nil {
-		log.Warn("license private key not found (license signing will fail until generated)",
-			"path", cfg.LicenseKeyPath,
-			"hint", "run scripts/gen-keys.sh")
+	// 业务 store
+	bizStore := store.New(storageStore.DB)
+
+	// 加载 License 私钥（缺失则 license 签发会 500，但其他 endpoint 正常）
+	var privKey ed25519.PrivateKey
+	if cfg.LicenseKeyPath != "" {
+		if k, err := license.LoadPrivateKey(cfg.LicenseKeyPath); err != nil {
+			log.Warn("license private key load failed (signing endpoints will 500)",
+				"path", cfg.LicenseKeyPath, "err", err,
+				"hint", "run scripts/gen-keys.sh")
+		} else {
+			privKey = k
+			log.Info("license private key ready", "path", cfg.LicenseKeyPath)
+		}
+	}
+
+	// Seed 默认套餐（V1）
+	if err := bizStore.SeedPlans(defaultPlans()); err != nil {
+		log.Warn("seed plans", "err", err)
 	} else {
-		log.Info("license private key ready", "path", cfg.LicenseKeyPath)
+		log.Info("plans seeded", "count", len(defaultPlans()))
 	}
 
 	// HTTP server
-	srv := api.New(store, []byte(cfg.JWTSecret), log.With("component", "api"))
+	srv := api.New(bizStore, []byte(cfg.JWTSecret), privKey, log.With("component", "api"))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -66,11 +81,6 @@ func main() {
 			errCh <- err
 		}
 	}()
-
-	// 写 pid 文件（便于开发期定位）
-	pidFile := filepath.Join(cfg.DataDir, "cloud.pid")
-	_ = os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0o644)
-	defer os.Remove(pidFile)
 
 	select {
 	case <-ctx.Done():
@@ -85,5 +95,31 @@ func main() {
 	log.Info("cloud stopped")
 }
 
-// 引用 slog 避免 unused（编译期保证 import）
+// defaultPlans V1 默认套餐（每次启动 upsert，可在数据库改 active 调整）。
+func defaultPlans() []store.Plan {
+	return []store.Plan{
+		{
+			PlanID:       "plan_basic_monthly",
+			Name:         "基础版 月度",
+			Description:  "Smart HID 基础版，月度订阅",
+			PriceCents:   1900,
+			Currency:     "CNY",
+			DurationDays: 30,
+			Features:     []string{"hid_control"},
+			Active:       true,
+		},
+		{
+			PlanID:       "plan_basic_yearly",
+			Name:         "基础版 年度",
+			Description:  "Smart HID 基础版，年度订阅（优惠）",
+			PriceCents:   19900,
+			Currency:     "CNY",
+			DurationDays: 365,
+			Features:     []string{"hid_control"},
+			Active:       true,
+		},
+	}
+}
+
+// 引用 slog 避免 unused
 var _ = slog.Default
