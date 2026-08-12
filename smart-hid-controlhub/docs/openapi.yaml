@@ -393,6 +393,142 @@ paths:
                     items: { $ref: '#/components/schemas/TrialUsage' }
                   total: { type: integer }
 
+  # =========================================================================
+  # License：离线导入（CL-3）+ 在线激活/刷新（CL-6，需 cloud.base_url）
+  # =========================================================================
+  /license:
+    get:
+      summary: 查询设备当前 License 状态（验签 + 时效）
+      tags: [License]
+      security: [{ BearerApiKey: [] }]
+      parameters:
+        - in: query
+          name: device_id
+          required: false
+          schema: { type: string, pattern: '^HID-[A-Z0-9]{8}$' }
+          description: 单设备可省略（自动选）；多设备必填。
+      responses:
+        '200':
+          description: License 状态
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LicenseInfo' }
+        '404':
+          description: 无 License
+
+  /license/list:
+    get:
+      summary: 列出所有已导入的 License（管理用，不重新验签）
+      tags: [License]
+      security: [{ BearerApiKey: [] }]
+      responses:
+        '200':
+          description: License 列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  licenses:
+                    type: array
+                    items: { $ref: '#/components/schemas/LicenseInfo' }
+                  total: { type: integer }
+
+  /license/import:
+    post:
+      summary: 离线导入 .license 文件（CL-3，验签后 upsert）
+      tags: [License]
+      security: [{ BearerApiKey: [] }]
+      description: |
+        Body 是完整 License JSON（Cloud 下载或拷贝的 .license 文件内容）。
+        device_id 从 payload 内提取；Import 含 VerifyFull + upsert。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, description: 完整 License JSON（payload + signature） }
+      responses:
+        '200':
+          description: 导入成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported: { type: boolean, example: true }
+                  license: { type: string, description: license_id }
+                  device: { type: string }
+                  status: { type: string, example: ACTIVE }
+        '400':
+          description: 验签失败 / 坏 JSON
+
+  /license/activate-code:
+    post:
+      summary: 在线激活（CL-6，激活码 → Cloud 消费 → 导入）
+      tags: [License]
+      security: [{ BearerApiKey: [] }]
+      description: |
+        调 Cloud POST /activation/consume 消费激活码，返回签名 License 本地导入。
+        需配置 cloud.base_url（离线模式返 503）。device_id 为空时自动选唯一配对设备。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, description: 12 字符激活码（Crockford base32） }
+                device_id: { type: string, pattern: '^HID-[A-Z0-9]{8}$' }
+      responses:
+        '200':
+          description: 激活成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activated: { type: boolean, example: true }
+                  device_id: { type: string }
+                  status: { type: string, example: ACTIVE }
+        '503': { description: 离线模式（cloud.base_url 未配） }
+        '502': { description: Cloud 消费失败（码无效/已用/过期/设备不符） }
+
+  /license/refresh:
+    post:
+      summary: 在线刷新（CL-6，从 Cloud 拉最新签名 License 覆盖导入，续期）
+      tags: [License]
+      security: [{ BearerApiKey: [] }]
+      description: |
+        device_id 给定 → 刷该设备；为空 → 刷全部本地 License（批量 best-effort）。
+        需配置 cloud.base_url（离线模式返 503）。续期后 expires_at 延长。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id: { type: string, pattern: '^HID-[A-Z0-9]{8}$' }
+      responses:
+        '200':
+          description: 刷新结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  refreshed: { type: integer, description: 成功数（批量）或 1（单设备） }
+                  failed: { type: integer, description: 失败数（仅批量） }
+                  device_id: { type: string, description: 单设备刷新时返回 }
+                  status: { type: string, description: 单设备刷新时返回 }
+                  results:
+                    type: array
+                    description: 仅批量刷新时返回
+                    items: { $ref: '#/components/schemas/RefreshResult' }
+        '503': { description: 离线模式 }
+        '502': { description: 单设备刷新失败 }
+
 # =========================================================================
 components:
   securitySchemes:
@@ -421,6 +557,38 @@ components:
           example: { error: unauthorized, message: "invalid api key" }
 
   schemas:
+    # ---------- License（CL-3/CL-6）----------
+    LicenseInfo:
+      type: object
+      description: ControlHub 本地 License 视图（验签 + 时效派生 status）。
+      properties:
+        license_id: { type: string, example: lic_a1b2c3 }
+        account_id: { type: string }
+        plan_id: { type: string, example: plan_basic_yearly }
+        device_id: { type: string, example: HID-00000001 }
+        issued_at: { type: integer, description: Unix 秒 }
+        valid_from: { type: integer, description: Unix 秒 }
+        expires_at: { type: integer, description: Unix 秒 }
+        features:
+          type: array
+          items: { type: string }
+        license_version: { type: integer, example: 1 }
+        status:
+          type: string
+          enum: [ACTIVE, EXPIRED, FUTURE, INVALID]
+          description: ACTIVE=验签+时效全过；其余为派生态。
+        effective: { type: boolean, description: 是否当前有效（Entitlement gate 用） }
+        time_remaining_seconds: { type: integer }
+
+    RefreshResult:
+      type: object
+      description: 批量刷新单条结果（CL-6）。
+      properties:
+        license_id: { type: string }
+        device_id: { type: string }
+        ok: { type: boolean }
+        error: { type: string, description: 失败原因（ok=false 时） }
+
     # ---------- 错误 ----------
     Error:
       type: object

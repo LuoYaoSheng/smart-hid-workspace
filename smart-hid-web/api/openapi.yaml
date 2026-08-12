@@ -1,8 +1,6 @@
 # ControlHub HTTP API — OpenAPI 3.0
 #
-# ⚠️ 这是 smart-hid-web 的自包含副本，用于落地页 API 文档渲染。
-# 事实源：smart-hid-controlhub/docs/openapi.yaml —— 改 API 请改事实源，再用 downloads/build-releases.sh 同步本文件。
-#
+# 事实源：本文件（ControlHub 私有 HTTP API）。
 # 协议公开定义（MQTT Command/Ack/Status）在 smart-ble/core/protocols/hid-command-schema.ts。
 # 依据：docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md §9-11
 #
@@ -245,7 +243,291 @@ paths:
 
   # 未实现端点（Phase 5/6 接入）：
   #   GET /license  — 当前 License 元数据与验签状态（CH-10）
-  #   GET /usage    — Trial 累计有效控制时间 / Session 信息（CH-09）
+
+  # =========================================================================
+  # CH-P2: API Key 持久化 + 轮换
+  # =========================================================================
+  /api-keys:
+    get:
+      summary: 列出所有 API key（不含明文）
+      tags: [APIKeys]
+      security: [{ BearerApiKey: [] }]
+      responses:
+        '200':
+          description: 列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items: { $ref: '#/components/schemas/APIKeyInfo' }
+                  total: { type: integer }
+
+  /api-keys/rotate:
+    post:
+      summary: 撤销当前所有 key + 生成新 key（验收 A12）
+      tags: [APIKeys]
+      security: [{ BearerApiKey: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string, example: "rotated" }
+      responses:
+        '200':
+          description: 新 key 明文（仅此一次）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RotateResult' }
+
+  # =========================================================================
+  # CH-P4: LAN 模式开关（验收 A11）
+  # =========================================================================
+  /settings/lan-mode:
+    get:
+      summary: 查询 LAN 模式开关状态
+      tags: [Settings]
+      security: [{ BearerApiKey: [] }]
+      responses:
+        '200':
+          description: 当前状态
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LANModeResp' }
+    post:
+      summary: 切换 LAN 模式（持久化，重启 ControlHub 生效）
+      tags: [Settings]
+      security: [{ BearerApiKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: 已持久化
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LANModeResp' }
+
+  # =========================================================================
+  # CH-P5: 设备配对
+  # =========================================================================
+  /pairing/sessions:
+    post:
+      summary: 创建配对会话（用户侧，需 API key）
+      tags: [Pairing]
+      security: [{ BearerApiKey: [] }]
+      responses:
+        '200':
+          description: 配对 session token + QR payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PairingSessionCreated' }
+
+  /pairing/sessions/{token}:
+    get:
+      summary: 查询配对 session 状态（Web UI 轮询用）
+      tags: [Pairing]
+      security: [{ BearerApiKey: [] }]
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: session 详情
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PairingSession' }
+        '404':
+          description: 不存在
+
+  # =========================================================================
+  # CH-P6: Trial 用量查询（验收 D5：Trial 过期后此 endpoint 仍可用）
+  # =========================================================================
+  /usage:
+    get:
+      summary: 查询 Trial 用量（默认单设备自动选择，多设备需 device_id 参数）
+      tags: [Trial]
+      security: [{ BearerApiKey: [] }]
+      parameters:
+        - in: query
+          name: device_id
+          required: false
+          schema: { type: string, pattern: '^HID-[A-Z0-9]{8}$' }
+      responses:
+        '200':
+          description: 当前用量
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrialUsage' }
+        '400':
+          description: 缺 device_id（无设备或多设备）
+
+  /usage/all:
+    get:
+      summary: 列出所有设备用量（管理用）
+      tags: [Trial]
+      security: [{ BearerApiKey: [] }]
+      responses:
+        '200':
+          description: 用量列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usages:
+                    type: array
+                    items: { $ref: '#/components/schemas/TrialUsage' }
+                  total: { type: integer }
+
+  # =========================================================================
+  # License：离线导入（CL-3）+ 在线激活/刷新（CL-6，需 cloud.base_url）
+  # =========================================================================
+  /license:
+    get:
+      summary: 查询设备当前 License 状态（验签 + 时效）
+      tags: [License]
+      security: [{ BearerApiKey: [] }]
+      parameters:
+        - in: query
+          name: device_id
+          required: false
+          schema: { type: string, pattern: '^HID-[A-Z0-9]{8}$' }
+          description: 单设备可省略（自动选）；多设备必填。
+      responses:
+        '200':
+          description: License 状态
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LicenseInfo' }
+        '404':
+          description: 无 License
+
+  /license/list:
+    get:
+      summary: 列出所有已导入的 License（管理用，不重新验签）
+      tags: [License]
+      security: [{ BearerApiKey: [] }]
+      responses:
+        '200':
+          description: License 列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  licenses:
+                    type: array
+                    items: { $ref: '#/components/schemas/LicenseInfo' }
+                  total: { type: integer }
+
+  /license/import:
+    post:
+      summary: 离线导入 .license 文件（CL-3，验签后 upsert）
+      tags: [License]
+      security: [{ BearerApiKey: [] }]
+      description: |
+        Body 是完整 License JSON（Cloud 下载或拷贝的 .license 文件内容）。
+        device_id 从 payload 内提取；Import 含 VerifyFull + upsert。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, description: 完整 License JSON（payload + signature） }
+      responses:
+        '200':
+          description: 导入成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported: { type: boolean, example: true }
+                  license: { type: string, description: license_id }
+                  device: { type: string }
+                  status: { type: string, example: ACTIVE }
+        '400':
+          description: 验签失败 / 坏 JSON
+
+  /license/activate-code:
+    post:
+      summary: 在线激活（CL-6，激活码 → Cloud 消费 → 导入）
+      tags: [License]
+      security: [{ BearerApiKey: [] }]
+      description: |
+        调 Cloud POST /activation/consume 消费激活码，返回签名 License 本地导入。
+        需配置 cloud.base_url（离线模式返 503）。device_id 为空时自动选唯一配对设备。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, description: 12 字符激活码（Crockford base32） }
+                device_id: { type: string, pattern: '^HID-[A-Z0-9]{8}$' }
+      responses:
+        '200':
+          description: 激活成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activated: { type: boolean, example: true }
+                  device_id: { type: string }
+                  status: { type: string, example: ACTIVE }
+        '503': { description: 离线模式（cloud.base_url 未配） }
+        '502': { description: Cloud 消费失败（码无效/已用/过期/设备不符） }
+
+  /license/refresh:
+    post:
+      summary: 在线刷新（CL-6，从 Cloud 拉最新签名 License 覆盖导入，续期）
+      tags: [License]
+      security: [{ BearerApiKey: [] }]
+      description: |
+        device_id 给定 → 刷该设备；为空 → 刷全部本地 License（批量 best-effort）。
+        需配置 cloud.base_url（离线模式返 503）。续期后 expires_at 延长。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id: { type: string, pattern: '^HID-[A-Z0-9]{8}$' }
+      responses:
+        '200':
+          description: 刷新结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  refreshed: { type: integer, description: 成功数（批量）或 1（单设备） }
+                  failed: { type: integer, description: 失败数（仅批量） }
+                  device_id: { type: string, description: 单设备刷新时返回 }
+                  status: { type: string, description: 单设备刷新时返回 }
+                  results:
+                    type: array
+                    description: 仅批量刷新时返回
+                    items: { $ref: '#/components/schemas/RefreshResult' }
+        '503': { description: 离线模式 }
+        '502': { description: 单设备刷新失败 }
 
 # =========================================================================
 components:
@@ -275,6 +557,38 @@ components:
           example: { error: unauthorized, message: "invalid api key" }
 
   schemas:
+    # ---------- License（CL-3/CL-6）----------
+    LicenseInfo:
+      type: object
+      description: ControlHub 本地 License 视图（验签 + 时效派生 status）。
+      properties:
+        license_id: { type: string, example: lic_a1b2c3 }
+        account_id: { type: string }
+        plan_id: { type: string, example: plan_basic_yearly }
+        device_id: { type: string, example: HID-00000001 }
+        issued_at: { type: integer, description: Unix 秒 }
+        valid_from: { type: integer, description: Unix 秒 }
+        expires_at: { type: integer, description: Unix 秒 }
+        features:
+          type: array
+          items: { type: string }
+        license_version: { type: integer, example: 1 }
+        status:
+          type: string
+          enum: [ACTIVE, EXPIRED, FUTURE, INVALID]
+          description: ACTIVE=验签+时效全过；其余为派生态。
+        effective: { type: boolean, description: 是否当前有效（Entitlement gate 用） }
+        time_remaining_seconds: { type: integer }
+
+    RefreshResult:
+      type: object
+      description: 批量刷新单条结果（CL-6）。
+      properties:
+        license_id: { type: string }
+        device_id: { type: string }
+        ok: { type: boolean }
+        error: { type: string, description: 失败原因（ok=false 时） }
+
     # ---------- 错误 ----------
     Error:
       type: object
@@ -427,3 +741,95 @@ components:
         status: { $ref: '#/components/schemas/AckStatus' }
         code: { type: integer }
         execution_ms: { type: integer, nullable: true, description: 仅终态回写后存在。 }
+
+    # ---------- CH-P2: API Key ----------
+    APIKeyInfo:
+      type: object
+      description: API key 列表项（明文不返回）。
+      required: [key_id, label, created_at, active]
+      properties:
+        key_id: { type: string, description: 'chk_ 前缀 + 12 字符' }
+        label: { type: string }
+        created_at: { type: integer, description: Unix 秒 }
+        revoked_at: { type: integer, nullable: true }
+        last_used_at: { type: integer, nullable: true }
+        active: { type: boolean }
+
+    RotateResult:
+      type: object
+      required: [api_key, label, note]
+      properties:
+        api_key: { type: string, description: '新 key 明文（仅此响应可见）；格式 chk_<64 hex>' }
+        label: { type: string }
+        note: { type: string }
+
+    # ---------- CH-P4: Settings ----------
+    LANModeResp:
+      type: object
+      required: [enabled, note]
+      properties:
+        enabled: { type: boolean }
+        note: { type: string, description: '提示切换需重启 ControlHub' }
+
+    # ---------- CH-P5: Pairing ----------
+    PairingSessionCreated:
+      type: object
+      required: [token, expires_at, qr_payload]
+      properties:
+        token: { type: string, description: '32 字符 hex' }
+        expires_at: { type: integer, description: 'Unix 秒' }
+        qr_payload:
+          type: string
+          description: 'shid://pair?token=...&host=<lan-ip>&port=17892，供 ESP32 Provision Mode 解析'
+          example: 'shid://pair?token=abc...&host=192.168.1.10&port=17892'
+
+    PairingSession:
+      type: object
+      required: [token, created_at, expires_at, status]
+      properties:
+        token: { type: string }
+        device_id: { type: string, description: '配对成功后填' }
+        created_at: { type: integer }
+        expires_at: { type: integer }
+        used_at: { type: integer, nullable: true }
+        status:
+          type: string
+          enum: [pending, success, expired, revoked]
+
+    PairingDeviceReq:
+      type: object
+      description: '设备侧 POST /api/v1/pairing/device 请求体（无 API key，凭 token）。'
+      required: [token, device_id, boot_id]
+      properties:
+        token: { type: string }
+        device_id: { type: string, pattern: '^HID-[A-Z0-9]{8}$' }
+        boot_id: { type: string }
+        firmware: { type: string }
+        hardware: { type: string }
+
+    PairingDeviceResult:
+      type: object
+      description: '配对成功响应，含一次性 MQTT 凭据。'
+      required: [mqtt_host, mqtt_port, mqtt_username, mqtt_credential, device_id]
+      properties:
+        mqtt_host: { type: string }
+        mqtt_port: { type: integer }
+        mqtt_username: { type: string, description: 'dev_<device_id>' }
+        mqtt_credential: { type: string, description: '一次性明文密码（32 字节随机）' }
+        device_id: { type: string }
+
+    # ---------- CH-P6: Trial ----------
+    TrialUsage:
+      type: object
+      required: [device_id, used_seconds, quota_seconds, remaining_seconds, session_active, expired, machine_anchor]
+      properties:
+        device_id: { type: string }
+        used_seconds: { type: number, description: '已用有效控制秒数' }
+        quota_seconds: { type: integer, description: '配额（settings.trial_quota_seconds）' }
+        remaining_seconds: { type: number }
+        session_active: { type: boolean }
+        session_started_at: { type: integer, nullable: true }
+        expired: { type: boolean }
+        machine_anchor:
+          type: string
+          description: '当前机器稳定 ID（Win MachineGuid / Mac IOPlatformUUID / Linux machine-id）'
