@@ -172,6 +172,39 @@ func (s *Server) handleAdminLicenseAction(w http.ResponseWriter, r *http.Request
 
 	var target string
 	switch action {
+	case "extend":
+		// 续期：重签同 license_id，延长 addDays 天（CL-6a）。仅 ACTIVE 可续期。
+		if cur.Status != "ACTIVE" {
+			writeJSON(w, http.StatusConflict, errBody{"conflict", "extend requires ACTIVE license (current: " + cur.Status + ")"})
+			return
+		}
+		var req struct {
+			AddDays int `json:"add_days"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody{"bad_request", err.Error()})
+			return
+		}
+		if req.AddDays <= 0 {
+			writeJSON(w, http.StatusBadRequest, errBody{"bad_request", "add_days must be positive"})
+			return
+		}
+		signed, err := s.reissueLicense(cur, req.AddDays)
+		if err != nil {
+			s.log.Error("admin extend license", "license_id", licenseID, "err", err)
+			writeJSON(w, http.StatusInternalServerError, errBody{"internal", err.Error()})
+			return
+		}
+		s.log.Info("license extended (admin)", "license_id", licenseID,
+			"add_days", req.AddDays, "new_expires_at", signed.Payload.ExpiresAt,
+			"admin", UserIDFromCtx(r.Context()))
+		writeJSON(w, http.StatusOK, map[string]any{
+			"license_id": licenseID,
+			"status":     "ACTIVE",
+			"expires_at": signed.Payload.ExpiresAt,
+			"issued_at":  signed.Payload.IssuedAt,
+		})
+		return
 	case "disable":
 		target = "DISABLED"
 	case "revoke":
@@ -283,8 +316,8 @@ func (s *Server) handleAdminActivationCodes(w http.ResponseWriter, r *http.Reque
 			writeJSON(w, http.StatusBadRequest, errBody{"bad_request", err.Error()})
 			return
 		}
-		if req.UserID == "" || req.DeviceID == "" || req.PlanID == "" {
-			writeJSON(w, http.StatusBadRequest, errBody{"bad_request", "user_id, device_id, plan_id required"})
+		if req.UserID == "" || req.PlanID == "" {
+			writeJSON(w, http.StatusBadRequest, errBody{"bad_request", "user_id, plan_id required (device_id optional — empty = generic code, binds at consume)"})
 			return
 		}
 		plan, err := s.store.GetPlan(req.PlanID)

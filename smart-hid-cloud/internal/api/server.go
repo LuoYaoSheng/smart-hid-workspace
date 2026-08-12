@@ -55,6 +55,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/auth/register", s.handleRegister)
 	mux.HandleFunc("/api/v1/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/v1/plans", s.handleListPlans)
+	mux.HandleFunc("/api/v1/activation/consume", s.handleActivationConsume) // CL-6a 激活码消费（码即凭据）
+	mux.HandleFunc("/api/v1/license/refresh", s.handleLicenseRefresh)       // CL-6a License 刷新（license_id 即凭据）
 
 	// 受保护路由（需 JWT）
 	protected := http.NewServeMux()

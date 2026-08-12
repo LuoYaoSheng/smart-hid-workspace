@@ -11,11 +11,9 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 
 	"smart-hid-cloud/internal/auth"
 	"smart-hid-cloud/internal/store"
-	"smart-hid-cloud/pkg/license"
 )
 
 // deviceIDPattern 与 ControlHub / 协议 schema 一致。
@@ -324,7 +322,7 @@ func (s *Server) handleActivateLicense(w http.ResponseWriter, r *http.Request, l
 		writeJSON(w, http.StatusBadRequest, errBody{"bad_request", "invalid device_id"})
 		return
 	}
-	// 校验 device 属于本 user
+	// 校验 device 属于本 user（JWT 流程；consume 流程靠激活码绑定，不走这里）
 	devs, err := s.store.ListDevicesByUser(userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody{"internal", err.Error()})
@@ -342,38 +340,14 @@ func (s *Server) handleActivateLicense(w http.ResponseWriter, r *http.Request, l
 		return
 	}
 
-	plan, err := s.store.GetPlan(lic.PlanID)
+	// 签发 + 激活（CL-6a 抽到 signAndActivate，与 consume 共用）
+	signed, err := s.signAndActivate(lic, req.DeviceID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody{"internal", "plan vanished"})
-		return
-	}
-	now := time.Now().Unix()
-	expiresAt := now + int64(plan.DurationDays)*86400
-
-	// 构造 Payload（保留 DB 已有 license_id，不用 NewPayload 工厂避免重新生成 ID）
-	payload := license.Payload{
-		LicenseID:      lic.LicenseID,
-		AccountID:      userID,
-		PlanID:         plan.PlanID,
-		DeviceID:       req.DeviceID,
-		IssuedAt:       now,
-		ValidFrom:      now,
-		ExpiresAt:      expiresAt,
-		Features:       plan.Features,
-		LicenseVersion: license.Version,
-	}
-	signed, err := license.Sign(payload, s.privateKey)
-	if err != nil {
-		s.log.Error("license sign", "err", err)
-		writeJSON(w, http.StatusInternalServerError, errBody{"internal", "sign failed"})
-		return
-	}
-	payloadJSON, _ := license.Encode(signed)
-	if err := s.store.ActivateLicense(lic.LicenseID, req.DeviceID, now, expiresAt, string(payloadJSON), signed.Signature); err != nil {
+		s.log.Error("license activate", "err", err)
 		writeJSON(w, http.StatusInternalServerError, errBody{"internal", err.Error()})
 		return
 	}
-	s.log.Info("license activated", "license_id", lic.LicenseID, "device_id", req.DeviceID, "expires_at", expiresAt)
+	s.log.Info("license activated", "license_id", lic.LicenseID, "device_id", req.DeviceID)
 	writeJSON(w, http.StatusOK, signed)
 }
 

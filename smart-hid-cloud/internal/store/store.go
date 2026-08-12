@@ -728,6 +728,65 @@ func (s *Store) RevokeActivationCode(code string) error {
 	return nil
 }
 
+// GetActivationCode 按码查激活码（CL-6a 消费端用）。
+func (s *Store) GetActivationCode(code string) (ActivationCode, error) {
+	var a ActivationCode
+	var usedAt sql.NullInt64
+	err := s.DB.QueryRow(
+		`SELECT code, license_id, user_id, device_id, expires_at, used_at, created_at
+		 FROM activation_codes WHERE code = ?`,
+		code,
+	).Scan(&a.Code, &a.LicenseID, &a.UserID, &a.DeviceID, &a.ExpiresAt, &usedAt, &a.CreatedAt)
+	if err == sql.ErrNoRows {
+		return ActivationCode{}, ErrNotFound
+	}
+	if err != nil {
+		return ActivationCode{}, err
+	}
+	if usedAt.Valid {
+		v := usedAt.Int64
+		a.UsedAt = &v
+	}
+	return a, nil
+}
+
+// MarkActivationCodeUsed 标记码已消费（仅未消费的码可标记，原子）。
+func (s *Store) MarkActivationCodeUsed(code string) error {
+	now := time.Now().Unix()
+	res, err := s.DB.Exec(
+		`UPDATE activation_codes SET used_at = ? WHERE code = ? AND used_at IS NULL`,
+		now, code,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrInvalidStatus // 已消费或不存在
+	}
+	return nil
+}
+
+// ReissueLicense 续期重签：同 license_id 覆盖 expires_at/issued_at/payload_json/signature，
+// 并把状态置 ACTIVE（CL-6a admin extend 用；ControlHub 刷新时拉最新 payload）。
+// 调用方负责状态校验（应仅对 ACTIVE license 续期）。
+func (s *Store) ReissueLicense(licenseID string, expiresAt, issuedAt int64, payloadJSON, signature string) error {
+	res, err := s.DB.Exec(
+		`UPDATE licenses
+		 SET expires_at = ?, issued_at = ?, payload_json = ?, signature = ?, status = 'ACTIVE'
+		 WHERE license_id = ?`,
+		expiresAt, issuedAt, payloadJSON, signature, licenseID,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // AdminStats 概览统计（CL-5b）。
 type AdminStats struct {
 	UsersTotal    int64 `json:"users_total"`
