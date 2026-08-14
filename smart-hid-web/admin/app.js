@@ -9,6 +9,7 @@ import { ordersView } from './views/orders.js';
 import { licensesView } from './views/licenses.js';
 import { plansView } from './views/plans.js';
 import { activationCodesView } from './views/activation-codes.js';
+import { feedbackView } from './views/feedback.js';
 
 register('/login', loginView);
 register('/stats', statsView);
@@ -17,6 +18,7 @@ register('/orders', ordersView);
 register('/licenses', licensesView);
 register('/plans', plansView);
 register('/activation-codes', activationCodesView);
+register('/feedback', feedbackView);
 
 const NAV = [
   { path: '/stats', label: '概览', icon: '📊' },
@@ -25,6 +27,7 @@ const NAV = [
   { path: '/licenses', label: '授权', icon: '🔑' },
   { path: '/plans', label: '套餐', icon: '📦' },
   { path: '/activation-codes', label: '激活码', icon: '🎟️' },
+  { path: '/feedback', label: '反馈', icon: '💬' },
 ];
 
 function renderSidebar() {

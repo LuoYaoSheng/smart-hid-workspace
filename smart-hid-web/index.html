@@ -25,6 +25,7 @@
       <li><a href="#download">下载</a></li>
       <li><a href="video.html" class="nav-video">视频</a></li>
       <li><a href="license.html" class="nav-lic">授权</a></li>
+      <li><a href="#feedback">反馈</a></li>
     </ul>
     <div class="nav-cta">
       <a class="btn btn-ghost btn-sm" href="app.html">控制台</a>
@@ -444,6 +445,55 @@
   </div>
 </section>
 
+<!-- ============ FEEDBACK ============ -->
+<section class="section feedback" id="feedback">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">FEEDBACK</span>
+      <h2>需求与反馈</h2>
+      <p class="lead">想要什么能力？遇到了 Bug？直接告诉我们——被采纳的需求会出现在开发路线上。</p>
+    </div>
+
+    <div class="fb-card">
+      <form class="fb-form" id="fb-form" novalidate>
+        <div class="fb-pills" aria-label="反馈类型">
+          <label class="fb-pill"><input type="radio" name="category" value="feature" checked><span>🚀 功能需求</span></label>
+          <label class="fb-pill"><input type="radio" name="category" value="bug"><span>🐛 Bug 报告</span></label>
+          <label class="fb-pill"><input type="radio" name="category" value="other"><span>💬 其他</span></label>
+        </div>
+        <div class="fb-field">
+          <label for="fb-title">标题</label>
+          <input class="fb-input" id="fb-title" name="title" maxlength="80" placeholder="一句话描述你的需求或问题（3–80 字）" required>
+        </div>
+        <div class="fb-field">
+          <label for="fb-body">详细说明</label>
+          <textarea class="fb-textarea" id="fb-body" name="body" rows="4" maxlength="2000" placeholder="复现步骤、期望行为、使用场景……（5–2000 字）" required></textarea>
+        </div>
+        <div class="fb-field">
+          <label for="fb-contact">联系方式（可选）</label>
+          <input class="fb-input" id="fb-contact" name="contact" maxlength="120" placeholder="邮箱等，便于我们回访">
+        </div>
+        <!-- honeypot：正常用户不可见不可填，bot 填了会被静默丢弃 -->
+        <input class="fb-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <div class="fb-foot">
+          <button type="submit" class="btn btn-primary" id="fb-submit">提交反馈</button>
+          <span class="fb-note">无需注册，匿名提交 · 每 IP 每小时限 5 条</span>
+        </div>
+        <div class="fb-msg" id="fb-msg" role="alert"></div>
+      </form>
+
+      <div class="fb-ok" id="fb-ok" hidden>
+        <div class="fb-ok-ico">✅</div>
+        <h3>已收到，感谢反馈！</h3>
+        <p>编号 <code class="mono" id="fb-ok-id"></code>。被采纳后会出现在 <a href="docs/roadmap.html">开发路线</a> 的「来自社区的需求」里。</p>
+        <button class="btn btn-outline" id="fb-again" type="button">再提一条</button>
+      </div>
+    </div>
+
+    <p class="fb-devhint">开发者也可以直接提 <a href="https://gitee.com/luoyaosheng/smart-hid-workspace/issues" target="_blank" rel="noopener">Gitee Issue</a>。</p>
+  </div>
+</section>
+
 <!-- ============ CTA ============ -->
 <section class="section cta-band">
   <div class="container cta-inner">
@@ -474,6 +524,7 @@
         <a href="#why">设计原则</a>
         <a href="video.html">演示视频</a>
         <a href="license.html">授权与套餐</a>
+        <a href="#feedback">需求与反馈</a>
       </div>
       <div>
         <h4>文档</h4>

@@ -59,4 +59,8 @@ export const api = {
     request('/admin/activation-codes', { method: 'POST', body: { user_id, device_id, plan_id } }),
   revokeActivationCode: (code) =>
     request('/admin/activation-codes/' + encodeURIComponent(code) + '/revoke', { method: 'POST' }),
+  feedbackList: (status) =>
+    request('/admin/feedback' + (status ? '?status=' + encodeURIComponent(status) : '')),
+  setFeedbackStatus: (id, status, admin_note) =>
+    request('/admin/feedback/' + encodeURIComponent(id) + '/status', { method: 'POST', body: { status, admin_note } }),
 };

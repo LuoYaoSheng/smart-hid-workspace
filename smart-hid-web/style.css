@@ -606,3 +606,46 @@ code {
   .vt-inner { grid-template-columns: 1fr; gap: 28px; }
   .vid-hero { padding: 72px 0 48px; }
 }
+
+/* ============ Feedback（FB-1 需求与反馈）============= */
+.feedback { background: var(--bg-soft); }
+.fb-card {
+  max-width: 640px; margin: 0 auto;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 28px; box-shadow: var(--shadow);
+}
+.fb-form { display: flex; flex-direction: column; gap: 16px; }
+.fb-pills { display: flex; flex-wrap: wrap; gap: 10px; }
+.fb-pill { cursor: pointer; position: relative; }
+.fb-pill input { position: absolute; opacity: 0; pointer-events: none; }
+.fb-pill span {
+  display: inline-block; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: 14px; font-weight: 600;
+  color: var(--muted); background: var(--bg); transition: all .15s ease;
+}
+.fb-pill:hover span { border-color: var(--primary); color: var(--primary); }
+.fb-pill input:checked + span { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+.fb-field { display: flex; flex-direction: column; gap: 6px; }
+.fb-field label { font-size: 13px; font-weight: 700; color: var(--text); }
+.fb-input, .fb-textarea {
+  width: 100%; padding: 11px 13px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); font: inherit; color: var(--ink);
+  background: var(--bg); transition: border-color .15s ease, box-shadow .15s ease;
+}
+.fb-input:focus, .fb-textarea:focus {
+  outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.fb-textarea { resize: vertical; min-height: 96px; }
+.fb-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.fb-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.fb-note { font-size: 12.5px; color: var(--muted); }
+.fb-msg { font-size: 13.5px; min-height: 18px; margin: 0; }
+.fb-msg.err { color: #dc2626; }
+.fb-ok { text-align: center; padding: 18px 4px 6px; }
+.fb-ok-ico { font-size: 40px; }
+.fb-ok h3 { margin: 12px 0 8px; }
+.fb-ok p { color: var(--muted); font-size: 14.5px; margin: 0 0 18px; }
+.fb-devhint { text-align: center; margin-top: 22px; font-size: 13px; color: var(--muted); }
+@media (max-width: 640px) {
+  .fb-card { padding: 20px; }
+}

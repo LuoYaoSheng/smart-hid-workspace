@@ -89,6 +89,7 @@
 .badge-ok { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
 .badge-warn { background: #fffbeb; color: #b45309; border-color: #fde68a; }
 .badge-bad { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.badge-info { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; } /* FB-1 反馈「已计划」 */
 
 /* ============ 空态 / 加载 / 错误 ============ */
 .empty-state, .loading-state {

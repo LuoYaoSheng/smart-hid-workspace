@@ -2,7 +2,7 @@
 import { isLoggedIn } from './store.js';
 
 const routes = new Map();
-const PROTECTED = ['/stats', '/users', '/orders', '/licenses', '/plans', '/activation-codes'];
+const PROTECTED = ['/stats', '/users', '/orders', '/licenses', '/plans', '/activation-codes', '/feedback'];
 
 export function register(path, view) { routes.set(path, view); }
 export function currentPath() {
