@@ -29,6 +29,8 @@ func (s *Server) registerAdminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/admin/plans/", s.handleAdminPlanAction) // /plans/{id}/{activate|deactivate}
 	mux.HandleFunc("/api/v1/admin/activation-codes", s.handleAdminActivationCodes)
 	mux.HandleFunc("/api/v1/admin/activation-codes/", s.handleAdminActivationCodeAction) // /{code}/revoke
+	mux.HandleFunc("/api/v1/admin/feedback", s.handleAdminFeedback)                      // FB-1 反馈列表
+	mux.HandleFunc("/api/v1/admin/feedback/", s.handleAdminFeedbackAction)               // /{id}/status
 }
 
 // ----- Stats -----

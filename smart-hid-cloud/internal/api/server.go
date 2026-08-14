@@ -25,8 +25,9 @@ type Server struct {
 	privateKey  ed25519.PrivateKey
 	log         *slog.Logger
 	httpSrv     *http.Server
-	corsOrigins []string // 允许的跨域来源；空表示同源不发 CORS 头
-	webRoot     string   // 静态门户目录；非空时 / 下非 /api 路径走 FileServer
+	corsOrigins []string       // 允许的跨域来源；空表示同源不发 CORS 头
+	webRoot     string         // 静态门户目录；非空时 / 下非 /api 路径走 FileServer
+	fbLimiter   *ipRateLimiter // 反馈公开端点限频（FB-1：每 IP 5 次/小时）
 }
 
 // New 构造 Server（不启动）。privateKey 为 nil 时 license 签发会失败（开发期可空）。
@@ -36,6 +37,7 @@ func New(st *store.Store, jwtSecret []byte, privateKey ed25519.PrivateKey, log *
 		jwtSecret:  jwtSecret,
 		privateKey: privateKey,
 		log:        log,
+		fbLimiter:  newIPRateLimiter(5, time.Hour),
 	}
 }
 
@@ -57,6 +59,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/plans", s.handleListPlans)
 	mux.HandleFunc("/api/v1/activation/consume", s.handleActivationConsume) // CL-6a 激活码消费（码即凭据）
 	mux.HandleFunc("/api/v1/license/refresh", s.handleLicenseRefresh)       // CL-6a License 刷新（license_id 即凭据）
+	mux.HandleFunc("/api/v1/feedback", s.handleFeedbackCreate)              // FB-1 匿名反馈提交（限频 + honeypot）
+	mux.HandleFunc("/api/v1/feedback/roadmap", s.handleFeedbackRoadmap)     // FB-1 公开路线图（已采纳条目）
 
 	// 受保护路由（需 JWT）
 	protected := http.NewServeMux()

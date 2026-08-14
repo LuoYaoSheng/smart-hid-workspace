@@ -21,9 +21,9 @@ import (
 
 // 常见错误。
 var (
-	ErrNotFound        = errors.New("store: not found")
-	ErrDuplicate       = errors.New("store: duplicate")
-	ErrInvalidStatus   = errors.New("store: invalid status transition")
+	ErrNotFound      = errors.New("store: not found")
+	ErrDuplicate     = errors.New("store: duplicate")
+	ErrInvalidStatus = errors.New("store: invalid status transition")
 )
 
 // ----- 业务对象 -----
@@ -55,14 +55,14 @@ type Device struct {
 }
 
 type Order struct {
-	OrderID     string  `json:"order_id"`
-	UserID      string  `json:"user_id"`
-	PlanID      string  `json:"plan_id"`
-	AmountCents int     `json:"amount_cents"`
-	Currency    string  `json:"currency"`
-	Status      string  `json:"status"`
-	CreatedAt   int64   `json:"created_at"`
-	PaidAt      *int64  `json:"paid_at,omitempty"`
+	OrderID     string `json:"order_id"`
+	UserID      string `json:"user_id"`
+	PlanID      string `json:"plan_id"`
+	AmountCents int    `json:"amount_cents"`
+	Currency    string `json:"currency"`
+	Status      string `json:"status"`
+	CreatedAt   int64  `json:"created_at"`
+	PaidAt      *int64 `json:"paid_at,omitempty"`
 }
 
 type LicenseRow struct {
@@ -789,13 +789,13 @@ func (s *Store) ReissueLicense(licenseID string, expiresAt, issuedAt int64, payl
 
 // AdminStats 概览统计（CL-5b）。
 type AdminStats struct {
-	UsersTotal    int64 `json:"users_total"`
-	OrdersTotal   int64 `json:"orders_total"`
-	OrdersPaid    int64 `json:"orders_paid"`
-	RevenueCents  int64 `json:"revenue_cents"`
-	LicensesTotal int64 `json:"licenses_total"`
+	UsersTotal     int64 `json:"users_total"`
+	OrdersTotal    int64 `json:"orders_total"`
+	OrdersPaid     int64 `json:"orders_paid"`
+	RevenueCents   int64 `json:"revenue_cents"`
+	LicensesTotal  int64 `json:"licenses_total"`
 	LicensesActive int64 `json:"licenses_active"`
-	CodesUnused   int64 `json:"codes_unused"`
+	CodesUnused    int64 `json:"codes_unused"`
 }
 
 // GetAdminStats 汇总统计。
@@ -819,6 +819,123 @@ func (s *Store) GetAdminStats() (AdminStats, error) {
 		}
 	}
 	return st, nil
+}
+
+// ----- Feedback（FB-1）-----
+
+// Feedback 用户提交的需求/反馈（admin 完整视图，含审计字段）。
+type Feedback struct {
+	FeedbackID string `json:"feedback_id"`
+	Category   string `json:"category"` // feature|bug|other
+	Title      string `json:"title"`
+	Body       string `json:"body"`
+	Contact    string `json:"contact,omitempty"`
+	ClientIP   string `json:"client_ip,omitempty"`
+	UserAgent  string `json:"user_agent,omitempty"`
+	Status     string `json:"status"` // new|planned|shipped|rejected
+	AdminNote  string `json:"admin_note,omitempty"`
+	CreatedAt  int64  `json:"created_at"`
+	UpdatedAt  int64  `json:"updated_at"`
+}
+
+// PublicFeedback 公开路线图视图（不含 contact/ip/ua 审计字段）。
+type PublicFeedback struct {
+	FeedbackID string `json:"feedback_id"`
+	Category   string `json:"category"`
+	Title      string `json:"title"`
+	Status     string `json:"status"`
+	AdminNote  string `json:"admin_note,omitempty"`
+	CreatedAt  int64  `json:"created_at"`
+	UpdatedAt  int64  `json:"updated_at"`
+}
+
+// CreateFeedback 匿名提交反馈。字段长度/类目白名单由 API 层校验，store 只落库。
+func (s *Store) CreateFeedback(category, title, body, contact, clientIP, userAgent string) (Feedback, error) {
+	id := "fb_" + randomHex(11)
+	now := time.Now().Unix()
+	_, err := s.DB.Exec(
+		`INSERT INTO feedback(feedback_id, category, title, body, contact, client_ip, user_agent, status)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, 'new')`,
+		id, category, title, body, contact, clientIP, userAgent,
+	)
+	if err != nil {
+		return Feedback{}, err
+	}
+	return Feedback{
+		FeedbackID: id, Category: category, Title: title, Body: body,
+		Contact: contact, ClientIP: clientIP, UserAgent: userAgent,
+		Status: "new", CreatedAt: now, UpdatedAt: now,
+	}, nil
+}
+
+// ListFeedback admin 列表。status 为空列全部；按提交时间倒序，最多 500 条。
+func (s *Store) ListFeedback(status string) ([]Feedback, error) {
+	q := `SELECT feedback_id, category, title, body, contact, client_ip, user_agent, status, admin_note, created_at, updated_at
+	      FROM feedback`
+	var args []any
+	if status != "" {
+		q += ` WHERE status = ?`
+		args = append(args, status)
+	}
+	q += ` ORDER BY created_at DESC LIMIT 500`
+	rows, err := s.DB.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Feedback
+	for rows.Next() {
+		var f Feedback
+		var contact, ip, ua, note sql.NullString
+		if err := rows.Scan(&f.FeedbackID, &f.Category, &f.Title, &f.Body,
+			&contact, &ip, &ua, &f.Status, &note, &f.CreatedAt, &f.UpdatedAt); err != nil {
+			return nil, err
+		}
+		f.Contact, f.ClientIP, f.UserAgent, f.AdminNote = contact.String, ip.String, ua.String, note.String
+		out = append(out, f)
+	}
+	return out, nil
+}
+
+// ListPublicFeedback 公开路线图：仅 planned/shipped（admin 甄别过才对外），按更新时间倒序。
+func (s *Store) ListPublicFeedback() ([]PublicFeedback, error) {
+	rows, err := s.DB.Query(
+		`SELECT feedback_id, category, title, status, admin_note, created_at, updated_at
+		 FROM feedback WHERE status IN ('planned','shipped')
+		 ORDER BY updated_at DESC LIMIT 100`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PublicFeedback
+	for rows.Next() {
+		var f PublicFeedback
+		var note sql.NullString
+		if err := rows.Scan(&f.FeedbackID, &f.Category, &f.Title, &f.Status,
+			&note, &f.CreatedAt, &f.UpdatedAt); err != nil {
+			return nil, err
+		}
+		f.AdminNote = note.String
+		out = append(out, f)
+	}
+	return out, nil
+}
+
+// SetFeedbackStatus admin 改状态 + 备注（自由流转，无转移限制）。
+func (s *Store) SetFeedbackStatus(feedbackID, status, adminNote string) error {
+	res, err := s.DB.Exec(
+		`UPDATE feedback SET status = ?, admin_note = ?, updated_at = ? WHERE feedback_id = ?`,
+		status, adminNote, time.Now().Unix(), feedbackID,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ----- 内部辅助 -----
