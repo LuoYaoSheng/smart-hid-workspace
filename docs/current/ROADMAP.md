@@ -15,7 +15,7 @@ authority: canonical
 M1-G1 ✅ DONE（2026-08-20，治理基线）
 M1-G2 ✅ DONE（2026-08-20，核心正确性：幂等/原子配对/并发安全/ACK 边界/深度校验）
 M1-G3 ✅ DONE（2026-08-20，网络/配网：bind/advertise 拆分 + NVS 运行时配置 + BLE Provision）
-M1-G4 ⏳ NEXT —— 等待用户明确说「继续 M1-G4」后才能开始
+M1-G4 ✅ DONE（2026-08-20，CI/Release：VERSION 唯一源 + 质量门 workflows + 干净发布链）
 ```
 
 ## M1 — Product Foundation Hardening（产品化加固）
@@ -38,11 +38,13 @@ mqtt bind/advertise 拆分（legacy 兼容迁移）、LAN IP 请求级解析（�
 BLE Provision 全链路源码（NimBLE + canonical 协议）、配网状态机与 RECOVERY。
 明细见 [HARDENING_BACKLOG](HARDENING_BACKLOG.md)。固件侧**未经真机验证**。
 
-### G4 CI / Release Engineering（未开始）
+### G4 CI / Release Engineering ✅（2026-08-20 完成）
 
-GitHub Actions（fmt / vet / unit / race / schema / OpenAPI / ESP-IDF clean
-build / shellcheck）、干净 Release 流水线、精确版本嵌入、构建清单、SHA256、
-Release 自动发布。
+唯一版本源（根 VERSION → ControlHub ldflags / 固件 PROJECT_VER）、CI 质量门
+（go fmt/vet/test/race + 协议/OpenAPI 门 + 治理 + shellcheck + 固件双配置
+构建）、tag 驱动 Release（dirty 拒绝、fullclean 构建、显式 SHA256、
+manifest.json provenance、README_RELEASE 诚实状态）。明细见
+[HARDENING_BACKLOG](HARDENING_BACKLOG.md)。
 
 ## M2 — Hardware & Delivery（硬件与交付）
 

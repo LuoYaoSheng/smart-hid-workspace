@@ -70,8 +70,9 @@ Smart HID 换了一条路：**让一块 ESP32-S3 以真实 USB 键盘 + 鼠标�
 2. **协议事实源**：HTTP API = `smart-hid-controlhub/docs/openapi.yaml`；MQTT 消息 = `protocols/schemas/`（TS 权威源在 smart-ble 仓）
 3. **历史资料** [`docs/archive/`](docs/archive/) 是 2026-08-11 设计资料包快照（`status: SUPERSEDED`），含已移除的 Cloud / Trial / License / 商业化设计——**仅作历史记录，不得作为实现依据**
 4. **禁止复活**：不得因历史文档存在而重新实现 Trial / License / Cloud / Commercial / Order / Payment / Entitlement / Usage Gate（见 [DEVELOPMENT_RULES §2](docs/current/DEVELOPMENT_RULES.md)）
-5. **当前路线**按 Milestone/Gate 推进：M1-G1 治理 / G2 核心正确性 / G3 网络与配网已完成，下一 Gate 是 M1-G4 CI/Release（见 [ROADMAP](docs/current/ROADMAP.md)），未获明确指示不提前实施
-6. 提交前可跑治理守卫：`bash scripts/check-governance.sh`
+5. **当前路线**按 Milestone/Gate 推进：M1（G1 治理 / G2 核心正确性 / G3 网络与配网 / G4 CI 与交付链）已完成；下一步是 M2 硬件验收（见 [ROADMAP](docs/current/ROADMAP.md)）
+6. 提交前本地可跑质量门：`bash scripts/check-governance.sh` + `python3 scripts/validate-protocols.py` +
+   `shellcheck -S warning scripts/*.sh …`；push main / PR 后 CI（ci.yml）全量执行同一套门
 
 ## 快速开始
 
@@ -105,7 +106,22 @@ cd smart-hid-web && python3 -m http.server 8090
 cd smart-hid-controlhub && go test ./...
 # 可靠性语义 28 项端到端（Go 参考实现，无需硬件）：
 bash smart-hid-controlhub/scripts/test-loop-f2.sh
+# 固件宿主单测（36 suite，含配网状态机崩溃边界；需本机 ESP-IDF 的 cJSON）：
+cd smart-hid-firmware/test/host && ./run.sh
 ```
+
+### Development Environment
+
+| 工具 | 版本 | 用途 |
+|---|---|---|
+| Go | 1.25（`smart-hid-controlhub/go.mod`） | ControlHub 构建/测试 |
+| ESP-IDF | v5.4.4（固件；CI 用 `espressif/idf:v5.4.4` 容器） | 固件构建 + 宿主单测 cJSON |
+| Python | 3.9–3.12（`jsonschema` + `pyyaml`） | 协议/OpenAPI 门 |
+| shellcheck | ≥0.10（warning 级） | 脚本静态检查 |
+
+版本事实源：根 `VERSION` 文件（ControlHub 经 ldflags 注入，`controlhub -version` 自证；
+固件经 PROJECT_VER 注入 esp_app_desc）。发布：`bash smart-hid-web/downloads/build-releases.sh`
+（要求干净工作区；产出 manifest.json + SHA256SUMS）；CI 在 tag `v*` 上自动发布。
 
 ## 配置参考（ControlHub config.yaml）
 

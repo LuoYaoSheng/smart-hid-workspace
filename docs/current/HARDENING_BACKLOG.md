@@ -58,16 +58,20 @@ request_id 语义（现行）：**Idempotency Key**——首次执行；并发�
 | 分区表从 3×1M 扩到 3×1536K（NimBLE + HTTP 组件使固件超 1M）；设备未烧录过，无迁移成本 | 已落地（无需后续） |
 | mock-device 经环回 peer 拿到 127.0.0.1 advertise（合法本机例外），真机场景不受影响 | 记录 |
 
-## M1-G4 CI / Release Engineering
+## M1-G4 CI / Release Engineering ✅（2026-08-20 完成）
 
-| # | 问题 | 证据 | 说明 |
-|---|---|---|---|
-| 1 | 版本默认值仍是 scaffold | smart-hid-web/downloads/build-releases.sh:15 `v0.1.0-scaffold` | 忘传 VERSION 即产出 scaffold 版本号 |
-| 2 | 固件包非 clean build | build-releases.sh:24-31 | 已有 build/ 就直接复用，可能携带过期产物；固件无版本嵌入 |
-| 3 | SHA256SUMS 自包含 | build-releases.sh:22, 33 | 二次运行时 glob `*` 把旧 SUMS 也算进新 SUMS |
-| 4 | 无 git 精确版本 / 构建清单 | 全脚本 | 二进制不记录 commit，无法追溯 |
-| 5 | 无 CI | .github/ 未建（本地 deploy-landing.yml 未跟踪） | fmt / vet / unit / race / schema / OpenAPI / ESP-IDF build / shellcheck 全缺 |
-| 6 | openapi 投影拷贝可能漂移 | build-releases.sh:36-37 | web/api/openapi.yaml 是拷贝，无一致性检查 |
+原登记 6 项处置（commit 见 git log M1-G4a~e）：
+
+| # | 原问题 | 处置 |
+|---|---|---|
+| 1 | 版本默认值 scaffold | ✅ 根 `VERSION` 文件唯一事实源（x.y.z）；build-releases 读文件且形态校验；scaffold 字样全树清除（治理守卫拦截） |
+| 2 | 固件包非 clean build / 无版本嵌入 | ✅ `scripts/build-firmware.sh`（fullclean + set-target + build）；固件版本 = PROJECT_VER ← VERSION 文件（esp_app_desc 运行时可读，device_identity 硬编码删除） |
+| 3 | SHA256SUMS 自包含 | ✅ 显式文件清单 + `-c` 自校验；SUMS 改名 controlhub-SHA256SUMS / firmware-SHA256SUMS（资产名唯一） |
+| 4 | 无版本/构建清单 | ✅ manifest.json（version/commit/build_time/dirty + 每 artifact sha256/size/type + 固件构建元数据）+ README_RELEASE.md + ControlHub `-version` 自证 |
+| 5 | 无 CI | ✅ 三 workflow：ci.yml（go fmt/vet/test/race + 协议/OpenAPI 门 + 治理 + shellcheck + 固件宿主单测与双配置构建）、release.yml（tag 驱动，tag↔VERSION 一致校验）、docs.yml（Pages） |
+| 6 | openapi 投影漂移 | ✅ build-releases 投影后 diff 防漂移 + validate-protocols.py 常态校验投影一致 |
+
+附加发现并修复：flash.sh / 固件 README 烧录偏移停留在 G3 旧分区表（0xd000/0x10000 → 0x11000/0x20000）；旧 per-dir `SHA256SUMS` 命名与 Release 资产唯一名冲突。
 
 ## M2-G1 Hardware Acceptance（独立任务，只列不排期）
 

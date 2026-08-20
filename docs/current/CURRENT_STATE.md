@@ -9,7 +9,7 @@ authority: canonical
 > 与代码冲突时，以 main 分支代码为准，并立即更新本文。
 > 历史设计资料在 `docs/archive/`，不得作为当前实现依据。
 
-最后核对：2026-08-20，基线 commit `5c2e5dc`。
+最后核对：2026-08-20，M1-G4 完成后（基线见 git log M1-G4*）。
 
 ## 产品定位
 
@@ -107,6 +107,9 @@ DO NOT IMPLEMENT：
 - `go test ./...` 全绿（含并发压力用例）；`go test -race ./...` 全绿；并发/网络包高倍重复通过
 - `test-loop-f2.sh` 28/28（真二进制 + mock-device 端到端，无需硬件；含幂等重放与日志零明文断言；**经 legacy mqtt.host 兼容路径驱动**）
 - 固件 `idf.py fullclean + build` 双配置通过（默认 provisioning 模式 + DEV_STATIC_CONFIG）；host 单测 36/36（含配网状态机崩溃边界）
+- 交付链（M1-G4）：根 VERSION 唯一版本源（二进制 `-version` 自证 + 固件 PROJECT_VER 注入）、
+  build-releases 干净构建（dirty 拒绝/显式 SHA256/manifest/投影防漂移）、协议与 OpenAPI 门
+  （validate-protocols.py）、shellcheck warning 级全过、CI/release/docs 三 workflow（tag 驱动发布）
 - 配置面 e2e、WebSocket e2e、演示台 Playwright 真浏览器实测均通过（2026-08-20）
 - 以上**全部基于 mock / 本机环境**：没有任何真机验证（ESP32-S3 烧写、USB 枚举、
   BLE 实连配网、BIOS / 登录界面、三操作系统、soak 均未执行）

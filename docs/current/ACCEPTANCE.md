@@ -75,11 +75,16 @@ authority: canonical
 - [x] 固件 secret 不进日志（wifi/mqtt 密码、token redact；host 单测断言，M1-G3）
 - [x] WS CheckOrigin 维持 LAN 有意取舍（G3 评审结论：记录不收紧）
 
-## G. Release（已知问题已登记，修复排 G4）
+## G. Release（G4 已修项打勾）
 
-- [x] 双平台二进制 + 固件包 + SHA256 人工发布流程可用（v1.0.0～v1.0.3）
-- [ ] build-releases.sh 版本默认值 / clean build / SUMS 自包含 —— 已登记，G4
-- [ ] CI 自动构建与发布 —— M1-G4
+- [x] 唯一版本源：根 VERSION 文件 → ControlHub ldflags 注入（`-version` 自证）+ 固件 PROJECT_VER（M1-G4）
+- [x] build-releases.sh：dirty tree 拒绝（DEV_BUILD 显式放行）、固件 fullclean 重建、
+      显式 SHA256 清单 + 自校验、openapi 投影防漂移（M1-G4）
+- [x] manifest.json provenance（version/commit/build_time/dirty + 每 artifact sha256）+ README_RELEASE 诚实状态（M1-G4）
+- [x] CI 质量门：go fmt/vet/test/race + 协议/OpenAPI 门 + 治理守卫 + shellcheck + 固件双配置构建（M1-G4，ci.yml）
+- [x] tag 驱动 Release：tag↔VERSION 一致校验 → 干净构建 → 自动发布（M1-G4，release.yml）
+- [x] Pages 部署 workflow 化（docs.yml，仅 smart-hid-web）
+- [ ] 首次 tag 发布走完全链路 —— 待下一个版本 tag 时实证
 
 ## H. Hardware（硬件验收）
 
