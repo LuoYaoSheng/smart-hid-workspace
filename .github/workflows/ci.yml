@@ -1,0 +1,94 @@
+# CI — push main / PR 全量质量门（M1-G4）
+# 注意：本文件随 M1-G4e 提交；若 token 缺 workflow scope 则暂留本地（见报告）。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # ---------- Go：格式 / 静态检查 / 单测 / 竞争 ----------
+  go:
+    name: Go (fmt / vet / test / race)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: smart-hid-controlhub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: smart-hid-controlhub/go.mod
+      - name: gofmt check
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; echo "上面文件未格式化：go fmt ./..."; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go test -race ./...
+
+  # ---------- 协议 / OpenAPI 契约门 ----------
+  protocol:
+    name: Protocol & OpenAPI gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install jsonschema pyyaml
+      - run: python3 scripts/validate-protocols.py
+
+  # ---------- 治理守卫 ----------
+  governance:
+    name: Governance guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/check-governance.sh
+
+  # ---------- 脚本静态检查 ----------
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck（warning 级为门）
+        run: |
+          shellcheck -S warning \
+            scripts/*.sh \
+            smart-hid-web/downloads/build-releases.sh \
+            smart-hid-web/downloads/firmware/flash.sh \
+            smart-hid-controlhub/scripts/*.sh
+
+  # ---------- 固件：宿主单测 + ESP-IDF 双配置构建 ----------
+  firmware:
+    name: Firmware (host tests + idf build x2)
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v5.4.4
+    steps:
+      - uses: actions/checkout@v4
+      - name: 宿主单测（纯逻辑组件 + esp/nvs stub）
+        run: |
+          apt-get update -qq && apt-get install -y -qq gcc >/dev/null
+          cd smart-hid-firmware/test/host && ./run.sh
+      - name: 默认构建（provisioning 模式）
+        run: |
+          . $IDF_PATH/export.sh >/dev/null
+          cd smart-hid-firmware
+          idf.py set-target esp32s3 >/dev/null
+          idf.py build
+      - name: DEV 静态配置构建（SMART_HID_DEV_STATIC_CONFIG=y）
+        run: |
+          . $IDF_PATH/export.sh >/dev/null
+          cd smart-hid-firmware
+          idf.py fullclean >/dev/null 2>&1 || true
+          rm -f sdkconfig
+          idf.py -B build-dev \
+            -DSDKCONFIG=sdkconfig.dev \
+            -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.dev.defaults" \
+            set-target esp32s3 >/dev/null
+          idf.py -B build-dev \
+            -DSDKCONFIG=sdkconfig.dev \
+            -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.dev.defaults" \
+            build

@@ -1,0 +1,34 @@
+# Docs — smart-hid-web 变更部署到 GitHub Pages（M1-G4）
+# 取代此前本机未跟踪的 deploy-landing.yml（用户确认后可删除本地那份避免双部署）。
+# 只部署 smart-hid-web/（官网 + 文档站 + 下载中心镜像），不触碰其他目录。
+name: Docs (Pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "smart-hid-web/**"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: smart-hid-web
+      - id: deployment
+        uses: actions/deploy-pages@v4

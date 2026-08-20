@@ -1,0 +1,56 @@
+# Release — tag 驱动（v*）：clean checkout → 全量构建 → manifest/checksum → GitHub Release
+# main 只验证（ci.yml）；tag 才发布（M1-G4 §12）。
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & publish release artifacts
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v5.4.4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 校验 tag 与 VERSION 一致
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER="$(tr -d ' \n' < VERSION | sed 's/^v//')"
+          if [ "$TAG" != "$VER" ]; then
+            echo "ERROR: tag v$TAG 与 VERSION 文件 $VER 不一致"; exit 1
+          fi
+          echo "tag=$TAG 与 VERSION 一致"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: smart-hid-controlhub/go.mod
+
+      - name: 环境注入（idf + host gcc）
+        run: |
+          apt-get update -qq && apt-get install -y -qq gcc >/dev/null
+          . $IDF_PATH/export.sh >/dev/null
+          echo "$IDF_PATH" >> "$GITHUB_ENV"  # 后续 step 仍需 IDF_PATH（export 不跨 step）
+
+      - name: 全量构建（ControlHub 双平台 + 固件 fullclean + manifest + SHA256）
+        run: |
+          . $IDF_PATH/export.sh >/dev/null 2>&1 || true
+          bash smart-hid-web/downloads/build-releases.sh
+
+      - name: 治理守卫（含 manifest/VERSION 一致性检查）
+        run: bash scripts/check-governance.sh
+
+      - name: 发布 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            smart-hid-web/downloads/manifest.json
+            smart-hid-web/downloads/README_RELEASE.md
+            smart-hid-web/downloads/controlhub/*
+            smart-hid-web/downloads/firmware/*
