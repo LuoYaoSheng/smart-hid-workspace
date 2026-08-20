@@ -32,9 +32,14 @@ var wsUpgrader = websocket.Upgrader{
 }
 
 // RealtimeHub 维护 WS 订阅者并广播事件。零订阅时 Broadcast 为 no-op。
+//
+// 并发安全（M1-G2）：subs 由 RWMutex 保护；Broadcast 持读锁快照订阅者后
+// 放锁再发送——不长时间持锁做可能阻塞的 channel send，也不在锁外读 map。
+// 订阅 channel 只由 subscribe 创建、只从 subs map 移除、永不 close：
+// 不存在 send on closed channel 路径。
 type RealtimeHub struct {
 	log *slog.Logger
-	mu  sync.Mutex
+	mu  sync.RWMutex
 	subs map[chan []byte]struct{}
 }
 
@@ -44,7 +49,7 @@ func NewRealtimeHub(log *slog.Logger) *RealtimeHub {
 
 // Broadcast 向所有订阅者推送 type/data 事件（慢消费者丢弃该条，不阻塞广播方）。
 func (h *RealtimeHub) Broadcast(eventType string, data any) {
-	if h == nil || len(h.subs) == 0 {
+	if h == nil {
 		return
 	}
 	payload, err := json.Marshal(map[string]any{"type": eventType, "data": data, "ts": time.Now().UnixMilli()})
@@ -52,9 +57,17 @@ func (h *RealtimeHub) Broadcast(eventType string, data any) {
 		h.log.Warn("realtime marshal failed", "err", err)
 		return
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	// 快照订阅者集合 → 放锁 → 向快照发送（发送期间订阅者增删不影响一致性）。
+	h.mu.RLock()
+	snapshot := make([]chan []byte, 0, len(h.subs))
 	for ch := range h.subs {
+		snapshot = append(snapshot, ch)
+	}
+	h.mu.RUnlock()
+	if len(snapshot) == 0 {
+		return
+	}
+	for _, ch := range snapshot {
 		select {
 		case ch <- payload:
 		default: // 慢消费者：丢事件保广播不阻塞
@@ -74,6 +87,7 @@ func (h *RealtimeHub) unsubscribe(ch chan []byte) {
 	h.mu.Lock()
 	delete(h.subs, ch)
 	h.mu.Unlock()
+	// 注意：不 close(ch)——Broadcast 可能持有快照仍在发送；残留消息由 GC 回收。
 }
 
 // handleRealtime 升级 WS 并开始推送（注册于 /api/v1/realtime，需 web.realtime=true）。
