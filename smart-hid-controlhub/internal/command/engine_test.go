@@ -158,25 +158,37 @@ func TestTopics(t *testing.T) {
 
 // ---------- HandleAck ----------
 
-func TestHandleAck_RoutesToPendingChannel(t *testing.T) {
+func TestHandleAck_IntermediateIgnored_TerminalSettles(t *testing.T) {
 	eng, _, _ := newTestEngine(t, nil)
-	ch := make(chan *SmartHidAck, 4)
+	ex := &execution{fingerprint: "fp", deviceID: "HID-ABCD1234", done: make(chan struct{})}
 	eng.mu.Lock()
-	eng.pending["req-1"] = ch
+	eng.execs["req-1"] = ex
 	eng.mu.Unlock()
 
+	// 中间态：不落库、不收尾。
 	eng.HandleAck(nil, &mockMessage{
 		topic:   AckTopic("HID-ABCD1234"),
 		payload: ackJSON("req-1", "HID-ABCD1234", AckExecuting, 0, 0),
 	})
-
 	select {
-	case got := <-ch:
-		if got.RequestID != "req-1" || got.Status != AckExecuting {
-			t.Fatalf("wrong ack routed: %+v", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("terminal ack not routed to pending channel within 1s")
+	case <-ex.done:
+		t.Fatal("intermediate ack must not settle execution")
+	default:
+	}
+
+	// 终态：收尾。
+	eng.HandleAck(nil, &mockMessage{
+		topic:   AckTopic("HID-ABCD1234"),
+		payload: ackJSON("req-1", "HID-ABCD1234", AckExecuted, 0, 7),
+	})
+	select {
+	case <-ex.done:
+	default:
+		t.Fatal("terminal ack should settle execution")
+	}
+	ack, terminal := ex.snapshot()
+	if !terminal || ack == nil || ack.Status != AckExecuted {
+		t.Fatalf("expected executed terminal, got ack=%+v terminal=%v", ack, terminal)
 	}
 }
 
@@ -275,10 +287,10 @@ func TestSend_HappyPath(t *testing.T) {
 
 	cmd := validCmd() // request_id=req-abc123
 	cmd.RequestID = "req-1"
-	ack, terminal, errs := eng.Send(context.Background(), cmd)
+	ack, terminal, serr := eng.Send(context.Background(), cmd)
 
-	if HasErrors(errs) {
-		t.Fatalf("unexpected validation errors: %v", errs)
+	if serr != nil {
+		t.Fatalf("unexpected send error: %v", serr)
 	}
 	if !terminal {
 		t.Fatal("expected terminal=true, got false")
@@ -310,12 +322,12 @@ func TestSend_HappyPath(t *testing.T) {
 		t.Errorf("unexpected published command: %+v", sent)
 	}
 
-	// pending chan 应在 Send 返回后清理
-	eng.mu.RLock()
-	_, stillPending := eng.pending["req-1"]
-	eng.mu.RUnlock()
-	if stillPending {
-		t.Error("pending entry should be cleaned up after Send returns")
+	// 在途 execution 应在 Send 返回后清理
+	eng.mu.Lock()
+	_, stillInFlight := eng.execs["req-1"]
+	eng.mu.Unlock()
+	if stillInFlight {
+		t.Error("in-flight execution should be cleaned up after Send returns")
 	}
 
 	// 命令应已持久化到 commands 表
@@ -343,9 +355,9 @@ func TestSend_IntermediateThenTerminal(t *testing.T) {
 
 	cmd := validCmd()
 	cmd.RequestID = "r1"
-	ack, terminal, errs := eng.Send(context.Background(), cmd)
-	if HasErrors(errs) || !terminal || ack == nil || ack.Status != AckExecuted {
-		t.Fatalf("expected executed terminal, got ack=%+v terminal=%v errs=%v", ack, terminal, errs)
+	ack, terminal, serr := eng.Send(context.Background(), cmd)
+	if serr != nil || !terminal || ack == nil || ack.Status != AckExecuted {
+		t.Fatalf("expected executed terminal, got ack=%+v terminal=%v serr=%v", ack, terminal, serr)
 	}
 }
 
@@ -356,15 +368,15 @@ func TestSend_ValidationFailureSkipsPublish(t *testing.T) {
 
 	cmd := validCmd()
 	cmd.TTLMs = 5 // 非法 TTL
-	ack, terminal, errs := eng.Send(context.Background(), cmd)
+	ack, terminal, serr := eng.Send(context.Background(), cmd)
 
 	if ack != nil || terminal {
 		t.Fatal("invalid command should not produce ack/terminal")
 	}
-	if !HasErrors(errs) {
-		t.Fatal("expected validation errors")
+	if serr == nil {
+		t.Fatal("expected send error")
 	}
-	hasField(t, errs, "ttl_ms")
+	hasField(t, serr.Fields, "ttl_ms")
 	if len(client.publishCalls) != 0 {
 		t.Fatalf("invalid command must not trigger publish, got %d calls", len(client.publishCalls))
 	}
@@ -375,11 +387,11 @@ func TestSend_UnknownDevice(t *testing.T) {
 	eng, _, _ := newTestEngine(t, client)
 
 	cmd := validCmd() // device HID-ABCD1234 未注册
-	_, terminal, errs := eng.Send(context.Background(), cmd)
+	_, terminal, serr := eng.Send(context.Background(), cmd)
 	if terminal {
 		t.Fatal("unknown device should not be terminal")
 	}
-	hasField(t, errs, "device")
+	hasField(t, serr.Fields, "device")
 	if len(client.publishCalls) != 0 {
 		t.Fatal("unknown device must not trigger publish")
 	}
@@ -394,11 +406,11 @@ func TestSend_OfflineDevice(t *testing.T) {
 	})
 
 	cmd := validCmd()
-	_, terminal, errs := eng.Send(context.Background(), cmd)
+	_, terminal, serr := eng.Send(context.Background(), cmd)
 	if terminal {
 		t.Fatal("offline device should not be terminal")
 	}
-	hasField(t, errs, "device")
+	hasField(t, serr.Fields, "device")
 	if len(client.publishCalls) != 0 {
 		t.Fatal("offline device must not trigger publish")
 	}
@@ -413,11 +425,11 @@ func TestSend_USBNotReady(t *testing.T) {
 	})
 
 	cmd := validCmd()
-	_, terminal, errs := eng.Send(context.Background(), cmd)
+	_, terminal, serr := eng.Send(context.Background(), cmd)
 	if terminal {
 		t.Fatal("usb-not-ready device should not be terminal")
 	}
-	hasField(t, errs, "device")
+	hasField(t, serr.Fields, "device")
 	if len(client.publishCalls) != 0 {
 		t.Fatal("usb-not-ready device must not trigger publish")
 	}
@@ -433,11 +445,11 @@ func TestSend_PublishTimeout(t *testing.T) {
 
 	cmd := validCmd()
 	cmd.TTLMs = TTLMsMin // 100ms，快速失败
-	_, terminal, errs := eng.Send(context.Background(), cmd)
+	_, terminal, serr := eng.Send(context.Background(), cmd)
 	if terminal {
 		t.Fatal("publish timeout should not be terminal")
 	}
-	hasField(t, errs, "mqtt")
+	hasField(t, serr.Fields, "mqtt")
 }
 
 func TestSend_NoAckWithinTTL(t *testing.T) {
@@ -452,11 +464,11 @@ func TestSend_NoAckWithinTTL(t *testing.T) {
 	cmd.RequestID = "noack-1"
 	cmd.TTLMs = TTLMsMin // 100ms
 	start := time.Now()
-	ack, terminal, errs := eng.Send(context.Background(), cmd)
+	ack, terminal, serr := eng.Send(context.Background(), cmd)
 	elapsed := time.Since(start)
 
-	if HasErrors(errs) {
-		t.Fatalf("no-ack should not produce errors: %v", errs)
+	if serr != nil {
+		t.Fatalf("no-ack should not produce errors: %v", serr)
 	}
 	if terminal {
 		t.Error("no-ack within TTL should be terminal=false")
@@ -484,9 +496,9 @@ func TestSend_ClientContextCancelled(t *testing.T) {
 
 	cmd := validCmd()
 	cmd.TTLMs = 5000 // 长 TTL，确保是 cancel 而非超时触发返回
-	_, terminal, errs := eng.Send(ctx, cmd)
+	_, terminal, serr := eng.Send(ctx, cmd)
 	if terminal {
 		t.Fatal("cancelled request should not be terminal")
 	}
-	hasField(t, errs, "client")
+	hasField(t, serr.Fields, "client")
 }

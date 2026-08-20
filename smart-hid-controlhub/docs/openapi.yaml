@@ -118,11 +118,16 @@ paths:
     post:
       summary: 下发 HID Command（同步返回终态 ACK 或 202）
       description: |
-        闭环：校验 → 设备就绪检查 → publish MQTT command(QoS1, retain=false) → 等终态 ACK（超时=TTL）。
+        闭环：校验（envelope + payload 深度）→ 幂等登记 → 设备就绪检查 →
+        持久化 → publish MQTT command(QoS1, retain=false) → 等终态 ACK（超时=TTL）。
         - TTL 内收到 executed/duplicate → 200
         - TTL 内收到 rejected → 422；expired → 504
         - TTL 内无终态 → 202（命令已发出）
         - 校验失败 / 设备未就绪 / publish 失败 → 400
+        request_id 是服务端幂等键（M1-G2）：
+        - 并发同 request_id 同命令 → join，等待同一结果（仅 publish 一次）
+        - 同 request_id 不同命令 → 409 request_id_conflict
+        - 终态后重放同 request_id 同命令 → 直接返回既有终态结果（不再执行 HID）
       tags: [command]
       parameters:
         - $ref: '#/components/parameters/DeviceIdPath'
@@ -194,7 +199,7 @@ paths:
               schema: { $ref: '#/components/schemas/AcceptedNotAcked' }
         '400':
           description: |
-            校验失败（envelope 字段非法 / 设备未就绪 / publish 失败）或请求体非法 JSON。
+            校验失败（envelope 字段非法 / payload 深度校验失败 / 设备未就绪 / publish 失败）或请求体非法 JSON。
             区分：validation_failed 含 fields 数组；bad_request 为 JSON 解析或路径不一致问题。
           content:
             application/json:
@@ -215,10 +220,24 @@ paths:
                     error: validation_failed
                     device_id: HID-00000001
                     fields: [{ field: device, message: "device HID-00000001 offline" }]
+                validation_payload_wheel:
+                  summary: payload 深度校验失败（wheel 超出 int8 范围）
+                  value:
+                    error: validation_failed
+                    device_id: HID-00000001
+                    fields: [{ field: payload.delta, message: "delta must be in [-127, 127], got 200" }]
                 bad_json:
                   summary: 请求体非合法 JSON
                   value: { error: bad_request, message: "invalid json: unexpected end of JSON input" }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: |
+            request_id 幂等冲突：该 request_id 已被一个不同内容的命令使用
+            （在途或已终态）。复用 request_id 必须保证命令内容一致。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: request_id_conflict, message: "request_id already used with a different command" }
         '422':
           description: 设备拒绝执行（如 target_boot_id 不匹配 → STALE_DEVICE_SESSION）。
           content:
@@ -230,6 +249,12 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SmartHidAck' }
+        '500':
+          description: 内部错误（如命令持久化失败）。命令不会被 publish。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: internal, message: "command engine error" }
 
   # -------------------------------------------------------------------------
   /commands/{request_id}:

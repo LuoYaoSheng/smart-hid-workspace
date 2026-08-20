@@ -101,18 +101,26 @@ func (s *Server) handleSendCommand(w http.ResponseWriter, r *http.Request, devic
 		return
 	}
 
-	ack, terminal, errs := s.engine.Send(r.Context(), &cmd)
-	if command.HasErrors(errs) {
-		// 校验失败 / 设备问题 / publish 失败 → 4xx/5xx
-		fields := make([]map[string]string, 0, len(errs))
-		for _, e := range errs {
-			fields = append(fields, map[string]string{"field": e.Field, "message": e.Message})
+	ack, terminal, serr := s.engine.Send(r.Context(), &cmd)
+	if serr != nil {
+		// Kind 决定 HTTP 映射：校验失败 400 / request_id 冲突 409 / 内部错误 500。
+		switch serr.Kind {
+		case command.ErrKindConflict:
+			writeJSON(w, http.StatusConflict, errBody{"request_id_conflict", serr.Message})
+		case command.ErrKindInternal:
+			s.log.Error("command engine internal error", "request_id", cmd.RequestID, "detail", serr.Message)
+			writeJSON(w, http.StatusInternalServerError, errBody{"internal", "command engine error"})
+		default:
+			fields := make([]map[string]string, 0, len(serr.Fields))
+			for _, e := range serr.Fields {
+				fields = append(fields, map[string]string{"field": e.Field, "message": e.Message})
+			}
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error":     "validation_failed",
+				"device_id": cmd.DeviceID,
+				"fields":    fields,
+			})
 		}
-		writeJSON(w, http.StatusBadRequest, map[string]any{
-			"error":     "validation_failed",
-			"device_id": cmd.DeviceID,
-			"fields":    fields,
-		})
 		return
 	}
 

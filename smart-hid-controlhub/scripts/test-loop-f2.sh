@@ -81,10 +81,15 @@ done
 curl -sf http://127.0.0.1:17890/api/v1/health >/dev/null || { fail "health not ready"; exit 1; }
 ok "ControlHub health ready"
 
-# 抓 API key（日志格式：{"msg":"api key","key":"chk_xxx"}）
-API_KEY=$(grep -o '"key":"chk_[^"]*"' "$WORKDIR/controlhub.log" | head -1 | sed 's/.*"key":"//;s/".*//' || true)
-[ -n "$API_KEY" ] || { fail "no api_key in log"; cat "$WORKDIR/controlhub.log"; exit 1; }
-ok "extracted api_key=${API_KEY:0:16}..."
+# 抓 API key（M1-G2 起：明文只落 0600 的 initial-api-key.txt，绝不进日志）
+API_KEY_FILE="$DATA/initial-api-key.txt"
+[ -f "$API_KEY_FILE" ] || { fail "initial-api-key.txt missing"; cat "$WORKDIR/controlhub.log"; exit 1; }
+API_KEY=$(head -1 "$API_KEY_FILE" | tr -d '[:space:]')
+[ -n "$API_KEY" ] || { fail "empty api key file"; exit 1; }
+if grep -q "chk_" "$WORKDIR/controlhub.log"; then
+  fail "api key plaintext leaked into controlhub.log"; exit 1
+fi
+ok "api_key from file (log clean): ${API_KEY:0:16}..."
 
 AUTH="Authorization: Bearer $API_KEY"
 
@@ -133,8 +138,10 @@ assert_json_field "first send status=executed" "$(cat /tmp/f2-dup.json)" status 
 resp=$(curl -s -o /tmp/f2-dup2.json -w '%{http_code}' -X POST -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"protocol\":\"1.0\",\"request_id\":\"f2-dup\",\"device_id\":\"HID-00000001\",\"target_boot_id\":\"$BOOT_ID\",\"type\":\"keyboard\",\"action\":\"tap\",\"ttl_ms\":3000,\"payload\":{\"key\":\"A\"}}" \
   http://127.0.0.1:17890/api/v1/devices/HID-00000001/commands)
-chk "second dup send HTTP 200 (duplicate→200)" "$resp" "200"
-assert_json_field "second send status=duplicate" "$(cat /tmp/f2-dup2.json)" status duplicate
+# M1-G2 幂等语义：同 request_id 同命令重放 → 服务端直接返回既有终态（不再
+# 重发 MQTT，不再执行 HID）。设备侧 dedup 仍保留，兜底 QoS1 网络层重投。
+chk "replay HTTP 200 (server-side terminal replay)" "$resp" "200"
+assert_json_field "replay returns recorded terminal (executed)" "$(cat /tmp/f2-dup2.json)" status executed
 
 # ============================================================
 # 测试 3：STALE_DEVICE_SESSION（错误 boot_id → rejected）
@@ -191,7 +198,7 @@ fi
 # ============================================================
 log "Test 6: key_down lease → release_all clear"
 resp=$(curl -s -o /tmp/f2-kd.json -w '%{http_code}' -X POST -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"protocol\":\"1.0\",\"request_id\":\"f2-kd\",\"device_id\":\"HID-00000001\",\"target_boot_id\":\"$BOOT_ID\",\"type\":\"keyboard\",\"action\":\"key_down\",\"ttl_ms\":3000,\"payload\":{\"key\":\"LEFTSHIFT\",\"lease_ms\":10000}}" \
+  -d "{\"protocol\":\"1.0\",\"request_id\":\"f2-kd\",\"device_id\":\"HID-00000001\",\"target_boot_id\":\"$BOOT_ID\",\"type\":\"keyboard\",\"action\":\"key_down\",\"ttl_ms\":3000,\"payload\":{\"key\":\"SHIFT\",\"lease_ms\":10000}}" \
   http://127.0.0.1:17890/api/v1/devices/HID-00000001/commands)
 chk "key_down HTTP 200" "$resp" "200"
 assert_json_field "key_down status=executed" "$(cat /tmp/f2-kd.json)" status executed
@@ -250,7 +257,7 @@ assert_json_field "query status=executed" "$(cat /tmp/f2-q.json)" status execute
 # ============================================================
 log "Test 9: MQTT disconnect → release_all (best-effort)"
 resp=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"protocol\":\"1.0\",\"request_id\":\"f2-disc\",\"device_id\":\"HID-00000001\",\"target_boot_id\":\"$BOOT_ID\",\"type\":\"keyboard\",\"action\":\"key_down\",\"ttl_ms\":3000,\"payload\":{\"key\":\"LEFTCTRL\",\"lease_ms\":30000}}" \
+  -d "{\"protocol\":\"1.0\",\"request_id\":\"f2-disc\",\"device_id\":\"HID-00000001\",\"target_boot_id\":\"$BOOT_ID\",\"type\":\"keyboard\",\"action\":\"key_down\",\"ttl_ms\":3000,\"payload\":{\"key\":\"CTRL\",\"lease_ms\":30000}}" \
   http://127.0.0.1:17890/api/v1/devices/HID-00000001/commands) || true
 ok "key_down before disconnect (http=$resp)"
 
