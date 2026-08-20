@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>协议 Schema — Smart HID</title>
+  <meta name="description" content="Smart HID Command / Ack / Status 三类消息的 JSON Schema，协议的事实源。">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="docs.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body class="docs-body">
+
+<nav class="nav" id="nav">
+  <div class="container nav-inner">
+    <a class="logo" href="../index.html"><span class="logo-mark">⚡</span><span class="logo-text">Smart&nbsp;HID</span></a>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#how">工作原理</a></li>
+      <li><a href="../index.html#features">键鼠能力</a></li>
+      <li><a href="../index.html#components">系统组成</a></li>
+      <li><a href="../index.html#download">下载</a></li>
+      <li><a href="../video.html" class="nav-video">视频</a></li>
+      <li><a href="../license.html" class="nav-lic">授权</a></li>
+    </ul>
+    <a class="btn btn-primary btn-sm" href="quick-start.html">快速开始</a>
+    <button class="nav-toggle" id="nav-toggle" aria-label="菜单"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+
+<div class="docs-shell container">
+  <aside class="toc" id="toc">
+    <div class="toc-title">本页目录</div>
+    <a href="#command">SmartHidCommand</a>
+    <a href="#ack">SmartHidAck</a>
+    <a href="#status">SmartHidStatus</a>
+    <a href="#related">相关文档</a>
+  </aside>
+
+  <main class="docs-main">
+    <span class="kicker">PROTOCOL · JSON SCHEMA</span>
+    <h1>协议 Schema</h1>
+    <p class="docs-lead">
+      Smart HID 设备与 ControlHub 之间三类消息的 JSON Schema（Draft 2020-12）。这是协议的<strong>事实源</strong>，
+      代码、文档、测试都以这里的字段定义为准。
+    </p>
+
+    <div class="callout">
+      传输层为 MQTT。Topic 与字段语义详见 <a href="../api-docs.html">HTTP API 文档</a>与
+      <a href="architecture.html">系统架构</a>。下方 Schema 描述消息体本身。
+    </div>
+
+    <!-- Command -->
+    <h2 id="command">SmartHidCommand · 控制指令</h2>
+    <p>控制端 → 设备。下发一次键鼠或系统动作。</p>
+    <ul>
+      <li><code>type</code> ∈ <code>keyboard</code> / <code>mouse</code> / <code>system</code></li>
+      <li><code>ttl_ms</code> 限定指令有效期（100–10000 ms），超时未执行则判 <code>expired</code></li>
+      <li><code>target_boot_id</code> 确保指令落到预期的设备启动实例，防止跨重启误命中</li>
+    </ul>
+<pre><code>{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmartHidCommand",
+  "type": "object",
+  "required": [
+    "protocol",
+    "request_id",
+    "device_id",
+    "target_boot_id",
+    "type",
+    "action",
+    "ttl_ms",
+    "payload"
+  ],
+  "properties": {
+    "protocol": { "const": "1.0" },
+    "request_id": { "type": "string", "minLength": 1, "maxLength": 96 },
+    "device_id": { "type": "string", "pattern": "^HID-[A-Z0-9]{8}$" },
+    "target_boot_id": { "type": "string" },
+    "type": { "enum": [ "keyboard", "mouse", "system" ] },
+    "action": { "type": "string" },
+    "ttl_ms": { "type": "integer", "minimum": 100, "maximum": 10000 },
+    "payload": { "type": "object" }
+  },
+  "additionalProperties": true
+}</code></pre>
+
+    <!-- Ack -->
+    <h2 id="ack">SmartHidAck · 执行回执</h2>
+    <p>设备 → 控制端。回执指令的执行结果。</p>
+    <ul>
+      <li><code>status</code> 状态机：<code>received</code> → <code>executing</code> → <code>executed</code>；异常分支 <code>rejected</code> / <code>expired</code> / <code>duplicate</code></li>
+      <li><code>code</code> 为 0 表示成功，非 0 为错误码</li>
+      <li><code>execution_ms</code> 设备端实测执行耗时，用于性能观测</li>
+    </ul>
+<pre><code>{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmartHidAck",
+  "type": "object",
+  "required": [ "protocol", "request_id", "device_id", "boot_id", "status", "code" ],
+  "properties": {
+    "protocol": { "const": "1.0" },
+    "request_id": { "type": "string" },
+    "device_id": { "type": "string" },
+    "boot_id": { "type": "string" },
+    "status": {
+      "enum": [ "received", "executing", "executed", "rejected", "expired", "duplicate" ]
+    },
+    "code": { "type": "integer" },
+    "execution_ms": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": true
+}</code></pre>
+
+    <!-- Status -->
+    <h2 id="status">SmartHidStatus · 设备状态</h2>
+    <p>设备周期性广播的在线状态。</p>
+    <ul>
+      <li><code>online</code> 布尔，设备是否可达</li>
+      <li><code>boot_id</code> 本次启动的唯一标识，与 Command 的 <code>target_boot_id</code> 对应</li>
+      <li><code>firmware</code> / <code>hardware</code> 版本信息，便于运维与兼容性判断</li>
+    </ul>
+<pre><code>{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmartHidStatus",
+  "type": "object",
+  "required": [ "protocol", "device_id", "online" ],
+  "properties": {
+    "protocol": { "const": "1.0" },
+    "device_id": { "type": "string" },
+    "online": { "type": "boolean" },
+    "boot_id": { "type": "string" },
+    "firmware": { "type": "string" },
+    "hardware": { "type": "string" }
+  },
+  "additionalProperties": true
+}</code></pre>
+
+    <h2 id="related">相关文档</h2>
+    <ul class="next-list">
+      <li>📘 <a href="../api-docs.html">API 文档</a>：HTTP 端点（Command 的下发与查询入口）</li>
+      <li>🏗️ <a href="architecture.html">系统架构</a>：协议在五组件中的流转</li>
+      <li>🚀 <a href="quick-start.html">快速开始</a>：第一条 Command 实操</li>
+      <li>📄 <a href="prd.html">产品 PRD</a>：能力边界与 V1 范围</li>
+    </ul>
+  </main>
+</div>
+
+<footer class="footer">
+  <div class="container footer-bottom">
+    <span>© 2026 Smart HID · 本地优先的网络 HID 控制系统</span>
+    <span class="footer-meta">ESP32-S3 · Go · MQTT · USB HID</span>
+  </div>
+</footer>
+
+<script src="../app.js"></script>
+<script src="docs.js"></script>
+</body>
+</html>

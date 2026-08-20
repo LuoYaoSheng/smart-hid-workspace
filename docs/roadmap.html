@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>开发路线 — Smart HID</title>
+  <meta name="description" content="Smart HID Phase 划分、当前进度与里程碑。">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="docs.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body class="docs-body">
+
+<nav class="nav" id="nav">
+  <div class="container nav-inner">
+    <a class="logo" href="../index.html"><span class="logo-mark">⚡</span><span class="logo-text">Smart&nbsp;HID</span></a>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#how">工作原理</a></li>
+      <li><a href="../index.html#features">键鼠能力</a></li>
+      <li><a href="../index.html#components">系统组成</a></li>
+      <li><a href="../index.html#download">下载</a></li>
+      <li><a href="../video.html" class="nav-video">视频</a></li>
+      <li><a href="../license.html" class="nav-lic">授权</a></li>
+    </ul>
+    <a class="btn btn-primary btn-sm" href="quick-start.html">快速开始</a>
+    <button class="nav-toggle" id="nav-toggle" aria-label="菜单"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+
+<div class="docs-shell container">
+  <aside class="toc" id="toc"><div class="toc-title">本页目录</div></aside>
+
+  <main class="docs-main" data-md="09_LOCAL_DEVELOPMENT_ROADMAP.md" data-strip-h1="1">
+    <span class="kicker">ROADMAP</span>
+    <h1>开发路线</h1>
+    <p class="docs-lead">从最小闭环到完整产品的 Phase 划分、当前进度与每个阶段的验收标准。</p>
+    <div class="md-body" id="md-body"><p style="color:#94a3b8">加载中…</p></div>
+
+    <h2 id="community">来自社区的需求</h2>
+    <p class="docs-lead" style="margin-bottom:20px">通过 <a href="../index.html#feedback">需求与反馈</a> 提交、被采纳进入路线的条目——下一条可能就是你的。</p>
+    <div id="community-feedback" hidden>
+      <div class="cf-group-title" id="cf-title-shipped">✅ 已发布</div>
+      <div class="cf-list" id="cf-shipped"></div>
+      <div class="cf-group-title" id="cf-title-planned">🧭 已计划</div>
+      <div class="cf-list" id="cf-planned"></div>
+    </div>
+    <p id="community-empty" style="color:#94a3b8" hidden>还没有被采纳的社区需求。</p>
+
+    <h2 id="related">相关文档</h2>
+    <ul class="next-list">
+      <li>📄 <a href="prd.html">产品 PRD</a>：能力边界与 V1 范围</li>
+      <li>🏗️ <a href="architecture.html">系统架构</a>：五组件与协议事实源</li>
+      <li>🚀 <a href="quick-start.html">快速开始</a>：5 分钟跑通</li>
+      <li>📘 <a href="../api-docs.html">API 文档</a>：HTTP 端点交互参考</li>
+    </ul>
+  </main>
+</div>
+
+<footer class="footer">
+  <div class="container footer-bottom">
+    <span>© 2026 Smart HID · 本地优先的网络 HID 控制系统</span>
+    <span class="footer-meta">ESP32-S3 · Go · MQTT · USB HID</span>
+  </div>
+</footer>
+
+<script src="../app.js"></script>
+<script src="docs.js"></script>
+<script src="markdown-loader.js"></script>
+<script>
+// FB-1：拉取公开路线图（仅 admin 甄别过的 planned/shipped），分组渲染。
+// API 不在线或无数据时整节保持隐藏，不影响文档页本身。
+(function () {
+  "use strict";
+  var wrap = document.getElementById("community-feedback");
+  if (!wrap) return;
+  var base = "/api/v1";
+  try {
+    var o = localStorage.getItem("smarthid_cloud_base");
+    if (o) base = o;
+  } catch (e) { /* file:// 或隐私模式降级为同源 */ }
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  var CAT = { feature: "功能需求", bug: "Bug", other: "其他" };
+  var LABEL = { shipped: "已发布", planned: "已计划" };
+
+  fetch(base + "/feedback/roadmap")
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var items = (d && d.items) || [];
+      if (!items.length) {
+        document.getElementById("community-empty").hidden = false;
+        return;
+      }
+      var groups = { shipped: [], planned: [] };
+      items.forEach(function (it) { if (groups[it.status]) groups[it.status].push(it); });
+      ["shipped", "planned"].forEach(function (k) {
+        var host = document.getElementById("cf-" + k);
+        var title = document.getElementById("cf-title-" + k);
+        if (!groups[k].length) { if (title) title.hidden = true; return; }
+        host.innerHTML = groups[k].map(function (it) {
+          return '<div class="cf-item">'
+            + '<div class="cf-head"><span class="cf-title">' + esc(it.title) + '</span>'
+            + '<span class="cf-pill ' + it.status + '">' + LABEL[it.status] + '</span>'
+            + '<span class="cf-cat">' + esc(CAT[it.category] || it.category) + '</span></div>'
+            + (it.admin_note ? '<div class="cf-note">' + esc(it.admin_note) + '</div>' : '')
+            + '</div>';
+        }).join("");
+      });
+      wrap.hidden = false;
+    })
+    .catch(function () { /* 离线静默 */ });
+})();
+</script>
+</body>
+</html>
