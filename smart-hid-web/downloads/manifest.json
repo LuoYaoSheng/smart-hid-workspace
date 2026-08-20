@@ -1,0 +1,69 @@
+{
+  "product": "smart-hid",
+  "version": "1.1.0",
+  "commit": "118c6eb",
+  "build_time": "2026-08-20T09:23:43Z",
+  "dirty": false,
+  "firmware": {
+    "version": "1.1.0",
+    "esp_idf": "v5.4.4",
+    "app_bin_bytes": 1074768,
+    "built_from": "scripts/build-firmware.sh (fullclean + set-target + build)"
+  },
+  "artifacts": [
+    {
+      "name": "controlhub/controlhub-darwin-arm64",
+      "sha256": "50667be86c8a19b3e08c4d78d11d22d5056c7eb0501169abe3b8bc2eddc21ac2",
+      "size": 12324594,
+      "type": "controlhub"
+    },
+    {
+      "name": "controlhub/controlhub-windows-amd64.exe",
+      "sha256": "e0ebfbbcfa4fbd15a61b184e62991a149c56f78cf1f86ca9b54f38e8366c9d0a",
+      "size": 13221376,
+      "type": "controlhub"
+    },
+    {
+      "name": "controlhub/controlhub-SHA256SUMS",
+      "sha256": "eae5507ab3226ca8ffe24b000d18a4876ddf27bedf498c6a68bcca2c7e4642b1",
+      "size": 185,
+      "type": "controlhub"
+    },
+    {
+      "name": "firmware/bootloader.bin",
+      "sha256": "b5a5ed07eadb760dfe7b80365ae7df317a9edb8fd8ea34712118d55a9a183754",
+      "size": 20928,
+      "type": "firmware"
+    },
+    {
+      "name": "firmware/partition-table.bin",
+      "sha256": "b6468941a1829f9337038deda1b617f28e44b5e37bdc4289662829b9fbb56cae",
+      "size": 3072,
+      "type": "firmware"
+    },
+    {
+      "name": "firmware/ota_data_initial.bin",
+      "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f",
+      "size": 8192,
+      "type": "firmware"
+    },
+    {
+      "name": "firmware/smart-hid-firmware.bin",
+      "sha256": "c5f6db927e3c3bb8b9a4b29b535f8989170619cba4becb6966c823aff4cefc05",
+      "size": 1074768,
+      "type": "firmware"
+    },
+    {
+      "name": "firmware/flash.sh",
+      "sha256": "0cea571d9d96a7594320c58eb0d47a38df36d8f2743ad569074ff737ded7a01c",
+      "size": 1387,
+      "type": "firmware"
+    },
+    {
+      "name": "firmware/firmware-SHA256SUMS",
+      "sha256": "ed3fa1bb380b8db0b5931875fc66cc797bf64bba8daab34bb772a77f6d5a2b25",
+      "size": 418,
+      "type": "firmware"
+    }
+  ]
+}
