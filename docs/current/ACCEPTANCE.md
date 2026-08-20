@@ -35,13 +35,15 @@ authority: canonical
 
 ## C. Firmware Source（源码级 ✅；硬件 ❌）
 
-- [x] ESP-IDF v5.4.4 编译通过
+- [x] ESP-IDF v5.4.4 编译通过（默认 provisioning 模式 + DEV_STATIC_CONFIG 双配置；分区 3×1536K 余量 32%）
 - [x] 命令引擎语义：tap / hotkey / key_down(up) / move / click / wheel /
       button_down(up) / release_all / lease / TTL / dedup / boot_id（28 项 mock e2e）
 - [x] LWT 掉线释放全部按键（mock e2e：broker 重启触发 release_all）
-- [x] 宿主单测：dedup_cache、hid_keymap
+- [x] 宿主单测：dedup_cache、hid_keymap、runtime_config、provisioning 状态机
+      （含崩溃边界）、ble_proto（36/36）
 - [ ] Windows / macOS / Linux 识别键盘 + 鼠标 —— NOT EXECUTED（硬件）
 - [ ] 队列满明确返回 —— 固件路径未在真机验证
+- [ ] BLE Provision 真机配网全链路 —— NOT EXECUTED（硬件）
 
 ## D. Protocol（契约一致性）
 
@@ -52,17 +54,26 @@ authority: canonical
 ## E. Provisioning（配网）
 
 - [x] ControlHub 侧配对服务（session / QR / 设备侧换凭据）
-- [ ] BLE Provision 全链路（小程序 ↔ 固件）—— PLANNED，M1-G3
-- [ ] NVS 运行时配置 / 重配网 —— PLANNED，M1-G3
+- [x] MQTT 网络模型：bind/advertise 拆分、legacy 迁移、环回/通配绝不返回设备、
+      多网卡 deterministic 单测（M1-G3，internal/netaddr）
+- [x] pairing 先解析 endpoint 再消费 token（失败 503 + token 保持 pending，单测）
+- [x] 固件 NVS 运行时配置（active/pending、schema 守卫、崩溃边界 boot promote，
+      host 单测 36 suite，M1-G3）
+- [x] BLE Provision 固件源码（NimBLE GATT + 分帧协议 + 状态机 + canonical 协议
+      文档；DEV_STATIC_CONFIG 双配置编译通过）
+- [ ] BLE Provision 真机全链路（小程序 ↔ 固件）—— NOT VERIFIED ON HARDWARE
+- [ ] 小程序客户端按 canonical 协议对齐 —— smart-ble 仓任务
 
-## F. Security（G2 已修项打勾；其余排 G3）
+## F. Security（G2/G3 已修项打勾；其余排 M2）
 
 - [x] 控制链路不出局域网，无云端组件
 - [x] API Key / 设备凭据明文不落库（SHA-256）
 - [x] 首次 API Key 明文不进日志（只落 0600 文件；结构性防回归 + e2e 断言日志零 chk_，M1-G2）
 - [x] 配对端口只在配对链路使用，token 一次性 + 5 分钟过期 + 原子消费（M1-G2）
-- [ ] MQTT 默认密码弱 + host 三用 —— 已登记，G3 处理
-- [ ] WS CheckOrigin 全放行（LAN 场景有意为之）—— 已登记，随 G3 评估
+- [x] 固定默认 MQTT 密码移除（内部凭据每启动随机；显式配置需成对，M1-G3）
+- [x] mqtt.host 三用拆分 + advertise 校验（环回/通配/localhost 拒绝，M1-G3）
+- [x] 固件 secret 不进日志（wifi/mqtt 密码、token redact；host 单测断言，M1-G3）
+- [x] WS CheckOrigin 维持 LAN 有意取舍（G3 评审结论：记录不收紧）
 
 ## G. Release（已知问题已登记，修复排 G4）
 

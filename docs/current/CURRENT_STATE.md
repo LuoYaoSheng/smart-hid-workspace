@@ -25,18 +25,19 @@ authority: canonical
   → 目标电脑
 ```
 
-辅助链路（**规划中，固件侧未实现**）：
+辅助链路（固件源码已实现，**未经真机验证**）：
 
 ```text
 BLE Toolkit+ 微信小程序（独立仓库 smart-ble）
-  → BLE
+  → BLE Provision（NimBLE，协议 protocols/ble/PROVISIONING_V1.md）
   → ESP32-S3（配网 / 诊断）
+  → ControlHub Pairing（:17892）→ per-device MQTT 凭据
+  → NVS 持久化（active/pending 双配置）→ MQTT → READY
 ```
 
-诚实状态：BLE 配网目前只有协议设计（历史文档 `docs/archive/03`）与独立小程序仓库
-smart-ble 的规划。**固件侧没有任何 BLE / NVS Provisioning 代码**——Wi-Fi 与 MQTT
-参数来自编译期 Kconfig 固定值（`CONFIG_SMART_HID_WIFI_SSID` 等）。BLE Provision
-整体属 PLANNED，排在 M1-G3。
+诚实状态：固件侧 BLE Provision / NVS 运行时配置 / 配网状态机源码已完成并
+通过 ESP-IDF v5.4.4 编译与 host 状态机单测（36 项）；**从未在真实 ESP32-S3
+上烧录验证**。小程序侧（smart-ble 仓）客户端适配仍待对齐 canonical 协议。
 
 ## 当前不是什么（REMOVED — 禁止恢复）
 
@@ -62,14 +63,14 @@ DO NOT IMPLEMENT：
 
 | 组件 | 状态 | 说明 |
 |---|---|---|
-| ControlHub（Go） | IMPLEMENTED | HTTP API + 内嵌 MQTT + 配对 + API Key + SQLite + 托盘 + Web 三页面；`go test` 全绿 + mock e2e |
-| 固件（C，ESP-IDF v5.4.4） | IMPLEMENTED ＋ NOT VERIFIED ON HARDWARE | USB HID / 命令引擎 / 可靠性语义源码完成、编译通过、28 项 mock e2e；**从未在真实 ESP32-S3 上烧录验证** |
+| ControlHub（Go） | IMPLEMENTED | HTTP API + 内嵌 MQTT（bind/advertise 拆分）+ 配对（请求级地址解析）+ API Key + SQLite + 托盘 + Web 三页面；`go test` 全绿 + mock e2e |
+| 固件（C，ESP-IDF v5.4.4） | IMPLEMENTED ＋ NOT VERIFIED ON HARDWARE | USB HID / 命令引擎 / 可靠性语义 / **BLE Provision + NVS 运行时配置 + 配网状态机**源码完成、编译通过、host 状态机单测；**从未在真实 ESP32-S3 上烧录验证** |
 | mock-device（cmd/mock-device） | IMPLEMENTED | Go 参考实现 = 虚拟 ESP32，测试替身；连非默认端口需 `--mqtt-port` |
 | 官网（smart-hid-web） | IMPLEMENTED | 纯静态落地页 / 文档站 / 下载中心，GitHub Pages 托管 |
-| protocols/ JSON Schema | IMPLEMENTED | command / ack / status 三 schema + 示例 |
-| BLE 配网（固件侧） | PLANNED | 无代码，Wi-Fi/MQTT 为 Kconfig 固定值；M1-G3 |
-| BLE 配网（小程序侧） | PARTIAL（外部独立仓 smart-ble） | 不在本仓库，进度以该仓库为准 |
-| OTA | PLANNED | 仅分区表预留双 OTA 分区 |
+| protocols/ JSON Schema | IMPLEMENTED | command / ack / status 三 schema + 示例；**ble/PROVISIONING_V1.md（canonical）** |
+| BLE 配网（固件侧） | IMPLEMENTED IN SOURCE ＋ BUILD VERIFIED ＋ NOT VERIFIED ON HARDWARE | NimBLE GATT 服务 + 分帧协议 + 状态机（M1-G3）；真机未验 |
+| BLE 配网（小程序侧） | PARTIAL（外部独立仓 smart-ble） | 不在本仓库；需按 protocols/ble/PROVISIONING_V1.md 对齐客户端 |
+| OTA | PLANNED | 分区表已扩至双 1536K OTA（M1-G3） |
 | Secure Boot / Flash Encryption / 固件签名 | PLANNED | M2-G3 |
 | 真机烧写与硬件验收 | NOT EXECUTED | 独立任务（M2-G1），明确不在 M1 内做 |
 
@@ -81,6 +82,9 @@ DO NOT IMPLEMENT：
 - **request_id 服务端幂等（M1-G2）**：并发同命令 join（publish 恰一次）；同 id 异命令 409 request_id_conflict；终态后重放直接返回既有结果（不再执行 HID）；指纹 = device/type/action/canonical payload（键序无关）
 - **payload 服务端深度校验（M1-G2）**：键名（镜像固件 keymap）、hotkey ≤8 键、lease 范围、dx/dy ≤4096、wheel 硬限 [-127,127]（固件单次 int8 强转）、count 1-10、button 枚举
 - 配对：Web 建 session → 动态 QR（`shid://pair?...`）→ 设备 POST `:17892` 换 MQTT 凭据（一次性 token，5 分钟，**单事务原子消费**——并发恰一次成功，失败可重试）
+- **MQTT 网络模型（M1-G3）**：`mqtt.bind_host`（默认 0.0.0.0，LAN 设备可达）/ `advertise_host`（空 = 按设备请求路径解析，绝不返回环回/通配）/ 内部连接地址（由 bind 推导）；多网卡歧义明确报错并列出候选；legacy `mqtt.host` 自动迁移 + 一次性 deprecated 警告
+- **pairing endpoint 先解析后消费 token（M1-G3）**：advertise 解析失败 → 503，token 保持 pending；QR host 与设备路径同一 resolver
+- **内部 MQTT 凭据随机化（M1-G3）**：不再有固定默认密码——留空 = 每启动随机（仅内存，不持久化不进日志）；显式成对配置仍支持（如 e2e）
 - **ACK 三方绑定（M1-G2）**：topic 设备 == ack.device_id == 在途请求期望设备；非法 ACK 记 warning 丢弃
 - API Key：SHA-256 入库、明文不落库、可轮换；HTTP 用 Bearer，WebSocket 用 query key；**首启明文只落 0600 文件，不进日志（M1-G2）**
 - Web 三页面：控制台 `/`、模拟键鼠演示台 `/demo.html`（可视化键盘 / 触控板 / 实体键盘直通 / 文本连打 / 多设备广播）、实时事件通道 `/api/v1/realtime`
@@ -93,13 +97,16 @@ DO NOT IMPLEMENT：
 - USB Composite HID：键盘 + 鼠标（TinyUSB）
 - 命令引擎：串行队列（32）／ request_id 去重（256）／ TTL ／ target_boot_id ／ lease 超时释放 ／ release_all
 - Fail-safe：MQTT / Wi-Fi 断开 → 设备端自动释放全部按键（LWT 语义）
-- Wi-Fi / MQTT：Kconfig 编译期固定值（无运行时配置，无 NVS 配网）
-- 宿主单测：dedup_cache、hid_keymap（`smart-hid-firmware/test/host/`）
+- **NVS 运行时配置（M1-G3）**：runtime_config 组件（active/pending 双 namespace、schema_version 守卫、generation、factory clear 底层能力）；Kconfig 网络参数仅 `SMART_HID_DEV_STATIC_CONFIG=y` 时作 DEV fallback（默认 OFF，绝不覆盖 NVS）
+- **配网状态机（M1-G3）**：BOOT→LOAD_CONFIG→UNPROVISIONED/PROVISIONING/CONNECTING_WIFI/PAIRING/CONNECTING_MQTT/READY/RECOVERY/ERROR；candidate 先 stage pending、成功才 promote（配网失败不变砖）；崩溃边界（token 已消费后掉电）由 complete-pending boot promote 收敛
+- **BLE Provision（M1-G3）**：NimBLE GATT（Provisioning Service 三特征 + 分帧写入 + 状态 notify；Just Works 加密如实声明非 MITM 抗性）；协议 canonical = `protocols/ble/PROVISIONING_V1.md`
+- 宿主单测：dedup_cache、hid_keymap、**runtime_config / provisioning / ble_proto**（`smart-hid-firmware/test/host/`，36 suite）
 
 ## 验证状态（诚实边界）
 
-- `go test ./...` 全绿（含并发压力用例）；`go test -race ./...` 全绿；并发包高倍重复通过
-- `test-loop-f2.sh` 28/28（真二进制 + mock-device 端到端，无需硬件；含幂等重放与日志零明文断言）
+- `go test ./...` 全绿（含并发压力用例）；`go test -race ./...` 全绿；并发/网络包高倍重复通过
+- `test-loop-f2.sh` 28/28（真二进制 + mock-device 端到端，无需硬件；含幂等重放与日志零明文断言；**经 legacy mqtt.host 兼容路径驱动**）
+- 固件 `idf.py fullclean + build` 双配置通过（默认 provisioning 模式 + DEV_STATIC_CONFIG）；host 单测 36/36（含配网状态机崩溃边界）
 - 配置面 e2e、WebSocket e2e、演示台 Playwright 真浏览器实测均通过（2026-08-20）
 - 以上**全部基于 mock / 本机环境**：没有任何真机验证（ESP32-S3 烧写、USB 枚举、
-  BIOS / 登录界面、三操作系统、soak 均未执行）
+  BLE 实连配网、BIOS / 登录界面、三操作系统、soak 均未执行）

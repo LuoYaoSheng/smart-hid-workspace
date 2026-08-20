@@ -70,7 +70,7 @@ Smart HID 换了一条路：**让一块 ESP32-S3 以真实 USB 键盘 + 鼠标�
 2. **协议事实源**：HTTP API = `smart-hid-controlhub/docs/openapi.yaml`；MQTT 消息 = `protocols/schemas/`（TS 权威源在 smart-ble 仓）
 3. **历史资料** [`docs/archive/`](docs/archive/) 是 2026-08-11 设计资料包快照（`status: SUPERSEDED`），含已移除的 Cloud / Trial / License / 商业化设计——**仅作历史记录，不得作为实现依据**
 4. **禁止复活**：不得因历史文档存在而重新实现 Trial / License / Cloud / Commercial / Order / Payment / Entitlement / Usage Gate（见 [DEVELOPMENT_RULES §2](docs/current/DEVELOPMENT_RULES.md)）
-5. **当前路线**按 Milestone/Gate 推进：M1-G1 治理基线已完成，下一 Gate 是 M1-G2 Core Correctness（见 [ROADMAP](docs/current/ROADMAP.md)），未获明确指示不提前实施
+5. **当前路线**按 Milestone/Gate 推进：M1-G1 治理 / G2 核心正确性 / G3 网络与配网已完成，下一 Gate 是 M1-G4 CI/Release（见 [ROADMAP](docs/current/ROADMAP.md)），未获明确指示不提前实施
 6. 提交前可跑治理守卫：`bash scripts/check-governance.sh`
 
 ## 快速开始
@@ -116,19 +116,23 @@ bash smart-hid-controlhub/scripts/test-loop-f2.sh
 | `http.host` / `http.port` | `127.0.0.1` / `17890` | 本地 HTTP 服务（API + 内置页面） |
 | `http.lan_mode` | `false` | 启动即监听 `0.0.0.0`（控制台运行时开关持久化后优先） |
 | `http.enable_api` | `true` | `false` = 不注册 `/api/v1`（纯静态模式） |
-| `mqtt.port` | `17891` | 嵌入式 MQTT Broker |
+| `mqtt.bind_host` / `mqtt.port` | `0.0.0.0` / `17891` | 嵌入式 MQTT Broker 监听（LAN 设备可达；per-device 凭据 + ACL 保护） |
+| `mqtt.advertise_host` | 空 | 返回给设备的 broker 地址；空 = 按设备请求路径自动解析（多网卡歧义时配对明确报错）。环回 / `localhost` / `0.0.0.0` 禁止 |
+| `mqtt.username` / `mqtt.password` | 空 | 内部 MQTT 凭据；成对配置或都留空 = 每次启动随机生成（不进日志） |
 | `pairing.enabled` / `pairing.port` | `true` / `17892` | 设备侧配对服务（QR 载荷端口同步生效） |
 | `web.console` / `web.demo` | `true` / `true` | 控制台 / 模拟键鼠演示台页面开关 |
 | `web.realtime` | `true` | WebSocket 实时事件通道 |
+
+> 旧版 `mqtt.host` 仍兼容读取（启动时自动迁移并打一次 deprecated 警告）。
 
 ## 当前状态（2026-08）
 
 | 组件 | 状态 |
 |---|---|
-| 固件 | ✅ F1 控制 + F2 可靠性源码完成，ESP-IDF v5.4.4 编译通过；28/28 可靠性语义端到端验证。⚠️ 尚未在真实 ESP32-S3 硬件上烧录验证 |
-| ControlHub | ✅ 产品化完成：托盘常驻 / 本地控制台 / SQLite / 动态配对 / API Key 鉴权 |
+| 固件 | ✅ F1 控制 + F2 可靠性 + F3 BLE 配网源码完成（NimBLE + NVS 运行时配置 + 配网状态机），ESP-IDF v5.4.4 双配置编译通过，36 项 host 单测。⚠️ 尚未在真实 ESP32-S3 硬件上烧录验证 |
+| ControlHub | ✅ 产品化完成：托盘常驻 / 本地控制台 / SQLite / 动态配对（请求级地址解析）/ API Key 鉴权 |
 | Web | ✅ 落地页 / 文档站 / 下载中心（纯静态零构建） |
-| 待办 | 真机烧录验证、固件 Provision Mode、生产安全（Secure Boot / Flash Encryption / 固件签名） |
+| 待办 | 真机烧录验证、小程序端配网协议对齐、生产安全（Secure Boot / Flash Encryption / 固件签名） |
 
 ## 安全设计
 

@@ -14,7 +14,8 @@ authority: canonical
 ```text
 M1-G1 ✅ DONE（2026-08-20，治理基线）
 M1-G2 ✅ DONE（2026-08-20，核心正确性：幂等/原子配对/并发安全/ACK 边界/深度校验）
-M1-G3 ⏳ NEXT —— 等待用户明确说「继续 M1-G3」后才能开始
+M1-G3 ✅ DONE（2026-08-20，网络/配网：bind/advertise 拆分 + NVS 运行时配置 + BLE Provision）
+M1-G4 ⏳ NEXT —— 等待用户明确说「继续 M1-G4」后才能开始
 ```
 
 ## M1 — Product Foundation Hardening（产品化加固）
@@ -30,10 +31,12 @@ request_id 并发去重与服务端幂等、waiter join、DB 错误处理、配�
 RealtimeHub 并发修正、ACK 三方绑定校验、payload 深度校验、`go test -race` 固化。
 明细见 [HARDENING_BACKLOG](HARDENING_BACKLOG.md)。
 
-### G3 Network / Provisioning Foundation（未开始）
+### G3 Network / Provisioning Foundation ✅（2026-08-20 完成）
 
-mqtt bind/advertise 拆分、LAN IP 选择、BLE Provision、NVS 运行时配置、
-重置 / 重配网、凭据持久化。明细见 HARDENING_BACKLOG。
+mqtt bind/advertise 拆分（legacy 兼容迁移）、LAN IP 请求级解析（多网卡明确失败）、
+内部 MQTT 凭据每启动随机化、固件 NVS 运行时配置（active/pending + 崩溃恢复）、
+BLE Provision 全链路源码（NimBLE + canonical 协议）、配网状态机与 RECOVERY。
+明细见 [HARDENING_BACKLOG](HARDENING_BACKLOG.md)。固件侧**未经真机验证**。
 
 ### G4 CI / Release Engineering（未开始）
 

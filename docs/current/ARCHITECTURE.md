@@ -31,8 +31,57 @@ ControlHub（Go，单进程）
         Target PC（零软件，BIOS 级通用）
 ```
 
-辅助（PLANNED，未实现）：BLE Toolkit+ 小程序（独立仓 smart-ble）经 BLE 为固件配网；
-当前固件 Wi-Fi / MQTT 为 Kconfig 编译期固定值。
+辅助（固件源码已实现，未上真机）：BLE Toolkit+ 小程序（独立仓 smart-ble）经
+BLE Provision 为固件配网（NimBLE，协议 `protocols/ble/PROVISIONING_V1.md`）。
+
+## MQTT 网络模型（M1-G3 拆分）
+
+一个 `mqtt.host` 承担三个语义的时代已结束；现在是三个明确概念：
+
+```text
+mqtt.bind_host（默认 0.0.0.0）
+  = embedded broker 监听地址
+  = LAN 设备可达（broker 有 per-device 凭据 + ACL 保护）
+
+internal connect address（非用户配置）
+  = ControlHub 自身连本机 broker
+  = 由 bind_host 推导（通配 → 127.0.0.1；具体 IP → 原值）
+
+mqtt.advertise_host（默认空 = 自动解析，netaddr.Resolver）
+  = 返回给 ESP32 的 broker 地址（pairing 响应 / QR 载荷）
+  解析优先级：
+    1. 显式配置（Load 时校验：拒绝环回/通配/localhost/链路本地）
+    2. 设备/浏览器请求实际到达的本机地址（http.LocalAddrContextKey）
+    3. 向 peer 的 UDP 出口推导（不发包）
+    4. 唯一可用 LAN IPv4（过滤 down/loopback/link-local/docker/veth）
+    5. 0 个或多个候选 → 明确失败（列出候选，提示配置 advertise_host）
+  唯一例外：peer 是环回（本机 mock/测试）→ 环回地址合法
+  legacy mqtt.host 自动迁移（环回→bind 兼容；LAN IP→bind+advertise）+ 一次性警告
+```
+
+pairing 顺序约束：**先解析 advertise → 再原子消费 token**——endpoint 解析失败
+返回 503 且 token 保持 pending，用户修复后原 token 可重试。
+
+内部 MQTT 凭据：不再有固定默认密码；`mqtt.username/password` 成对显式配置
+或留空由每次启动随机生成（仅内存，不持久化、不进日志）。设备凭据始终
+per-device 随机 + ACL（PerDeviceHook），与内部凭据互不相干。
+
+## 固件配网链（M1-G3）
+
+```text
+BOOT → LOAD_CONFIG（NVS rt_active/rt_pending；schema_version 守卫）
+ ├─ valid active ──→ CONNECTING_WIFI → CONNECTING_MQTT → READY
+ ├─ no config ─────→ UNPROVISIONED → BLE PROVISIONING
+ ├─ DEV_STATIC（显式）→ Kconfig 开发配置（仅内存，绝不写 NVS）
+ └─ 版本未知 ──────→ RECOVERY（BLE 开，active 只读）
+
+BLE candidate（分帧写入）→ 校验 → stage pending → CONNECTING_WIFI
+ → PAIRING（HTTP :17892）→ 凭据先落盘（pending.complete=1）
+ → promote 为 active → CONNECTING_MQTT → READY（BLE 广播停）
+失败：discard pending，active 不动；运行期持续失联 5 分钟 → RECOVERY
+崩溃恢复：complete pending 在下次 boot 自动 promote（token 已消费、
+凭据已持久化——唯一无死状态路径）
+```
 
 ## 仓库布局
 
@@ -70,5 +119,8 @@ MQTT 消息契约        protocols/schemas/*.schema.json（TS 权威源在 smart
 - 命令走 HTTP 同步闭环（调用方需要 ACK 结果），WebSocket 只下行事件，不做命令通道
 - 严禁 retained command；QoS1 + request_id 去重保证幂等
 - 设备不预烧凭证：配对时动态签发每设备 MQTT 凭据（SHA-256 入库，可撤销）
-- 控制链路不出局域网；默认 `127.0.0.1`，LAN 各面（HTTP / broker）需显式开启
-- 已知架构债务（mqtt.host 一字段三用等）见 HARDENING_BACKLOG M1-G3，此处不美化
+- 控制链路不出局域网；HTTP API 默认 `127.0.0.1` 需显式开 LAN，MQTT broker
+  默认 `0.0.0.0`（设备接入是主场景，凭据 + ACL 兜底）
+- 固件网络配置以 NVS 为正式事实源；设备不猜 MQTT 地址——pairing 响应的
+  advertised endpoint 是唯一来源（protocols/ble/PROVISIONING_V1.md §9）
+- 已知架构债务见 HARDENING_BACKLOG（G4 Release / M2 各节），此处不美化
