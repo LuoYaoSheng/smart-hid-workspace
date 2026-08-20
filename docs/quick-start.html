@@ -142,6 +142,16 @@ controlhub-windows-amd64.exe</code></pre>
 <pre><code>浏览器打开  http://127.0.0.1:17890/</code></pre>
     <p>顶部填入 API Key → 在命令编辑器里选「键盘 / tap / ENTER」→ 发送。设备表实时刷新在线状态。</p>
 
+    <!-- demo -->
+    <h2 id="demo">7. 演示：网页模拟键鼠（强烈推荐）</h2>
+    <p>想直观看效果？用另一台电脑（B）的浏览器遥控这台电脑（A）：</p>
+    <ol>
+      <li>A 电脑：打开 Web 控制台 <code>http://127.0.0.1:17890/</code> → 设置区开启 <strong>LAN 模式</strong> → 按提示重启 ControlHub</li>
+      <li>B 电脑：浏览器打开 <code>http://&lt;A 的局域网 IP&gt;:17890/demo.html</code>（同 Wi-Fi/网段）</li>
+      <li>填入 API Key → 选择设备 → 开始：<strong>点可视化键盘打字、拖触控板移动 A 电脑光标、或用 B 的实体键盘直通输入</strong>——A 电脑收到的是真实键鼠输入，打开记事本即可看到逐字打出</li>
+    </ol>
+    <p>页面顶部实时显示往返延迟与 executed 计数；<strong>⛔ 释放所有按键</strong>随时急停（演示的正是系统的可靠性语义：lease 兜底 + release_all）。</p>
+
     <!-- troubleshoot -->
     <h2 id="troubleshoot">排错</h2>
     <details><summary>设备一直是 offline / unknown</summary>
