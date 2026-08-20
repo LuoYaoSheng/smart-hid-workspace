@@ -100,7 +100,7 @@ func (e *Engine) Send(ctx context.Context, cmd *SmartHidCommand) (*SmartHidAck, 
 	// 2. 设备就绪检查
 	online, usbReady, ok := e.devices.IsReady(cmd.DeviceID)
 	if !ok {
-		// 设备未知：拒绝（Phase 1 无配对，仅 status 注册）
+		// 设备未知：拒绝（设备经配对签发凭据，或经 status 上报注册后可见）
 		return nil, false, []*ValidationError{{"device", fmt.Sprintf("unknown device %s", cmd.DeviceID)}}
 	}
 	if !online {

@@ -16,7 +16,9 @@ http:
 mqtt:
   host: "127.0.0.1"
   port: 17891
-  # Phase 1 仅本机回环，不做 ACL；Phase 4 接入配对时补
+  # 正式装配启用每设备凭据 + per-device ACL（PerDeviceHook）。
+  # 注意：host 默认 127.0.0.1，真机设备接入时需改为局域网可达地址
+  # （bind / 广播地址拆分见 docs/current/HARDENING_BACKLOG M1-G3）。
   username: "controlhub"
   password: "change-me-in-production"
 
@@ -31,7 +33,7 @@ web:
   demo: true      # 模拟键鼠演示台（/demo.html）
   realtime: true  # WebSocket 实时事件通道（/api/v1/realtime，设备状态/命令回执推送）
 
-# API Key：留空则启动时随机生成并打印到日志（Phase 1 开发期）
+# API Key：留空则首次启动随机生成，写入 data_dir/initial-api-key.txt 并打印到日志一次
 api_key: ""
 
 # 数据目录（SQLite、日志）

@@ -1,7 +1,7 @@
 // Package mqtt 封装嵌入式 MQTT broker（mochi-mqtt v2）+ ControlHub 作为 client。
 //
-// Phase 1：仅本机回环 + 静态 user/pass ledger + 粗 ACL。
-// Phase 4（CH-P5）：可选切换到 PerDeviceHook，支持每设备凭据 + per-device ACL。
+// 正式路径：app.Build 注入 DB → PerDeviceHook（每设备凭据 + per-device ACL）。
+// 静态 ledger 分支仅为无 DB 的测试场景保留（生产装配不会走到）。
 package mqtt
 
 import (
@@ -21,12 +21,12 @@ type Broker struct {
 	server *mochi.Server
 	tcp    *listeners.TCP
 	log    *slog.Logger
-	db     *sql.DB // CH-P5：非空则启用 PerDeviceHook
+	db     *sql.DB // 非空则启用 PerDeviceHook（正式装配恒非空）
 }
 
 // NewBroker 创建嵌入式 broker（不启动）。
-// db 为 nil 时，Start 仍走 Phase 1 的静态 ledger（向后兼容开发期 mock-device）；
-// db 非 nil 时，Start 用 PerDeviceHook：hub 用户 + 每设备凭据 + per-device ACL。
+// db 为 nil 时，Start 走静态 ledger（仅测试场景）；db 非 nil 时用
+// PerDeviceHook：hub 用户 + 每设备凭据 + per-device ACL。
 func NewBroker(host string, port int, log *slog.Logger) *Broker {
 	s := mochi.New(nil)
 	tcp := listeners.NewTCP(listeners.Config{
@@ -50,13 +50,13 @@ func (b *Broker) Start(username, password string) error {
 	}
 
 	if b.db != nil {
-		// CH-P5：PerDeviceHook（hub 用户 + 每设备凭据）
+		// PerDeviceHook（hub 用户 + 每设备凭据）——正式路径
 		opts := &PerDeviceHookOptions{DB: b.db, HubUser: username, HubPass: password}
 		if err := b.server.AddHook(new(PerDeviceHook), opts); err != nil {
 			return fmt.Errorf("add per-device hook: %w", err)
 		}
 	} else if username != "" {
-		// Phase 1 静态 ledger（向后兼容；app.Build 会注入 db，不会走这里）
+		// 静态 ledger 回退（无 DB 的测试场景；app.Build 恒注入 db，正式运行不走这里）
 		ledger := &auth.Ledger{
 			Auth: auth.AuthRules{
 				{

@@ -1,5 +1,5 @@
 // Package logging 提供 slog 结构化日志封装。
-// Phase 1：输出到 stdout（开发期）；Phase 5 接入 lumberjack 滚动文件。
+// 当前：JSON 输出到 stdout，级别由 config.log_level 控制；无文件滚动。
 package logging
 
 import (

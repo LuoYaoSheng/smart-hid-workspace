@@ -19,8 +19,8 @@ func (e *ValidationError) Error() string {
 }
 
 // ValidateCommand 校验 SmartHidCommand envelope 的所有必填字段与约束。
-// Phase 1 不校验 payload 内部结构（type/action 合法即可），
-// 深度 payload 校验在设备侧（Phase 3 接入真实固件时强化）。
+// 已知边界：当前不校验 payload 内部结构（type/action 合法即可），深度
+// payload 校验全部在设备侧——属登记在册的债务（docs/current/HARDENING_BACKLOG M1-G2）。
 func ValidateCommand(cmd *SmartHidCommand) []*ValidationError {
 	var errs []*ValidationError
 

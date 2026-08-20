@@ -1,5 +1,5 @@
 // Package config 加载 ControlHub 配置。
-// Phase 1：YAML 文件（可选）+ 默认值；不做环境变量覆盖（Phase 5 接入）。
+// YAML 文件（可选）覆盖在内置默认值之上；不支持环境变量覆盖。
 package config
 
 import (

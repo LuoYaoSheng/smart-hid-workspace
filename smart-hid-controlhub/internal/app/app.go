@@ -1,7 +1,7 @@
 // Package app 装配 ControlHub 各模块：config → logging → storage → broker → device manager → engine → api。
 //
-// CH-P3 重构：把原 Run 拆成 Build / Start / Wait / Stop / Close，
-// 以支持 headless（信号循环）和 tray（GUI 主线程）两种生命周期模型。
+// 生命周期拆成 Build / Start / Wait / Stop / Close，
+// 以支持 headless（信号循环）和 tray（GUI 主线程）两种运行模型。
 package app
 
 import (
@@ -70,7 +70,7 @@ func Build(cfgPath string) (*App, error) {
 		return nil, err
 	}
 
-	// API Key（CH-P2）：apikey.Store 持久化；首次启动生成 + 写文件 + 日志一次。
+	// API Key：apikey.Store 持久化；首次启动生成 + 写文件 + 日志一次。
 	keys := apikey.New(store.DB, log.With("component", "apikey"))
 	initialKeyPath := filepath.Join(cfg.DataDir, "initial-api-key.txt")
 	if raw, err := keys.EnsureInitial("initial"); err != nil {
@@ -97,7 +97,7 @@ func Build(cfgPath string) (*App, error) {
 		return nil, err
 	}
 
-	// Settings store（CH-P4）：LAN 模式开关等运行时可改配置
+	// Settings store：LAN 模式开关等运行时可改配置
 	setStore := settings.New(store.DB)
 
 	// LAN 模式：config.http.lan_mode 提供启动期默认，持久化的运行时开关优先
@@ -107,14 +107,14 @@ func Build(cfgPath string) (*App, error) {
 		log.Info("lan mode enabled; http bind overridden", "host", cfg.HTTP.Host)
 	}
 
-	// MQTT broker（嵌入式，CH-P5：启用 per-device auth hook）
+	// MQTT broker（嵌入式，per-device auth hook）
 	broker := mqtt.NewBroker(cfg.MQTT.Host, cfg.MQTT.Port, log.With("component", "mqtt")).
 		WithDB(store.DB)
 
 	// ControlHub 自身作为 MQTT client
 	hubClient := mqtt.NewClient(cfg.MQTT.Host, cfg.MQTT.Port, "controlhub-internal", cfg.MQTT.Username, cfg.MQTT.Password)
 
-	// Pairing Manager（CH-P5）；config.pairing.enabled=false 时不启设备侧 listener
+	// Pairing Manager；config.pairing.enabled=false 时不启设备侧 listener
 	var pairingMgr *pairing.Manager
 	var pairingSrv *pairing.DeviceServer
 	pairingMgr = pairing.New(store.DB, cfg.MQTT.Host, cfg.MQTT.Port, pairing.DefaultTTLSec,
