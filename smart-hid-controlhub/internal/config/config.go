@@ -14,16 +14,19 @@ import (
 type Config struct {
 	HTTP     HTTPConfig     `yaml:"http"`
 	MQTT     MQTTConfig     `yaml:"mqtt"`
+	Pairing  PairingConfig  `yaml:"pairing"`
+	Web      WebConfig      `yaml:"web"`
 	APIKey   string         `yaml:"api_key"`
 	DataDir  string         `yaml:"data_dir"`
 	LogLevel string         `yaml:"log_level"`
 }
 
 type HTTPConfig struct {
-	Host string `yaml:"host"`
-	Port int    `yaml:"port"`
+	Host      string `yaml:"host"`
+	Port      int    `yaml:"port"`
+	LanMode   bool   `yaml:"lan_mode"`   // 启动即监听 0.0.0.0（控制台运行时开关持久化后优先）
+	EnableAPI bool   `yaml:"enable_api"` // false = 不注册 /api/v1（纯静态模式）
 }
-
 
 type MQTTConfig struct {
 	Host     string `yaml:"host"`
@@ -32,11 +35,26 @@ type MQTTConfig struct {
 	Password string `yaml:"password"`
 }
 
+// PairingConfig 设备侧配对服务（原端口 17892 硬编码，现可配）。
+type PairingConfig struct {
+	Enabled bool `yaml:"enabled"`
+	Port    int  `yaml:"port"`
+}
+
+// WebConfig 内置 Web 界面的各页面开关。
+type WebConfig struct {
+	Console  bool `yaml:"console"`  // 控制台 + API 测试页
+	Demo     bool `yaml:"demo"`     // 模拟键鼠演示台（demo.html）
+	Realtime bool `yaml:"realtime"` // WebSocket 实时事件通道（/api/v1/realtime）
+}
+
 // Default 返回内置默认配置（无 config.yaml 时使用）。
 func Default() *Config {
 	return &Config{
-		HTTP:     HTTPConfig{Host: "127.0.0.1", Port: 17890},
+		HTTP:     HTTPConfig{Host: "127.0.0.1", Port: 17890, LanMode: false, EnableAPI: true},
 		MQTT:     MQTTConfig{Host: "127.0.0.1", Port: 17891, Username: "controlhub", Password: "change-me-in-production"},
+		Pairing:  PairingConfig{Enabled: true, Port: 17892},
+		Web:      WebConfig{Console: true, Demo: true, Realtime: true},
 		APIKey:   "",
 		DataDir:  "./data",
 		LogLevel: "info",
@@ -65,6 +83,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.MQTT.Port == 0 {
 		cfg.MQTT.Port = 17891
+	}
+	if cfg.Pairing.Port == 0 {
+		cfg.Pairing.Port = 17892
 	}
 	if cfg.DataDir == "" {
 		cfg.DataDir = "./data"

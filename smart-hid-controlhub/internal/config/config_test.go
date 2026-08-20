@@ -126,3 +126,49 @@ func TestLoad_BadYAML(t *testing.T) {
 		t.Fatal("expected parse error for malformed yaml")
 	}
 }
+
+func TestLoad_NewFieldsDefaults(t *testing.T) {
+	// 老配置（无新字段）必须保持旧行为：全开 + 17892
+	dir := t.TempDir()
+	p := filepath.Join(dir, "c.yaml")
+	os.WriteFile(p, []byte("http:\n  port: 17990\n"), 0o644)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.HTTP.EnableAPI || cfg.HTTP.LanMode {
+		t.Errorf("http defaults = enable_api:%v lan_mode:%v, want true/false", cfg.HTTP.EnableAPI, cfg.HTTP.LanMode)
+	}
+	if !cfg.Pairing.Enabled || cfg.Pairing.Port != 17892 {
+		t.Errorf("pairing defaults = %v/%d, want true/17892", cfg.Pairing.Enabled, cfg.Pairing.Port)
+	}
+	if !cfg.Web.Console || !cfg.Web.Demo || !cfg.Web.Realtime {
+		t.Errorf("web defaults = %+v, want all true", cfg.Web)
+	}
+	if cfg.HTTP.Port != 17990 {
+		t.Errorf("explicit http.port = %d, want 17990", cfg.HTTP.Port)
+	}
+}
+
+func TestLoad_NewFieldsExplicit(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "c.yaml")
+	os.WriteFile(p, []byte(`
+http: {enable_api: false, lan_mode: true}
+pairing: {enabled: false, port: 17992}
+web: {console: false, demo: false, realtime: false}
+`), 0o644)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.HTTP.EnableAPI || !cfg.HTTP.LanMode {
+		t.Errorf("http = %v/%v, want false/true", cfg.HTTP.EnableAPI, cfg.HTTP.LanMode)
+	}
+	if cfg.Pairing.Enabled || cfg.Pairing.Port != 17992 {
+		t.Errorf("pairing = %v/%d, want false/17992", cfg.Pairing.Enabled, cfg.Pairing.Port)
+	}
+	if cfg.Web.Console || cfg.Web.Demo || cfg.Web.Realtime {
+		t.Errorf("web = %+v, want all false", cfg.Web)
+	}
+}

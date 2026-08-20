@@ -99,10 +99,11 @@ func Build(cfgPath string) (*App, error) {
 	// Settings store（CH-P4）：LAN 模式开关等运行时可改配置
 	setStore := settings.New(store.DB)
 
-	// 应用 settings 到 cfg（LAN 模式覆盖 HTTP bind host）
-	if setStore.GetBool(settings.KeyLANModeEnabled, false) {
+	// LAN 模式：config.http.lan_mode 提供启动期默认，持久化的运行时开关优先
+	lanOn := cfg.HTTP.LanMode || setStore.GetBool(settings.KeyLANModeEnabled, false)
+	if lanOn {
 		cfg.HTTP.Host = "0.0.0.0"
-		log.Info("lan mode enabled (settings); http bind overridden", "host", cfg.HTTP.Host)
+		log.Info("lan mode enabled; http bind overridden", "host", cfg.HTTP.Host)
 	}
 
 	// MQTT broker（嵌入式，CH-P5：启用 per-device auth hook）
@@ -112,17 +113,25 @@ func Build(cfgPath string) (*App, error) {
 	// ControlHub 自身作为 MQTT client
 	hubClient := mqtt.NewClient(cfg.MQTT.Host, cfg.MQTT.Port, "controlhub-internal", cfg.MQTT.Username, cfg.MQTT.Password)
 
-	// Pairing Manager（CH-P5）
-	pairingMgr := pairing.New(store.DB, cfg.MQTT.Host, cfg.MQTT.Port, pairing.DefaultTTLSec,
+	// Pairing Manager（CH-P5）；config.pairing.enabled=false 时不启设备侧 listener
+	var pairingMgr *pairing.Manager
+	var pairingSrv *pairing.DeviceServer
+	pairingMgr = pairing.New(store.DB, cfg.MQTT.Host, cfg.MQTT.Port, pairing.DefaultTTLSec,
 		log.With("component", "pairing"))
-	pairingSrv := pairing.NewDeviceServer(pairingMgr,
-		fmt.Sprintf("0.0.0.0:%d", pairing.DefaultPairingPort),
-		log.With("component", "pairing-server"))
+	if cfg.Pairing.Enabled {
+		pairingSrv = pairing.NewDeviceServer(pairingMgr,
+			fmt.Sprintf("0.0.0.0:%d", cfg.Pairing.Port),
+			log.With("component", "pairing-server"))
+	} else {
+		log.Info("pairing server disabled (config.pairing.enabled=false)")
+	}
 
 	// Engine + API server（构造时不启动）
 	engine := command.New(hubClient, dm, store, log.With("component", "engine"))
 
-	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, log.With("component", "api"))
+	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, log.With("component", "api")).
+		WithPairingPort(cfg.Pairing.Port).
+		WithWebOptions(cfg.HTTP.EnableAPI, cfg.Web.Console, cfg.Web.Demo)
 
 	return &App{
 		cfg:        cfg,
@@ -190,19 +199,21 @@ func (a *App) Start() error {
 			}
 		}()
 
-		// Pairing 设备侧 listener（goroutine，端口 17892）
-		go func() {
-			if err := a.pairingSrv.Start(); err != nil {
-				a.log.Error("pairing server error", "err", err)
-				a.Stop()
-			}
-		}()
+		// Pairing 设备侧 listener（goroutine；config.pairing.enabled=false 时为 nil 跳过）
+		if a.pairingSrv != nil {
+			go func() {
+				if err := a.pairingSrv.Start(); err != nil {
+					a.log.Error("pairing server error", "err", err)
+					a.Stop()
+				}
+			}()
+		}
 
 		a.started = true
 		a.log.Info("controlhub started",
 			"http_addr", fmt.Sprintf("%s:%d", a.cfg.HTTP.Host, a.cfg.HTTP.Port),
 			"mqtt_port", a.cfg.MQTT.Port,
-			"pairing_port", pairing.DefaultPairingPort)
+			"pairing_port", a.cfg.Pairing.Port)
 	})
 	return startErr
 }

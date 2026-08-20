@@ -1,10 +1,16 @@
 # ControlHub 配置示例
 # 复制为 config.yaml 后按需修改；不提供 config.yaml 时使用内置默认值。
 
-# 本地 HTTP API 端口（默认 127.0.0.1）
+# 本地 HTTP 服务（API + 内置 Web 界面）
 http:
   host: "127.0.0.1"
   port: 17890
+  # 启动即监听 0.0.0.0（局域网可访问）。控制台「设置」里的 LAN 模式开关
+  # 持久化后优先生效；两者任一为 true 即局域网开放。
+  lan_mode: false
+  # 是否注册 /api/v1 控制接口。false = 纯静态模式（只提供 Web 页面，
+  # 控制台/演示台因无 API 将不可操作，一般仅用于纯展示场景）。
+  enable_api: true
 
 # 嵌入式 MQTT broker
 mqtt:
@@ -13,6 +19,17 @@ mqtt:
   # Phase 1 仅本机回环，不做 ACL；Phase 4 接入配对时补
   username: "controlhub"
   password: "change-me-in-production"
+
+# 设备侧配对服务（Provision Mode 设备接入用）
+pairing:
+  enabled: true
+  port: 17892
+
+# 内置 Web 界面各页面开关
+web:
+  console: true   # 控制台 + API 测试页（/ 与 /api-test.html）
+  demo: true      # 模拟键鼠演示台（/demo.html）
+  realtime: true  # WebSocket 实时事件通道（/api/v1/realtime，设备状态/命令回执推送）
 
 # API Key：留空则启动时随机生成并打印到日志（Phase 1 开发期）
 api_key: ""

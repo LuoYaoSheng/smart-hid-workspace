@@ -29,7 +29,7 @@ func (s *Server) handlePairingSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	// QR payload host 用 LAN IP（设备从局域网访问）；端口默认 17892
 	qrHost := pairing.GuessLANIP()
-	qr := s.pairingMgr.QRPayload(token, qrHost, pairing.DefaultPairingPort)
+	qr := s.pairingMgr.QRPayload(token, qrHost, s.pairingPort)
 	s.log.Info("pairing session created via api", "token_prefix", token[:8]+"...", "qr_host", qrHost)
 	writeJSON(w, http.StatusOK, createSessionResp{
 		Token:     token,

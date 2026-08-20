@@ -25,3 +25,34 @@ func Handler() http.Handler {
 	}
 	return http.FileServer(http.FS(sub))
 }
+
+// consolePaths / demoPaths 是可独立关闭的静态资源（config.web.*）。
+var consolePaths = map[string]bool{
+	"/": true, "/index.html": true, "/app.js": true, "/style.css": true,
+	"/api-test.html": true, "/api-test.js": true,
+}
+var demoPaths = map[string]bool{"/demo.html": true, "/demo.js": true}
+
+// Gated 在 Handler 外按 config.web 门禁：关闭的页面返回 404。
+// console 关闭时控制台与其资源 404；demo 关闭时演示台 404；其余资源照常。
+func Gated(console, demo bool) http.Handler {
+	inner := Handler()
+	if console && demo {
+		return inner
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if p == "" {
+			p = "/"
+		}
+		if consolePaths[p] && !console {
+			http.NotFound(w, r)
+			return
+		}
+		if demoPaths[p] && !demo {
+			http.NotFound(w, r)
+			return
+		}
+		inner.ServeHTTP(w, r)
+	})
+}

@@ -33,6 +33,10 @@ type Server struct {
 	keys        *apikey.Store
 	settings    *settings.Store
 	pairingMgr  *pairing.Manager
+	pairingPort int    // 配对端口（QR 载荷用；config.pairing.port）
+	enableAPI   bool   // config.http.enable_api；false = 纯静态模式
+	webConsole  bool   // config.web.console
+	webDemo     bool   // config.web.demo
 	log         *slog.Logger
 	httpSrv     *http.Server
 }
@@ -46,44 +50,62 @@ func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStor
 		keys:       keys,
 		settings:   setStore,
 		pairingMgr: pairingMgr,
-		log:        log,
+		// 默认全开（与 config.Default 对齐）；app.Build 会用配置显式覆盖。
+		pairingPort: pairing.DefaultPairingPort,
+		enableAPI:   true,
+		webConsole:  true,
+		webDemo:     true,
+		log:         log,
 	}
+}
+
+// WithPairingPort 设置配对端口（QR 载荷 shid://pair?...&port=）。
+func (s *Server) WithPairingPort(p int) *Server { s.pairingPort = p; return s }
+
+// WithWebOptions 应用 http.enable_api / web.console / web.demo 开关。
+func (s *Server) WithWebOptions(enableAPI, console, demo bool) *Server {
+	s.enableAPI, s.webConsole, s.webDemo = enableAPI, console, demo
+	return s
 }
 
 // Routes 返回 http.Handler（带鉴权中间件 + 路由分发）。
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/health", s.handleHealth)
 
-	// 受保护路由（需 Bearer）
-	protected := http.NewServeMux()
-	protected.HandleFunc("/api/v1/devices", s.handleDevicesList)
-	protected.HandleFunc("/api/v1/devices/", s.handleDeviceOrCommand) // /devices/{id} 与 /devices/{id}/commands
-	protected.HandleFunc("/api/v1/commands/", s.handleCommandQuery)
-	protected.HandleFunc("/api/v1/api-keys", s.handleAPIKeysList)            // GET list
-	protected.HandleFunc("/api/v1/api-keys/rotate", s.handleAPIKeysRotate)   // POST 轮换（A12）
-	protected.HandleFunc("/api/v1/settings/lan-mode", s.handleSettingsLAN)   // GET/POST LAN 模式（A11）
-	if s.pairingMgr != nil {
-		protected.HandleFunc("/api/v1/pairing/sessions", s.handlePairingSessions)        // POST 创建
-		protected.HandleFunc("/api/v1/pairing/sessions/", s.handlePairingSessionsByToken) // GET {token}
+	if s.enableAPI {
+		mux.HandleFunc("/api/v1/health", s.handleHealth)
+
+		// 受保护路由（需 Bearer）
+		protected := http.NewServeMux()
+		protected.HandleFunc("/api/v1/devices", s.handleDevicesList)
+		protected.HandleFunc("/api/v1/devices/", s.handleDeviceOrCommand) // /devices/{id} 与 /devices/{id}/commands
+		protected.HandleFunc("/api/v1/commands/", s.handleCommandQuery)
+		protected.HandleFunc("/api/v1/api-keys", s.handleAPIKeysList)          // GET list
+		protected.HandleFunc("/api/v1/api-keys/rotate", s.handleAPIKeysRotate) // POST 轮换（A12）
+		protected.HandleFunc("/api/v1/settings/lan-mode", s.handleSettingsLAN) // GET/POST LAN 模式（A11）
+		if s.pairingMgr != nil {
+			protected.HandleFunc("/api/v1/pairing/sessions", s.handlePairingSessions)        // POST 创建
+			protected.HandleFunc("/api/v1/pairing/sessions/", s.handlePairingSessionsByToken) // GET {token}
+		}
+
+		// 用一个 wrapper 给 protected 套鉴权
+		auth := s.authMiddleware(protected)
+		mux.Handle("/api/v1/devices", auth)
+		mux.Handle("/api/v1/devices/", auth)
+		mux.Handle("/api/v1/commands/", auth)
+		mux.Handle("/api/v1/api-keys", auth)
+		mux.Handle("/api/v1/api-keys/rotate", auth)
+		mux.Handle("/api/v1/settings/lan-mode", auth)
+		if s.pairingMgr != nil {
+			mux.Handle("/api/v1/pairing/sessions", auth)
+			mux.Handle("/api/v1/pairing/sessions/", auth)
+		}
 	}
 
-	// 用一个 wrapper 给 protected 套鉴权
-	auth := s.authMiddleware(protected)
-	mux.Handle("/api/v1/devices", auth)
-	mux.Handle("/api/v1/devices/", auth)
-	mux.Handle("/api/v1/commands/", auth)
-	mux.Handle("/api/v1/api-keys", auth)
-	mux.Handle("/api/v1/api-keys/rotate", auth)
-	mux.Handle("/api/v1/settings/lan-mode", auth)
-	if s.pairingMgr != nil {
-		mux.Handle("/api/v1/pairing/sessions", auth)
-		mux.Handle("/api/v1/pairing/sessions/", auth)
-	}
-
-	// Web 管理界面（内嵌静态资源，本身不鉴权；控制调用由前端带 Bearer 请求 /api/v1/*）。
+	// Web 界面（内嵌静态资源，本身不鉴权；控制调用由前端带 Bearer 请求 /api/v1/*）。
 	// 注册在 "/" 兜底：/api/v1/* 更具体会优先生效，其余路径交给 FileServer。
-	mux.Handle("/", web.Handler())
+	// enableAPI=false 的纯静态模式下，页面会因 API 不可用而不可操作（config 注释已说明）。
+	mux.Handle("/", web.Gated(s.webConsole, s.webDemo))
 
 	return s.logMiddleware(mux)
 }
