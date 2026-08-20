@@ -34,6 +34,7 @@ Smart HID 换了一条路：**让一块 ESP32-S3 以真实 USB 键盘 + 鼠标�
 - **BLE 配网**：通过 [smart-ble](https://github.com/LuoYaoSheng/smart-ble)（微信小程序 BLE Toolkit+）完成 Wi-Fi 配网与设备诊断
 - **产品化完成度**：系统托盘常驻、本地 Web 控制台、SQLite 持久化、API Key 鉴权与轮换、LAN 模式开关
 - **网页模拟键鼠**：ControlHub 内置演示台 `/demo.html`——另一台电脑用浏览器里的可视化键盘/触控板/实体键盘直通遥控本机，实时显示往返延迟，演示零门槛
+- **WebSocket 实时事件通道**：`/api/v1/realtime` 推送设备状态与命令回执——多端打开演示页即可实时观战
 
 ### 可靠性语义
 
@@ -95,6 +96,20 @@ cd smart-hid-controlhub && go test ./...
 # 可靠性语义 28 项端到端（Go 参考实现，无需硬件）：
 bash smart-hid-controlhub/scripts/test-loop-f2.sh
 ```
+
+## 配置参考（ControlHub config.yaml）
+
+全部可配、默认全开；不提供 config.yaml 时使用内置默认值（`smart-hid-controlhub/config.example.yaml` 有完整注释）：
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `http.host` / `http.port` | `127.0.0.1` / `17890` | 本地 HTTP 服务（API + 内置页面） |
+| `http.lan_mode` | `false` | 启动即监听 `0.0.0.0`（控制台运行时开关持久化后优先） |
+| `http.enable_api` | `true` | `false` = 不注册 `/api/v1`（纯静态模式） |
+| `mqtt.port` | `17891` | 嵌入式 MQTT Broker |
+| `pairing.enabled` / `pairing.port` | `true` / `17892` | 设备侧配对服务（QR 载荷端口同步生效） |
+| `web.console` / `web.demo` | `true` / `true` | 控制台 / 模拟键鼠演示台页面开关 |
+| `web.realtime` | `true` | WebSocket 实时事件通道 |
 
 ## 当前状态（2026-08）
 
