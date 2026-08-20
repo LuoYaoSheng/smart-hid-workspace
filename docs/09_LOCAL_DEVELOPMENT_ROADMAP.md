@@ -6,8 +6,7 @@
 Smart-HID-Workspace/
 ├── smart-ble/
 ├── smart-hid-controlhub/
-├── smart-hid-firmware/
-├── smart-hid-cloud/
+└── smart-hid-firmware/
 └── smart-hid-web/
 ```
 
@@ -87,38 +86,7 @@ Firmware：
 - Startup
 - Diagnostics
 
-## Phase 5：Trial
-
-- Device-based Trial Anchor
-- Effective Control Session
-- Session idle
-- Usage persistence
-- Trial expired gate
-
-## Phase 6：Commercial
-
-Cloud:
-- User
-- Plan
-- Order
-- Payment
-- License
-- Activation
-- Signer
-
-Web:
-- Portal
-- License
-- Device
-- Order
-- Download
-
-ControlHub:
-- activation
-- refresh
-- offline import
-
-## Phase 7：Production Security
+## Phase 5：Production Security
 
 Firmware:
 - Secure Boot

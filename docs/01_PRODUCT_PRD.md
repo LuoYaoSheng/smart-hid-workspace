@@ -7,8 +7,6 @@ Smart HID 是一个本地优先的网络 HID 控制系统，由：
 - ESP32-S3 Smart HID 硬件
 - ControlHub Windows 本地程序
 - BLE Toolkit+ 微信小程序
-- Smart HID Web
-- Smart HID Cloud
 
 组成。
 
@@ -40,8 +38,6 @@ Smart HID 是一个本地优先的网络 HID 控制系统，由：
 - Embedded MQTT Broker
 - Device Manager
 - Command Engine
-- Trial
-- License Verify
 - Local Web UI
 - Tray
 - SQLite
@@ -53,24 +49,6 @@ Smart HID 是一个本地优先的网络 HID 控制系统，由：
 - ControlHub Pairing
 - 诊断
 - 通用 BLE 工具
-
-### Smart HID Web
-- 登录
-- 套餐
-- 订单
-- License
-- 设备授权
-- 离线授权下载
-
-### Smart HID Cloud
-- User
-- Plan
-- Order
-- Payment
-- License
-- Activation
-- Device Binding
-- License Signer
 
 ## 4. 核心运行链路
 
@@ -110,58 +88,17 @@ V1 不做：
 - Clipboard Read
 - Screen Capture
 
-## 6. Trial
+## 6. 开放使用
 
-免费用户：
+无账号、无订阅、无授权门禁：
 - 键盘可用
 - 鼠标可用
 - HTTP API 可用
 - 本地 MQTT 可用
 
-限制方式：
-- 累计有效控制时间
-- 第一条成功 HID Command 才启动 Trial Session
-- 无操作时不消耗
-- 配置/状态/诊断不消耗
+下载、编译、运行即为完全体。
 
-具体总体验时长不在 UI 和协议中写死。
-
-## 7. License
-
-License Cloud 签名，ControlHub 本地验签。
-
-推荐载荷：
-
-```text
-license_id
-account_id
-plan_id
-device_id
-issued_at
-valid_from
-expires_at
-features
-license_version
-signature
-```
-
-主绑定对象：ESP32 Device ID。
-
-## 8. 购买与激活
-
-购买和绑定分离：
-
-```text
-购买套餐
-→ 获得 UNUSED License
-→ 选择 Device
-→ 激活
-→ 云端签发
-→ ControlHub 下载/导入
-→ 本地验签
-```
-
-## 9. 首次使用
+## 7. 首次使用
 
 ```text
 安装 ControlHub
@@ -178,11 +115,11 @@ signature
 → 免费开始使用
 ```
 
-## 10. V1 成功标准
+## 8. V1 成功标准
 
-- 无云环境下，本地有效 License 可以继续控制。
+- 无云环境下（本系统默认无云），控制链路完整可用。
 - ESP32 离线期间不积压 HID Command。
 - 重连后不重放旧 Command。
 - QoS1 重投不会导致同一 HID 动作重复执行。
 - 按键/鼠标按钮不会因网络断开永久卡住。
-- 小程序完全不依赖会员/License/订单系统。
+- 小程序完全不依赖任何云端系统。

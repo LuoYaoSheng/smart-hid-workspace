@@ -9,33 +9,15 @@ CH -->|MQTT| ESP[ESP32-S3]
 ESP -->|USB HID| PC[目标电脑]
 
 MP[BLE Toolkit+ 小程序] -->|BLE| ESP
-
-WEB[Smart HID Web] -->|HTTPS| CLOUD[Smart HID Cloud]
-CH -. 激活/刷新 .-> CLOUD
 ```
 
 ## 2. 仓库边界
 
-### Public
+全部开源（Apache-2.0）：
 
 ```text
-smart-ble
-```
-
-包含：
-- BLE Toolkit+
-- Smart HID 配网页面
-- BLE/Smart HID 协议公开定义
-- Demo
-- Docs
-
-### Private
-
-```text
-smart-hid-controlhub
-smart-hid-firmware
-smart-hid-cloud
-smart-hid-web
+smart-hid-workspace（本仓库：controlhub / firmware / web / protocols / docs）
+smart-ble（独立仓库：BLE Toolkit+ 小程序 + 协议公开定义事实源）
 ```
 
 ## 3. 本地工作区建议
@@ -44,8 +26,7 @@ smart-hid-web
 Smart-HID-Workspace/
 ├── smart-ble/
 ├── smart-hid-controlhub/
-├── smart-hid-firmware/
-├── smart-hid-cloud/
+└── smart-hid-firmware/
 └── smart-hid-web/
 ```
 
@@ -60,21 +41,18 @@ Smart-HID-Workspace/
 ### ControlHub HTTP
 `smart-hid-controlhub/docs/openapi.yaml`
 
-### License
-`smart-hid-cloud/docs/license-format.md`
-
 ## 5. 运行依赖
 
 没有：
-- Firmware → Cloud 实时依赖
-- Command → Cloud 实时依赖
-- 小程序 → License Cloud 依赖
+- Firmware → 云端实时依赖
+- Command → 云端实时依赖
+- 小程序 → 云端依赖
+
+整个系统没有云端，控制链路完全本地。
 
 ## 6. 开发顺序
 
 1. 协议
 2. ControlHub + Firmware 本地闭环
 3. BLE 配网
-4. Trial
-5. Web / Cloud / License
-6. Production Security
+4. 生产安全
