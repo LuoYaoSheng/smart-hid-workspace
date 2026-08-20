@@ -1,0 +1,631 @@
+# ControlHub HTTP API — OpenAPI 3.0
+#
+# 事实源：本文件（ControlHub 私有 HTTP API）。
+# 协议公开定义（MQTT Command/Ack/Status）在 smart-ble/core/protocols/hid-command-schema.ts。
+# 依据：docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md §9-11
+#
+# 与实现对齐：internal/api/handlers.go（响应结构）+ internal/command/types.go（envelope 字段）。
+# 修改 API 时必须同步本文件，二者保持一致。
+#
+# Base URL: http://127.0.0.1:{port}/api/v1
+# Auth: 除 /health 外，控制 API 使用 Bearer API Key（默认只监听 127.0.0.1；LAN 需用户显式开启）。
+
+openapi: 3.0.3
+info:
+  title: Smart HID ControlHub HTTP API
+  version: 1.0.0
+  description: |
+    ControlHub 本地控制 HTTP API。实时控制本地优先，不经过云。
+
+    **鉴权**：除 `GET /health` 外，所有端点要求 `Authorization: Bearer <api_key>`。
+    API Key 在 `config.yaml` 的 `http.api_key` 指定；留空则启动时随机生成并打印到日志（前缀 `chk_`）。
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "17890"
+        description: Local HTTP / Web 端口（默认 17890）
+
+# 全局默认安全要求（除显式声明 security: [] 的 /health 外，所有端点需 Bearer）。
+security:
+  - BearerApiKey: []
+
+tags:
+  - name: system
+    description: 系统 / 健康
+  - name: device
+    description: 设备管理
+  - name: command
+    description: 命令下发与查询
+
+paths:
+  # -------------------------------------------------------------------------
+  /health:
+    get:
+      summary: 健康检查（无需鉴权）
+      security: []
+      tags: [system]
+      responses:
+        '200':
+          description: ControlHub 健康。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+              example: { status: ok, protocol: "1.0", device_cnt: 1 }
+
+  # -------------------------------------------------------------------------
+  # WebSocket 实时事件通道（OS-3b）。浏览器 WS 无法带 Authorization header，
+  # 鉴权用 query 参数 ?key=<api-key>（LAN 场景）。只下行：hello / device / ack。
+  /realtime:
+    get:
+      summary: WebSocket 实时事件通道（需 web.realtime=true）
+      description: |
+        升级为 WebSocket 后服务端推送 JSON 事件（只下行，控制命令仍走 HTTP 闭环）：
+          {"type":"hello","data":{"server":"smart-hid-controlhub","protocol":"1.0"},"ts":...}
+          {"type":"device","data":{"device_id":"HID-00000001","boot_id":"B-...","online":true,"usb_hid_ready":true,"firmware":"..."},"ts":...}
+          {"type":"ack","data":{"request_id":"...","device_id":"HID-00000001","status":"executed","code":0,"execution_ms":6},"ts":...}
+        保活：服务端 30s ping。鉴权：?key=<api-key>（升级前校验，错误返回 401）。
+      tags: [realtime]
+      parameters:
+        - name: key
+          in: query
+          required: true
+          schema: { type: string, example: chk_xxx }
+      responses:
+        '101': { description: 协议升级成功（WebSocket） }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /devices:
+    get:
+      summary: 设备列表
+      tags: [device]
+      responses:
+        '200':
+          description: 已知设备列表（通过 status topic 或配对注册）。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceListResponse' }
+              example:
+                devices:
+                  - { device_id: HID-00000001, boot_id: B-D8F91E, online: true, usb_hid_ready: true, firmware: "1.0.0" }
+                total: 1
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # -------------------------------------------------------------------------
+  /devices/{device_id}:
+    get:
+      summary: 设备详情
+      tags: [device]
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+      responses:
+        '200':
+          description: 设备运行态。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Device' }
+        '404':
+          description: 设备未知。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: not_found, message: "device not found" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # -------------------------------------------------------------------------
+  /devices/{device_id}/commands:
+    post:
+      summary: 下发 HID Command（同步返回终态 ACK 或 202）
+      description: |
+        闭环：校验 → 设备就绪检查 → publish MQTT command(QoS1, retain=false) → 等终态 ACK（超时=TTL）。
+        - TTL 内收到 executed/duplicate → 200
+        - TTL 内收到 rejected → 422；expired → 504
+        - TTL 内无终态 → 202（命令已发出）
+        - 校验失败 / 设备未就绪 / publish 失败 → 400
+      tags: [command]
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SmartHidCommand' }
+            examples:
+              keyboard_tap:
+                summary: 键盘单击 ENTER
+                value:
+                  protocol: "1.0"
+                  request_id: web_1786452703_a1b2c3
+                  device_id: HID-00000001
+                  target_boot_id: B-D8F91E
+                  type: keyboard
+                  action: tap
+                  ttl_ms: 3000
+                  payload: { key: ENTER, hold_ms: 40 }
+              keyboard_hotkey:
+                summary: 组合键 CTRL+C
+                value:
+                  protocol: "1.0"
+                  request_id: web_1786452704_d4e5f6
+                  device_id: HID-00000001
+                  target_boot_id: B-D8F91E
+                  type: keyboard
+                  action: hotkey
+                  ttl_ms: 3000
+                  payload: { keys: [CTRL, C], hold_ms: 40 }
+              mouse_move:
+                summary: 鼠标相对移动
+                value:
+                  protocol: "1.0"
+                  request_id: web_1786452705_g7h8i9
+                  device_id: HID-00000001
+                  target_boot_id: B-D8F91E
+                  type: mouse
+                  action: move
+                  ttl_ms: 2000
+                  payload: { dx: 100, dy: -50 }
+              system_release:
+                summary: 释放所有按键
+                value:
+                  protocol: "1.0"
+                  request_id: web_1786452706_j0k1l2
+                  device_id: HID-00000001
+                  target_boot_id: B-D8F91E
+                  type: system
+                  action: release_all
+                  ttl_ms: 1000
+                  payload: {}
+      responses:
+        '200':
+          description: 命令已执行（executed）或幂等重放（duplicate）。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SmartHidAck' }
+              examples:
+                executed:
+                  value: { protocol: "1.0", request_id: web_1786452703_a1b2c3, device_id: HID-00000001, boot_id: B-D8F91E, status: executed, code: 0, execution_ms: 6 }
+                duplicate:
+                  value: { protocol: "1.0", request_id: web_1786452703_a1b2c3, device_id: HID-00000001, boot_id: B-D8F91E, status: duplicate, code: 0 }
+        '202':
+          description: 命令已 publish 但 TTL 内未收到终态 ACK。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptedNotAcked' }
+        '400':
+          description: |
+            校验失败（envelope 字段非法 / 设备未就绪 / publish 失败）或请求体非法 JSON。
+            区分：validation_failed 含 fields 数组；bad_request 为 JSON 解析或路径不一致问题。
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationError'
+                  - $ref: '#/components/schemas/Error'
+              examples:
+                validation_ttl:
+                  summary: TTL 越界
+                  value:
+                    error: validation_failed
+                    device_id: HID-00000001
+                    fields: [{ field: ttl_ms, message: "must be in [100, 10000], got 5" }]
+                validation_device_offline:
+                  summary: 设备离线
+                  value:
+                    error: validation_failed
+                    device_id: HID-00000001
+                    fields: [{ field: device, message: "device HID-00000001 offline" }]
+                bad_json:
+                  summary: 请求体非合法 JSON
+                  value: { error: bad_request, message: "invalid json: unexpected end of JSON input" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422':
+          description: 设备拒绝执行（如 target_boot_id 不匹配 → STALE_DEVICE_SESSION）。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SmartHidAck' }
+              example: { protocol: "1.0", request_id: web_1786452703_a1b2c3, device_id: HID-00000001, boot_id: B-D8F91E, status: rejected, code: 4001 }
+        '504':
+          description: 命令在设备侧过期（TTL 到期前未完成执行）。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SmartHidAck' }
+
+  # -------------------------------------------------------------------------
+  /commands/{request_id}:
+    get:
+      summary: 查询 Command 状态
+      tags: [command]
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string }
+          description: POST /devices/{id}/commands 时使用的 request_id。
+      responses:
+        '200':
+          description: 命令当前状态（从 SQLite commands 表读取）。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommandQueryResponse' }
+              examples:
+                executed:
+                  value: { request_id: web_1786452703_a1b2c3, status: executed, code: 0, execution_ms: 6 }
+                pending:
+                  value: { request_id: web_1786452703_a1b2c3, status: received, code: 0 }
+        '404':
+          description: request_id 未找到（命令从未下发，或已被清理）。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: not_found, message: "command not found" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # 未实现端点（Phase 5/6 接入）：
+
+  # =========================================================================
+  # CH-P2: API Key 持久化 + 轮换
+  # =========================================================================
+  /api-keys:
+    get:
+      summary: 列出所有 API key（不含明文）
+      tags: [APIKeys]
+      security: [{ BearerApiKey: [] }]
+      responses:
+        '200':
+          description: 列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items: { $ref: '#/components/schemas/APIKeyInfo' }
+                  total: { type: integer }
+
+  /api-keys/rotate:
+    post:
+      summary: 撤销当前所有 key + 生成新 key（验收 A12）
+      tags: [APIKeys]
+      security: [{ BearerApiKey: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string, example: "rotated" }
+      responses:
+        '200':
+          description: 新 key 明文（仅此一次）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RotateResult' }
+
+  # =========================================================================
+  # CH-P4: LAN 模式开关（验收 A11）
+  # =========================================================================
+  /settings/lan-mode:
+    get:
+      summary: 查询 LAN 模式开关状态
+      tags: [Settings]
+      security: [{ BearerApiKey: [] }]
+      responses:
+        '200':
+          description: 当前状态
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LANModeResp' }
+    post:
+      summary: 切换 LAN 模式（持久化，重启 ControlHub 生效）
+      tags: [Settings]
+      security: [{ BearerApiKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: 已持久化
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LANModeResp' }
+
+  # =========================================================================
+  # CH-P5: 设备配对
+  # =========================================================================
+  /pairing/sessions:
+    post:
+      summary: 创建配对会话（用户侧，需 API key）
+      tags: [Pairing]
+      security: [{ BearerApiKey: [] }]
+      responses:
+        '200':
+          description: 配对 session token + QR payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PairingSessionCreated' }
+
+  /pairing/sessions/{token}:
+    get:
+      summary: 查询配对 session 状态（Web UI 轮询用）
+      tags: [Pairing]
+      security: [{ BearerApiKey: [] }]
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: session 详情
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PairingSession' }
+        '404':
+          description: 不存在
+
+  # =========================================================================
+# =========================================================================
+components:
+  securitySchemes:
+    BearerApiKey:
+      type: http
+      scheme: bearer
+      description: ControlHub 本地 API Key（可重新生成）。
+
+  parameters:
+    DeviceIdPath:
+      name: device_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^HID-[A-Z0-9]{8}$'
+      description: 目标设备 ID。
+      example: HID-00000001
+
+  responses:
+    Unauthorized:
+      description: 缺少或无效的 Bearer API Key。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: unauthorized, message: "invalid api key" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: 机器可读错误码（bad_request / unauthorized / not_found / method_not_allowed）。
+        message: { type: string, description: 人类可读说明。 }
+
+    ValidationError:
+      type: object
+      required: [error, device_id, fields]
+      properties:
+        error: { type: string, example: validation_failed }
+        device_id: { type: string, description: 请求中的 device_id（可能为空字符串）。 }
+        fields:
+          type: array
+          description: |
+            逐字段校验错误。field 可能是 envelope 字段名（protocol/request_id/device_id/ttl_ms/...），
+            或语义分组（device=设备就绪问题 / mqtt=publish 失败 / client=请求取消）。
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    # ---------- 设备 ----------
+    Device:
+      type: object
+      required: [device_id, boot_id, online, usb_hid_ready, firmware]
+      properties:
+        device_id:
+          type: string
+          pattern: '^HID-[A-Z0-9]{8}$'
+          example: HID-00000001
+        boot_id: { type: string, description: 设备当前启动标识（每次重启变化）。命令的 target_boot_id 必须匹配。 }
+        online: { type: boolean, description: 设备是否在线（近期有 status 包）。 }
+        usb_hid_ready: { type: boolean, description: USB HID 是否就绪（已枚举为目标电脑的键鼠）。 }
+        firmware: { type: string, description: 固件版本号，空串表示未知。 }
+
+    DeviceListResponse:
+      type: object
+      required: [devices, total]
+      properties:
+        devices:
+          type: array
+          items: { $ref: '#/components/schemas/Device' }
+        total: { type: integer }
+
+    HealthResponse:
+      type: object
+      required: [status, protocol, device_cnt]
+      properties:
+        status: { type: string, example: ok }
+        protocol: { type: string, description: 'SmartHidCommand 协议版本（当前 "1.0"）', example: "1.0" }
+        device_cnt: { type: integer, description: 当前已知设备数 }
+
+    # ---------- 命令 ----------
+    KeyboardPayload:
+      type: object
+      description: |
+        键盘载荷。key 用于 tap/key_down/key_up；keys 用于 hotkey。
+        hold_ms 按键保持；lease_ms 仅 key_down 有效（到期自动 key_up，防卡键）。
+      properties:
+        key: { type: string, description: '单键，如 ENTER / A / F1（见固件 hid_keymap）', example: ENTER }
+        keys:
+          type: array
+          description: 组合键序列（hotkey）。
+          items: { type: string }
+          example: [CTRL, C]
+        hold_ms: { type: integer, minimum: 0, example: 40 }
+        lease_ms: { type: integer, minimum: 0, example: 2000 }
+
+    MousePayload:
+      type: object
+      description: |
+        鼠标载荷（V1 仅相对移动）。button: left/right/middle。
+        lease_ms 仅 button_down 有效（到期自动 button_up）。
+      properties:
+        dx: { type: integer, example: 10 }
+        dy: { type: integer, example: -5 }
+        button: { type: string, enum: [left, right, middle], example: left }
+        count: { type: integer, minimum: 1, example: 1 }
+        delta: { type: integer, description: '滚轮增量（负=上，正=下）', example: -3 }
+        lease_ms: { type: integer, minimum: 0, example: 2000 }
+
+    SmartHidCommand:
+      type: object
+      required: [protocol, request_id, device_id, target_boot_id, type, action, ttl_ms, payload]
+      description: MQTT command envelope（8 必填字段）。镜像 hid-command-schema.ts SmartHidCommand。
+      properties:
+        protocol: { type: string, enum: ["1.0"], description: 协议版本，必须为 "1.0"。 }
+        request_id: { type: string, maxLength: 96, minLength: 1, description: 幂等键。设备侧按此去重（环形 256）。 }
+        device_id: { type: string, pattern: '^HID-[A-Z0-9]{8}$', example: HID-00000001 }
+        target_boot_id: { type: string, description: 目标 boot_id。不匹配 → 设备回 rejected(STALE_DEVICE_SESSION)。 }
+        type: { type: string, enum: [keyboard, mouse, system] }
+        action:
+          type: string
+          description: |
+            动作，合法值依 type 而定：
+            - keyboard: tap | hotkey | key_down | key_up
+            - mouse: move | click | button_down | button_up | wheel
+            - system: release_all
+        ttl_ms: { type: integer, minimum: 100, maximum: 10000, description: 命令存活时间。TTL 内无终态 ACK → 202。, example: 3000 }
+        payload:
+          description: |
+            载荷，结构依 type/action 而定（见 KeyboardPayload / MousePayload）。
+            序列化后不超过 2048 字节。system.release_all 可为空对象 `{}`。
+          oneOf:
+            - $ref: '#/components/schemas/KeyboardPayload'
+            - $ref: '#/components/schemas/MousePayload'
+            - type: object
+
+    # ---------- ACK ----------
+    AckStatus:
+      type: string
+      enum: [received, executing, executed, rejected, expired, duplicate]
+      description: received/executing 为中间态；executed/rejected/expired/duplicate 为终态。
+
+    SmartHidAck:
+      type: object
+      required: [protocol, request_id, device_id, boot_id, status, code]
+      description: MQTT ack envelope。镜像 hid-command-schema.ts SmartHidAck。
+      properties:
+        protocol: { type: string, example: "1.0" }
+        request_id: { type: string, description: 回显 Command 的 request_id }
+        device_id: { type: string }
+        boot_id: { type: string, description: 设备当前 boot_id }
+        status: { $ref: '#/components/schemas/AckStatus' }
+        code: { type: integer, description: 0 成功；非 0 错误码。, example: 0 }
+        execution_ms: { type: integer, description: 执行耗时（仅 executed/duplicate 等终态可能携带）。 }
+
+    AcceptedNotAcked:
+      type: object
+      required: [request_id, device_id, status, message]
+      description: 命令已 publish 到 MQTT，但 TTL 内未收到终态 ACK（HTTP 202）。
+      properties:
+        request_id: { type: string }
+        device_id: { type: string }
+        status: { type: string, example: accepted_not_acked }
+        message: { type: string, example: "command published but no terminal ack within ttl_ms" }
+
+    CommandQueryResponse:
+      type: object
+      required: [request_id, status, code]
+      properties:
+        request_id: { type: string }
+        status: { $ref: '#/components/schemas/AckStatus' }
+        code: { type: integer }
+        execution_ms: { type: integer, nullable: true, description: 仅终态回写后存在。 }
+
+    # ---------- CH-P2: API Key ----------
+    APIKeyInfo:
+      type: object
+      description: API key 列表项（明文不返回）。
+      required: [key_id, label, created_at, active]
+      properties:
+        key_id: { type: string, description: 'chk_ 前缀 + 12 字符' }
+        label: { type: string }
+        created_at: { type: integer, description: Unix 秒 }
+        revoked_at: { type: integer, nullable: true }
+        last_used_at: { type: integer, nullable: true }
+        active: { type: boolean }
+
+    RotateResult:
+      type: object
+      required: [api_key, label, note]
+      properties:
+        api_key: { type: string, description: '新 key 明文（仅此响应可见）；格式 chk_<64 hex>' }
+        label: { type: string }
+        note: { type: string }
+
+    # ---------- CH-P4: Settings ----------
+    LANModeResp:
+      type: object
+      required: [enabled, note]
+      properties:
+        enabled: { type: boolean }
+        note: { type: string, description: '提示切换需重启 ControlHub' }
+
+    # ---------- CH-P5: Pairing ----------
+    PairingSessionCreated:
+      type: object
+      required: [token, expires_at, qr_payload]
+      properties:
+        token: { type: string, description: '32 字符 hex' }
+        expires_at: { type: integer, description: 'Unix 秒' }
+        qr_payload:
+          type: string
+          description: 'shid://pair?token=...&host=<lan-ip>&port=17892，供 ESP32 Provision Mode 解析'
+          example: 'shid://pair?token=abc...&host=192.168.1.10&port=17892'
+
+    PairingSession:
+      type: object
+      required: [token, created_at, expires_at, status]
+      properties:
+        token: { type: string }
+        device_id: { type: string, description: '配对成功后填' }
+        created_at: { type: integer }
+        expires_at: { type: integer }
+        used_at: { type: integer, nullable: true }
+        status:
+          type: string
+          enum: [pending, success, expired, revoked]
+
+    PairingDeviceReq:
+      type: object
+      description: '设备侧 POST /api/v1/pairing/device 请求体（无 API key，凭 token）。'
+      required: [token, device_id, boot_id]
+      properties:
+        token: { type: string }
+        device_id: { type: string, pattern: '^HID-[A-Z0-9]{8}$' }
+        boot_id: { type: string }
+        firmware: { type: string }
+        hardware: { type: string }
+
+    PairingDeviceResult:
+      type: object
+      description: '配对成功响应，含一次性 MQTT 凭据。'
+      required: [mqtt_host, mqtt_port, mqtt_username, mqtt_credential, device_id]
+      properties:
+        mqtt_host: { type: string }
+        mqtt_port: { type: integer }
+        mqtt_username: { type: string, description: 'dev_<device_id>' }
+        mqtt_credential: { type: string, description: '一次性明文密码（32 字节随机）' }
+        device_id: { type: string }
+

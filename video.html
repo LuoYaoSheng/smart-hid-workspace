@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>演示视频 — Smart HID</title>
+  <meta name="description" content="Smart HID 演示与教程视频。发布在哔哩哔哩 / 抖音 / YouTube，落地页同步嵌入与跳转。">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <div class="container nav-inner">
+    <a class="logo" href="index.html"><span class="logo-mark">⚡</span><span class="logo-text">Smart&nbsp;HID</span></a>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="index.html#how">工作原理</a></li>
+      <li><a href="index.html#features">键鼠能力</a></li>
+      <li><a href="index.html#components">系统组成</a></li>
+      <li><a href="index.html#docs">文档</a></li>
+      <li><a href="index.html#download">下载</a></li>
+      <li><a href="video.html" class="active nav-video">视频</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a class="btn btn-primary btn-sm" href="docs/quick-start.html">快速开始</a>
+    </div>
+    <button class="nav-toggle" id="nav-toggle" aria-label="菜单"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+
+<!-- ============ HEADER ============ -->
+<header class="vid-hero">
+  <div class="container">
+    <span class="eyebrow">VIDEO</span>
+    <h1>看看 Smart HID 怎么跑</h1>
+    <p class="vid-lead">
+      产品演示、快速上手、API 对接与排查视频。首发
+      <strong>哔哩哔哩</strong>，同步分发<strong>抖音</strong> / <strong>YouTube</strong>。
+      这里嵌入主平台播放器，并提供全平台跳转。
+    </p>
+    <div class="vid-badges">
+      <span>📺 哔哩哔哩</span><span>🎵 抖音</span><span>▶️ YouTube</span><span>🔄 多平台同步</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ FEATURED VIDEO ============ -->
+<section class="section vid-feature" id="featured">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">FEATURED</span>
+      <h2 id="featured-title">产品演示</h2>
+      <p class="lead" id="featured-desc">一条链路看明白：HTTP API → ControlHub → MQTT → ESP32-S3 → USB HID。真实硬件 demo + 目标电脑零侵入效果。</p>
+    </div>
+
+    <!-- 主播放器：bilibili bvid 填入后自动嵌入；未填则显示制作中占位 -->
+    <div class="vid-player" id="vid-player">
+      <!-- 由 buildPlayer() 注入 iframe 或占位 -->
+    </div>
+
+    <!-- 主视频多平台跳转 -->
+    <div class="vid-links" id="featured-links">
+      <!-- 由 buildLinks() 注入 -->
+    </div>
+  </div>
+</section>
+
+<!-- ============ VIDEO LIST ============ -->
+<section class="section vid-list-sec" id="playlist">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">PLAYLIST</span>
+      <h2>系列视频</h2>
+      <p class="lead">规划中的视频清单。发布后在配置块填入对应平台链接，"即将上线"会自动变成"观看"。</p>
+    </div>
+    <div class="vid-grid" id="vid-grid">
+      <!-- 由 buildList() 注入 -->
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOLLOW ============ -->
+<section class="section vid-follow" id="follow">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">FOLLOW</span>
+      <h2>关注我们，第一时间收到新视频</h2>
+    </div>
+    <div class="follow-grid" id="follow-grid">
+      <!-- 由 buildFollow() 注入 -->
+    </div>
+    <p class="follow-note">
+      视频发布节奏以产品进度为准。当前为本地开发阶段，视频正在制作中——发布后本页与落地页同步更新。
+    </p>
+  </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<section class="section cta-band">
+  <div class="container cta-inner">
+    <div>
+      <h2>不等视频，现在就试</h2>
+      <p>下载 ControlHub + 固件，5 分钟跑通第一条 HID 命令。</p>
+    </div>
+    <div class="cta-actions">
+      <a class="btn btn-light btn-lg" href="index.html#download">前往下载</a>
+      <a class="btn btn-outline btn-lg" href="docs/quick-start.html">图文教程</a>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container footer-bottom">
+    <span>© 2026 Smart HID · 本地优先的网络 HID 控制系统</span>
+    <span class="footer-meta">ESP32-S3 · Go · MQTT · USB HID</span>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+
+<!-- =====================================================================
+     视频配置  ——  发布后只改这里，页面自动渲染
+     · platform.channel：填你的各平台主页 URL（关注区会用到）
+     · featured.bvid：   填入 B 站 BV 号（如 'BV1xx411c7mD'），主播放器自动嵌入
+     · featured.{bilibili,douyin,youtube}：单条视频在各平台的链接
+     · list[].bvid / 平台链接：同上，每个视频独立
+     · 任意字段留空 '' → 对应按钮显示"即将上线"，不会出现死链
+     ===================================================================== -->
+<script>
+const VIDEO_CONFIG = {
+  platforms: {
+    bilibili: { name: '哔哩哔哩', icon: '📺', channel: 'https://space.bilibili.com/', color: '#fb7299' },
+    douyin:   { name: '抖音',     icon: '🎵', channel: 'https://www.douyin.com/',     color: '#161823' },
+    youtube:  { name: 'YouTube',  icon: '▶️', channel: 'https://www.youtube.com/',    color: '#ff0000' }
+  },
+  featured: {
+    title: '产品演示 · 一条链路看明白',
+    desc:  'HTTP API → ControlHub → MQTT → ESP32-S3 → USB HID。真实硬件 demo + 目标电脑零侵入效果。',
+    duration: '3 分钟',
+    bvid: '',                          // TODO 发布后填入，如 'BV1xx411c7mD'
+    bilibili: '',                      // TODO 完整观看链接
+    douyin:   '',                      // TODO 抖音视频分享链接
+    youtube:  ''                       // TODO YouTube watch URL（可选）
+  },
+  list: [
+    { title: '产品介绍 · 它能做什么',     duration: '3 min', desc: '能力边界、典型场景、为什么这样设计。',           bvid:'', bilibili:'', douyin:'', youtube:'' },
+    { title: '5 分钟快速上手',           duration: '5 min', desc: '烧录固件 → 起 ControlHub → 配网 → 发首条命令。', bvid:'', bilibili:'', douyin:'', youtube:'' },
+    { title: 'API 对接进阶',             duration: '8 min', desc: 'HTTP 契约、request_id 去重、ttl_ms、ACK 状态机。', bvid:'', bilibili:'', douyin:'', youtube:'' },
+    { title: '常见问题与排查',           duration: '6 min', desc: 'BLE 配网失败、设备不在线、命令无响应怎么定位。',   bvid:'', bilibili:'', douyin:'', youtube:'' }
+  ]
+};
+
+// ---------- helpers ----------
+function bilibiliEmbed(bvid) {
+  // high_quality=1 高画质, danmaku=1 弹幕开, autoplay=0 不自动播, page=1 第一P
+  return 'https://player.bilibili.com/player.html?bvid=' + encodeURIComponent(bvid)
+       + '&page=1&high_quality=1&danmaku=1&autoplay=0';
+}
+function platformBtns(item) {
+  // 返回多平台跳转按钮 HTML；某平台缺链接则跳过
+  const out = [];
+  if (item.bvid || item.bilibili) {
+    const url = item.bilibili || ('https://www.bilibili.com/video/' + item.bvid);
+    out.push(`<a class="pf-btn pf-bili" href="${url}" target="_blank" rel="noopener">📺 哔哩哔哩观看</a>`);
+  }
+  if (item.douyin)  out.push(`<a class="pf-btn pf-douyin" href="${item.douyin}" target="_blank" rel="noopener">🎵 抖音观看</a>`);
+  if (item.youtube) out.push(`<a class="pf-btn pf-yt"    href="${item.youtube}" target="_blank" rel="noopener">▶️ YouTube</a>`);
+  return out.join('');
+}
+
+// ---------- render ----------
+function buildPlayer() {
+  const f = VIDEO_CONFIG.featured;
+  const host = document.getElementById('vid-player');
+  if (f.bvid) {
+    host.innerHTML =
+      `<div class="vid-embed"><iframe src="${bilibiliEmbed(f.bvid)}"
+         scrolling="no" border="0" frameborder="no" framespacing="0"
+         allowfullscreen="true" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+         title="${f.title}"></iframe></div>
+       <div class="vid-duration">⏱️ ${f.duration}</div>`;
+  } else {
+    host.innerHTML =
+      `<div class="vid-placeholder">
+         <div class="vp-bg"></div>
+         <div class="vp-inner">
+           <div class="vp-play" aria-hidden="true">▶</div>
+           <div class="vp-status">演示视频制作中</div>
+           <div class="vp-hint">首发哔哩哔哩 · 多平台同步</div>
+         </div>
+       </div>`;
+  }
+  document.getElementById('featured-title').textContent = f.title;
+  document.getElementById('featured-desc').textContent = f.desc;
+}
+
+function buildFeaturedLinks() {
+  const f = VIDEO_CONFIG.featured;
+  const host = document.getElementById('featured-links');
+  const btns = platformBtns(f);
+  host.innerHTML = btns
+    ? `<span class="vl-label">本视频全平台观看：</span>${btns}`
+    : `<span class="vl-soon">⏳ 视频制作中，敬请期待。发布后这里会出现各平台观看入口。</span>`;
+}
+
+function buildList() {
+  const grid = document.getElementById('vid-grid');
+  grid.innerHTML = VIDEO_CONFIG.list.map((v, i) => {
+    const btns = platformBtns(v);
+    const hasLink = btns.length > 0;
+    return `
+      <article class="vid-card${hasLink ? '' : ' vid-card-soon'}">
+        <div class="vc-thumb">
+          <div class="vc-thumb-bg"></div>
+          <span class="vc-duration">${v.duration}</span>
+          ${hasLink ? '<span class="vc-play">▶</span>' : '<span class="vc-soon-tag">即将上线</span>'}
+        </div>
+        <div class="vc-body">
+          <h3>${v.title}</h3>
+          <p>${v.desc}</p>
+          <div class="vc-links">${btns || '<span class="vc-pending">⏳ 待发布</span>'}</div>
+        </div>
+      </article>`;
+  }).join('');
+}
+
+function buildFollow() {
+  const g = document.getElementById('follow-grid');
+  g.innerHTML = Object.entries(VIDEO_CONFIG.platforms).map(([key, p]) => {
+    const hasChannel = p.channel && !p.channel.match(/^https?:\/\/[^\/]*\/?$/) || key === 'bilibili' && p.channel.length > 'https://space.bilibili.com/'.length;
+    return `
+      <a class="follow-card${hasChannel ? '' : ' follow-card-soon'}"
+         href="${p.channel}" target="_blank" rel="noopener"
+         style="--pf-color:${p.color}">
+        <div class="fc-icon">${p.icon}</div>
+        <div class="fc-name">${p.name}</div>
+        <div class="fc-handle">${hasChannel ? '前往主页 →' : '主页待开通'}</div>
+      </a>`;
+  }).join('');
+}
+
+buildPlayer();
+buildFeaturedLinks();
+buildList();
+buildFollow();
+</script>
+</body>
+</html>
