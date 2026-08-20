@@ -648,7 +648,11 @@ components:
       description: '配对成功响应，含一次性 MQTT 凭据。'
       required: [mqtt_host, mqtt_port, mqtt_username, mqtt_credential, device_id]
       properties:
-        mqtt_host: { type: string }
+        mqtt_host:
+          type: string
+          description: >-
+            ControlHub advertised broker 地址（按设备请求路径解析或 mqtt.advertise_host；
+            绝不为环回/通配——设备据此连接，M1-G3 网络模型）。
         mqtt_port: { type: integer }
         mqtt_username: { type: string, description: 'dev_<device_id>' }
         mqtt_credential: { type: string, description: '一次性明文密码（32 字节随机）' }

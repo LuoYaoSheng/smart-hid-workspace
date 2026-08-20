@@ -23,7 +23,7 @@ func newMgr(t *testing.T) (*Manager, *sql.DB) {
 		t.Fatalf("open: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	return New(store.DB, "127.0.0.1", 17891, 60, silentLogger()), store.DB
+	return New(store.DB, 17891, 60, silentLogger()), store.DB
 }
 
 func TestCreateSession_HappyPath(t *testing.T) {
@@ -48,7 +48,7 @@ func TestCreateSession_HappyPath(t *testing.T) {
 func TestCompleteSession_HappyPath(t *testing.T) {
 	m, _ := newMgr(t)
 	token, _, _ := m.CreateSession()
-	result, err := m.CompleteSession(token, "HID-ABCD1234", "boot-1", "1.0.0", "v1")
+	result, err := m.CompleteSession(token, "HID-ABCD1234", "boot-1", "1.0.0", "v1", "192.168.1.8")
 	if err != nil {
 		t.Fatalf("complete: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestCompleteSession_HappyPath(t *testing.T) {
 		t.Errorf("port = %d", result.MQTTPort)
 	}
 	// 二次使用同 token 应失败（session 一次性）
-	_, err = m.CompleteSession(token, "HID-ABCD1234", "boot-1", "1.0.0", "v1")
+	_, err = m.CompleteSession(token, "HID-ABCD1234", "boot-1", "1.0.0", "v1", "192.168.1.8")
 	if err == nil {
 		t.Errorf("reuse token should fail")
 	}
@@ -71,7 +71,7 @@ func TestCompleteSession_HappyPath(t *testing.T) {
 func TestCompleteSession_InvalidDeviceID(t *testing.T) {
 	m, _ := newMgr(t)
 	token, _, _ := m.CreateSession()
-	_, err := m.CompleteSession(token, "invalid-id", "boot-1", "", "")
+	_, err := m.CompleteSession(token, "invalid-id", "boot-1", "", "", "")
 	if err == nil {
 		t.Errorf("invalid device_id should fail")
 	}
@@ -80,7 +80,7 @@ func TestCompleteSession_InvalidDeviceID(t *testing.T) {
 func TestCompleteSession_MissingBootID(t *testing.T) {
 	m, _ := newMgr(t)
 	token, _, _ := m.CreateSession()
-	_, err := m.CompleteSession(token, "HID-ABCD1234", "", "", "")
+	_, err := m.CompleteSession(token, "HID-ABCD1234", "", "", "", "")
 	if err == nil {
 		t.Errorf("missing boot_id should fail")
 	}
@@ -88,7 +88,7 @@ func TestCompleteSession_MissingBootID(t *testing.T) {
 
 func TestCompleteSession_BadToken(t *testing.T) {
 	m, _ := newMgr(t)
-	_, err := m.CompleteSession("nonexistent-token", "HID-ABCD1234", "boot-1", "", "")
+	_, err := m.CompleteSession("nonexistent-token", "HID-ABCD1234", "boot-1", "", "", "192.168.1.8")
 	if err == nil {
 		t.Errorf("bad token should fail")
 	}

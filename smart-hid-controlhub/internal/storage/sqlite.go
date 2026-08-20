@@ -9,6 +9,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"runtime"
+	"runtime/debug"
 
 	_ "modernc.org/sqlite"
 )
@@ -41,6 +43,13 @@ func New(path string, log *slog.Logger) (*Store, error) {
 }
 
 // Close 关闭句柄。
+//
+// modernc.org/sqlite 的 mmap 释放由 finalizer 异步驱动；在 macOS 上紧随其后的
+// 目录删除（如测试的 t.TempDir 清理）偶发 "directory not empty"。Close 后强制
+// GC + 归还内存，让 munmap 在本调用内完成（对生产 shutdown 也无害）。
 func (s *Store) Close() error {
-	return s.DB.Close()
+	err := s.DB.Close()
+	runtime.GC()
+	debug.FreeOSMemory()
+	return err
 }

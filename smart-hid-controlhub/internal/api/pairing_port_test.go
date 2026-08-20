@@ -30,7 +30,7 @@ func TestPairingQRPort_FromConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pm := pairing.New(store.DB, "127.0.0.1", 17891, pairing.DefaultTTLSec, silentLog())
+	pm := pairing.New(store.DB, 17891, pairing.DefaultTTLSec, silentLog())
 
 	srv := New(nil, dm, keys, nil, pm, silentLog()).WithPairingPort(28792)
 	ts := httptest.NewServer(srv.Routes())

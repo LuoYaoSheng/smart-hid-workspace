@@ -448,7 +448,7 @@ func main() {
 	host := flag.String("mqtt-host", "127.0.0.1", "mqtt broker host")
 	port := flag.Int("mqtt-port", 17891, "mqtt broker port")
 	mqttUser := flag.String("mqtt-user", "controlhub", "mqtt username")
-	mqttPass := flag.String("mqtt-pass", "change-me-in-production", "mqtt password")
+	mqttPass := flag.String("mqtt-pass", "", "mqtt password (empty = must come from --pair-url or explicit)")
 	deviceID := flag.String("device-id", "HID-00000001",
 		"device id (must match ^HID-[A-Z0-9]{8}$)")
 	stale := flag.Bool("stale-boot-id", false, "reject all commands (simulate boot_id mismatch)")

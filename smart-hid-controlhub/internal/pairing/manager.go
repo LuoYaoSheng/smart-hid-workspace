@@ -66,16 +66,17 @@ type PairingResult struct {
 
 // Manager 管理 pairing_sessions + device_credentials 表。
 type Manager struct {
-	db       *sql.DB
-	log      *slog.Logger
-	ttlSec   int
-	mqttHost string // 设备连 broker 用的 host（对外 LAN 地址，由调用方决定）
-	mqttPort int
+	db      *sql.DB
+	log     *slog.Logger
+	ttlSec  int
+	mqttPort int // broker 端口（固定）；host 由调用方按请求路径解析后传入 CompleteSession
 }
 
-// New 创建 Manager。mqttHost/mqttPort 是发给设备的 broker 地址。
+// New 创建 Manager。mqttPort 是发给设备的 broker 端口；broker host 不再是
+// Manager 的静态字段——每次 CompleteSession 由 DeviceServer 按设备请求路径
+// 解析 advertise host 后传入（M1-G3 网络模型拆分）。
 // ttlSec <= 0 时用 DefaultTTLSec。
-func New(db *sql.DB, mqttHost string, mqttPort, ttlSec int, log *slog.Logger) *Manager {
+func New(db *sql.DB, mqttPort, ttlSec int, log *slog.Logger) *Manager {
 	if ttlSec <= 0 {
 		ttlSec = DefaultTTLSec
 	}
@@ -83,7 +84,6 @@ func New(db *sql.DB, mqttHost string, mqttPort, ttlSec int, log *slog.Logger) *M
 		db:       db,
 		log:      log,
 		ttlSec:   ttlSec,
-		mqttHost: mqttHost,
 		mqttPort: mqttPort,
 	}
 }
@@ -140,6 +140,10 @@ func (m *Manager) GetSession(token string) (*Session, error) {
 
 // CompleteSession 设备侧调用：单事务原子消费 token（0→1 严格一次）并签发凭据。
 //
+// advertiseHost 必须由调用方（DeviceServer）在消费 token **之前**按设备请求
+// 路径解析好并传入——endpoint 解析失败时 token 尚未被消费，用户可直接重试
+// （spec M1-G3 §11 顺序：resolve → validate → atomic consume → return）。
+//
 // 事务内三步：
 //  1. CAS 认领：UPDATE ... WHERE status='pending' AND expires_at>=now，RowsAffected==1
 //     才是赢家（并发竞争者全部在此落败，不存在 TOCTOU）
@@ -148,12 +152,15 @@ func (m *Manager) GetSession(token string) (*Session, error) {
 //
 // 任一步失败整体 ROLLBACK —— 不会出现"凭据已发但 session 仍 pending"或反向半状态。
 // 返回 PairingResult（含一次性明文密码）；失败返回哨兵错误（ErrTokenUsed/Expired/NotFound）。
-func (m *Manager) CompleteSession(token, deviceID, bootID, firmware, hardware string) (*PairingResult, error) {
+func (m *Manager) CompleteSession(token, deviceID, bootID, firmware, hardware, advertiseHost string) (*PairingResult, error) {
 	if !DeviceIDPattern.MatchString(deviceID) {
 		return nil, fmt.Errorf("invalid device_id format")
 	}
 	if bootID == "" {
 		return nil, fmt.Errorf("boot_id required")
+	}
+	if advertiseHost == "" {
+		return nil, fmt.Errorf("advertise host required (resolve before consuming token)")
 	}
 
 	// 随机凭据在内存生成（不涉库，可在事务外）；持久化与 session 状态同事务。
@@ -214,7 +221,7 @@ func (m *Manager) CompleteSession(token, deviceID, bootID, firmware, hardware st
 		"firmware", firmware, "token_prefix", token[:8]+"...")
 
 	return &PairingResult{
-		MQTTHost:       m.mqttHost,
+		MQTTHost:       advertiseHost,
 		MQTTPort:       m.mqttPort,
 		MQTTUsername:   username,
 		MQTTCredential: password,

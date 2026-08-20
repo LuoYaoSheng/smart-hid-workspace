@@ -25,6 +25,7 @@ import (
 	"smart-hid-controlhub/internal/device"
 	"smart-hid-controlhub/internal/logging"
 	"smart-hid-controlhub/internal/mqtt"
+	"smart-hid-controlhub/internal/netaddr"
 	"smart-hid-controlhub/internal/pairing"
 	"smart-hid-controlhub/internal/protocol"
 	"smart-hid-controlhub/internal/settings"
@@ -42,6 +43,8 @@ type App struct {
 	dm           *device.Manager
 	broker       *mqtt.Broker
 	hubClient    pahomqtt.Client
+	mqttUser     string // 内部 MQTT 凭据（随机或配置；绝不写日志）
+	mqttPass     string
 	engine       *command.Engine
 	apiSrv       *api.Server
 	pairingMgr   *pairing.Manager
@@ -106,20 +109,43 @@ func Build(cfgPath string) (*App, error) {
 		log.Info("lan mode enabled; http bind overridden", "host", cfg.HTTP.Host)
 	}
 
-	// MQTT broker（嵌入式，per-device auth hook）
-	broker := mqtt.NewBroker(cfg.MQTT.Host, cfg.MQTT.Port, log.With("component", "mqtt")).
+	// --- MQTT 网络模型（M1-G3）：bind / internal connect / advertise 三语义拆分 ---
+	if cfg.MQTT.LegacyHostUsed {
+		log.Warn("deprecated config: mqtt.host migrated to mqtt.bind_host/advertise_host; update config.yaml",
+			"bind_host", cfg.MQTT.BindHost, "advertise_host", cfg.MQTT.AdvertiseHost)
+	}
+	internalHost := netaddr.InternalConnectHost(cfg.MQTT.BindHost)
+
+	// 内部 MQTT 凭据：显式成对配置优先（如 e2e 固定凭据）；否则每次启动随机生成
+	// ——仅存在于内存（broker hook 与内部 client 同进程共享），不持久化、不进日志。
+	mqttUser, mqttPass := cfg.MQTT.Username, cfg.MQTT.Password
+	if mqttUser == "" {
+		var err error
+		mqttUser, mqttPass, err = mqtt.GenerateInternalCredential()
+		if err != nil {
+			_ = store.Close()
+			return nil, err
+		}
+		log.Info("mqtt internal credential: per-boot random generated (not persisted, not logged)")
+	}
+
+	// MQTT broker（嵌入式，per-device auth hook）；bind 决定监听面
+	broker := mqtt.NewBroker(cfg.MQTT.BindHost, cfg.MQTT.Port, log.With("component", "mqtt")).
 		WithDB(store.DB)
 
-	// ControlHub 自身作为 MQTT client
-	hubClient := mqtt.NewClient(cfg.MQTT.Host, cfg.MQTT.Port, "controlhub-internal", cfg.MQTT.Username, cfg.MQTT.Password)
+	// ControlHub 自身作为 MQTT client：连内部推导地址（bind=通配 → 环回）
+	hubClient := mqtt.NewClient(internalHost, cfg.MQTT.Port, "controlhub-internal", mqttUser, mqttPass)
+
+	// Advertise resolver：显式 advertise_host > 请求路径 > 出口推导 > 唯一 LAN IPv4
+	advertiseResolver := netaddr.New(cfg.MQTT.AdvertiseHost)
 
 	// Pairing Manager；config.pairing.enabled=false 时不启设备侧 listener
 	var pairingMgr *pairing.Manager
 	var pairingSrv *pairing.DeviceServer
-	pairingMgr = pairing.New(store.DB, cfg.MQTT.Host, cfg.MQTT.Port, pairing.DefaultTTLSec,
+	pairingMgr = pairing.New(store.DB, cfg.MQTT.Port, pairing.DefaultTTLSec,
 		log.With("component", "pairing"))
 	if cfg.Pairing.Enabled {
-		pairingSrv = pairing.NewDeviceServer(pairingMgr,
+		pairingSrv = pairing.NewDeviceServer(pairingMgr, advertiseResolver,
 			fmt.Sprintf("0.0.0.0:%d", cfg.Pairing.Port),
 			log.With("component", "pairing-server"))
 	} else {
@@ -140,6 +166,7 @@ func Build(cfgPath string) (*App, error) {
 
 	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, log.With("component", "api")).
 		WithPairingPort(cfg.Pairing.Port).
+		WithAdvertiseResolver(advertiseResolver).
 		WithWebOptions(cfg.HTTP.EnableAPI, cfg.Web.Console, cfg.Web.Demo).
 		WithRealtimeHub(realtimeHub)
 
@@ -152,6 +179,8 @@ func Build(cfgPath string) (*App, error) {
 		dm:         dm,
 		broker:     broker,
 		hubClient:  hubClient,
+		mqttUser:   mqttUser,
+		mqttPass:   mqttPass,
 		engine:     engine,
 		apiSrv:     apiSrv,
 		pairingMgr: pairingMgr,
@@ -165,7 +194,7 @@ func (a *App) Start() error {
 	var startErr error
 	a.startOnce.Do(func() {
 		// 启动 broker
-		if err := a.broker.Start(a.cfg.MQTT.Username, a.cfg.MQTT.Password); err != nil {
+		if err := a.broker.Start(a.mqttUser, a.mqttPass); err != nil {
 			startErr = err
 			return
 		}
@@ -225,7 +254,8 @@ func (a *App) Start() error {
 		a.started = true
 		a.log.Info("controlhub started",
 			"http_addr", fmt.Sprintf("%s:%d", a.cfg.HTTP.Host, a.cfg.HTTP.Port),
-			"mqtt_port", a.cfg.MQTT.Port,
+			"mqtt_bind", fmt.Sprintf("%s:%d", a.cfg.MQTT.BindHost, a.cfg.MQTT.Port),
+			"mqtt_advertise", ternaryStr(a.cfg.MQTT.AdvertiseHost != "", a.cfg.MQTT.AdvertiseHost, "auto (per-request)"),
 			"pairing_port", a.cfg.Pairing.Port)
 	})
 	return startErr
@@ -297,6 +327,13 @@ func logInitialKeyGenerated(log *slog.Logger, path string) {
 	log.Info("initial api key generated",
 		"saved_to", path,
 		"note", "key is ONLY in this 0600 file; delete it after saving; rotate via POST /api/v1/api-keys/rotate")
+}
+
+func ternaryStr(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
 }
 
 // HTTPPort 返回本地 HTTP 端口，供 tray "打开控制台" 使用。

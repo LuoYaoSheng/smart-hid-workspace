@@ -11,11 +11,15 @@ func TestDefault(t *testing.T) {
 	if c.HTTP.Port != 17890 || c.HTTP.Host != "127.0.0.1" {
 		t.Errorf("http default = %+v, want 127.0.0.1:17890", c.HTTP)
 	}
-	if c.MQTT.Port != 17891 || c.MQTT.Host != "127.0.0.1" {
-		t.Errorf("mqtt default = %+v, want 127.0.0.1:17891", c.MQTT)
+	if c.MQTT.Port != 17891 || c.MQTT.BindHost != "0.0.0.0" {
+		t.Errorf("mqtt default = %+v, want bind 0.0.0.0:17891", c.MQTT)
 	}
-	if c.MQTT.Username != "controlhub" || c.MQTT.Password == "" {
-		t.Error("mqtt default credentials should be set")
+	// M1-G3：不再有固定默认内部凭据（空 = 每次启动随机生成）
+	if c.MQTT.Username != "" || c.MQTT.Password != "" {
+		t.Error("mqtt default credentials must be empty (per-boot random)")
+	}
+	if c.MQTT.AdvertiseHost != "" {
+		t.Error("mqtt default advertise must be empty (auto resolve)")
 	}
 	if c.DataDir != "./data" {
 		t.Errorf("data_dir default = %q, want ./data", c.DataDir)
@@ -61,7 +65,7 @@ func TestLoad_NonexistentPath(t *testing.T) {
 func TestLoad_ValidOverride(t *testing.T) {
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "data") // Load 会 MkdirAll
-	path := writeYAML(t, "http:\n  host: 0.0.0.0\n  port: 8080\nmqtt:\n  host: 10.0.0.1\n  port: 1883\n  username: u\n  password: p\napi_key: my-secret-key\ndata_dir: \""+dataDir+"\"\nlog_level: debug\n")
+	path := writeYAML(t, "http:\n  host: 0.0.0.0\n  port: 8080\nmqtt:\n  bind_host: 10.0.0.1\n  port: 1883\n  username: u\n  password: p\napi_key: my-secret-key\ndata_dir: \""+dataDir+"\"\nlog_level: debug\n")
 	c, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -69,7 +73,7 @@ func TestLoad_ValidOverride(t *testing.T) {
 	if c.HTTP.Host != "0.0.0.0" || c.HTTP.Port != 8080 {
 		t.Errorf("http override not applied: %+v", c.HTTP)
 	}
-	if c.MQTT.Host != "10.0.0.1" || c.MQTT.Port != 1883 || c.MQTT.Username != "u" || c.MQTT.Password != "p" {
+	if c.MQTT.BindHost != "10.0.0.1" || c.MQTT.Port != 1883 || c.MQTT.Username != "u" || c.MQTT.Password != "p" {
 		t.Errorf("mqtt override not applied: %+v", c.MQTT)
 	}
 	if c.APIKey != "my-secret-key" {
@@ -77,6 +81,98 @@ func TestLoad_ValidOverride(t *testing.T) {
 	}
 	if c.LogLevel != "debug" {
 		t.Errorf("log_level = %q, want debug", c.LogLevel)
+	}
+}
+
+// TestMQTTBindHostDefault 默认 bind 0.0.0.0：LAN 设备可达是产品主场景
+//（broker 有 per-device 凭据 + ACL 保护，见 docs/current/ARCHITECTURE）。
+func TestMQTTBindHostDefault(t *testing.T) {
+	t.Chdir(t.TempDir())
+	c, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.MQTT.BindHost != "0.0.0.0" {
+		t.Fatalf("bind_host default = %q, want 0.0.0.0", c.MQTT.BindHost)
+	}
+	if c.MQTT.AdvertiseHost != "" {
+		t.Fatalf("advertise default = %q, want empty (auto)", c.MQTT.AdvertiseHost)
+	}
+	if c.MQTT.LegacyHostUsed {
+		t.Fatal("no legacy field should be flagged on new-style config")
+	}
+}
+
+// TestLegacyMQTTHostConfig legacy mqtt.host 迁移规则（spec M1-G3 §12）。
+func TestLegacyMQTTHostConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+	cases := []struct {
+		name             string
+		yamlHost         string
+		wantBind         string
+		wantAdvertise    string
+		wantLegacyFlag   bool
+	}{
+		{"LAN IP", "192.168.1.20", "192.168.1.20", "192.168.1.20", true},
+		{"loopback", "127.0.0.1", "127.0.0.1", "", true},
+		{"localhost", "localhost", "127.0.0.1", "", true},
+		{"wildcard", "0.0.0.0", "0.0.0.0", "", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			path := writeYAML(t, "mqtt:\n  host: "+c.yamlHost+"\n  port: 17891\n")
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.MQTT.BindHost != c.wantBind {
+				t.Errorf("bind = %q, want %q", cfg.MQTT.BindHost, c.wantBind)
+			}
+			if cfg.MQTT.AdvertiseHost != c.wantAdvertise {
+				t.Errorf("advertise = %q, want %q", cfg.MQTT.AdvertiseHost, c.wantAdvertise)
+			}
+			if cfg.MQTT.LegacyHostUsed != c.wantLegacyFlag {
+				t.Errorf("legacy flag = %v, want %v", cfg.MQTT.LegacyHostUsed, c.wantLegacyFlag)
+			}
+			if cfg.MQTT.Host != "" {
+				t.Errorf("legacy Host must be cleared after migration, got %q", cfg.MQTT.Host)
+			}
+		})
+	}
+}
+
+// TestRejectLoopbackAdvertiseHost 显式 advertise 环回/localhost 在 Load 即失败。
+func TestRejectLoopbackAdvertiseHost(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, bad := range []string{"127.0.0.1", "localhost", "::1"} {
+		path := writeYAML(t, "mqtt:\n  advertise_host: "+bad+"\n")
+		if _, err := Load(path); err == nil {
+			t.Errorf("advertise_host %s should fail fast at Load", bad)
+		}
+	}
+}
+
+// TestRejectWildcardAdvertiseHost 显式 advertise 通配地址在 Load 即失败。
+func TestRejectWildcardAdvertiseHost(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, bad := range []string{"0.0.0.0", "::"} {
+		path := writeYAML(t, "mqtt:\n  advertise_host: "+bad+"\n")
+		if _, err := Load(path); err == nil {
+			t.Errorf("advertise_host %s should fail fast at Load", bad)
+		}
+	}
+}
+
+// TestMQTTCredentialPairValidation 内部凭据必须成对配置。
+func TestMQTTCredentialPairValidation(t *testing.T) {
+	t.Chdir(t.TempDir())
+	path := writeYAML(t, "mqtt:\n  username: u\n") // 只有 username
+	if _, err := Load(path); err == nil {
+		t.Error("half-set credentials should fail at Load")
+	}
+	path = writeYAML(t, "mqtt:\n  password: p\n") // 只有 password
+	if _, err := Load(path); err == nil {
+		t.Error("half-set credentials should fail at Load")
 	}
 }
 

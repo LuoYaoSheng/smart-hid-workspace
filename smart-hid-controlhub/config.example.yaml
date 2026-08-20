@@ -12,15 +12,20 @@ http:
   # 控制台/演示台因无 API 将不可操作，一般仅用于纯展示场景）。
   enable_api: true
 
-# 嵌入式 MQTT broker
+# 嵌入式 MQTT broker（M1-G3 网络模型：bind / advertise 拆分）
 mqtt:
-  host: "127.0.0.1"
+  # broker 监听地址。默认 0.0.0.0——设备经 LAN 接入是产品主场景
+  #（broker 有 per-device 凭据 + ACL 保护；只想本机用可改回 127.0.0.1）。
+  bind_host: "0.0.0.0"
   port: 17891
-  # 正式装配启用每设备凭据 + per-device ACL（PerDeviceHook）。
-  # 注意：host 默认 127.0.0.1，真机设备接入时需改为局域网可达地址
-  # （bind / 广播地址拆分见 docs/current/HARDENING_BACKLOG M1-G3）。
-  username: "controlhub"
-  password: "change-me-in-production"
+  # 返回给设备的 broker 地址。留空 = 自动解析（优先设备请求实际到达的本机
+  # 地址，其次唯一可用 LAN IPv4；多网卡歧义时配对会明确报错）。
+  # 环回 / localhost / 0.0.0.0 在此禁止——对设备不可达。
+  advertise_host: ""
+  # ControlHub 内部 MQTT 凭据。两者必须成对配置；都留空 = 每次启动随机生成
+  #（仅存在内存，不持久化、不进日志）。设备凭据是配对时按设备签发的，与此无关。
+  # username: "controlhub"
+  # password: ""
 
 # 设备侧配对服务（Provision Mode 设备接入用）
 pairing:

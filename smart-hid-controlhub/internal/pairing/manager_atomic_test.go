@@ -30,7 +30,7 @@ func TestPairingTokenConcurrentConsume(t *testing.T) {
 				dev = "HID-BBBB0001"
 			}
 			<-start
-			res, err := m.CompleteSession(token, dev, "boot-1", "1.0.0", "v1")
+			res, err := m.CompleteSession(token, dev, "boot-1", "1.0.0", "v1", "192.168.1.8")
 			switch {
 			case err == nil:
 				atomic.AddInt32(&success, 1)
@@ -92,7 +92,7 @@ func TestPairingTokenExpired(t *testing.T) {
 	token, _, _ := m.CreateSession()
 	_, _ = db.Exec(`UPDATE pairing_sessions SET expires_at=1 WHERE token=?`, token)
 
-	if _, err := m.CompleteSession(token, "HID-AAAA0000", "boot-1", "", ""); err != ErrTokenExpired {
+	if _, err := m.CompleteSession(token, "HID-AAAA0000", "boot-1", "", "", "192.168.1.8"); err != ErrTokenExpired {
 		t.Fatalf("err = %v, want ErrTokenExpired", err)
 	}
 	var n int
@@ -105,7 +105,7 @@ func TestPairingTokenExpired(t *testing.T) {
 // TestPairingTokenInvalid —— 不存在 token：ErrTokenNotFound。
 func TestPairingTokenInvalid(t *testing.T) {
 	m, _ := newMgr(t)
-	if _, err := m.CompleteSession("nonexistent", "HID-AAAA0000", "boot-1", "", ""); err != ErrTokenNotFound {
+	if _, err := m.CompleteSession("nonexistent", "HID-AAAA0000", "boot-1", "", "", "192.168.1.8"); err != ErrTokenNotFound {
 		t.Fatalf("err = %v, want ErrTokenNotFound", err)
 	}
 }
@@ -114,10 +114,10 @@ func TestPairingTokenInvalid(t *testing.T) {
 func TestPairingTokenAlreadyConsumed(t *testing.T) {
 	m, _ := newMgr(t)
 	token, _, _ := m.CreateSession()
-	if _, err := m.CompleteSession(token, "HID-AAAA0000", "boot-1", "", ""); err != nil {
+	if _, err := m.CompleteSession(token, "HID-AAAA0000", "boot-1", "", "", "192.168.1.8"); err != nil {
 		t.Fatalf("first consume: %v", err)
 	}
-	if _, err := m.CompleteSession(token, "HID-BBBB0001", "boot-1", "", ""); err != ErrTokenUsed {
+	if _, err := m.CompleteSession(token, "HID-BBBB0001", "boot-1", "", "", "192.168.1.8"); err != ErrTokenUsed {
 		t.Fatalf("err = %v, want ErrTokenUsed", err)
 	}
 }
@@ -133,7 +133,7 @@ func TestPairingCredentialDBFailureRollback(t *testing.T) {
 		t.Fatalf("drop: %v", err)
 	}
 
-	if _, err := m.CompleteSession(token, "HID-AAAA0000", "boot-1", "", ""); err == nil {
+	if _, err := m.CompleteSession(token, "HID-AAAA0000", "boot-1", "", "", "192.168.1.8"); err == nil {
 		t.Fatal("expected failure with dropped table")
 	}
 
@@ -157,7 +157,7 @@ func TestPairingCredentialDBFailureRollback(t *testing.T) {
 	)`); err != nil {
 		t.Fatalf("recreate: %v", err)
 	}
-	if _, err := m.CompleteSession(token, "HID-AAAA0000", "boot-1", "", ""); err != nil {
+	if _, err := m.CompleteSession(token, "HID-AAAA0000", "boot-1", "", "", "192.168.1.8"); err != nil {
 		t.Fatalf("retry after rollback should succeed: %v", err)
 	}
 }

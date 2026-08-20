@@ -24,6 +24,7 @@ import (
 	"smart-hid-controlhub/internal/apikey"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/device"
+	"smart-hid-controlhub/internal/netaddr"
 	"smart-hid-controlhub/internal/pairing"
 	"smart-hid-controlhub/internal/settings"
 	"smart-hid-controlhub/internal/web"
@@ -31,18 +32,19 @@ import (
 
 // Server 持有所有依赖。
 type Server struct {
-	engine      *command.Engine
-	devices     *device.Manager
-	keys        *apikey.Store
-	settings    *settings.Store
+	engine       *command.Engine
+	devices      *device.Manager
+	keys         *apikey.Store
+	settings     *settings.Store
 	pairingMgr   *pairing.Manager
-	pairingPort  int          // 配对端口（QR 载荷用；config.pairing.port）
-	realtimeHub  *RealtimeHub // WebSocket 事件通道（web.realtime=true 时注入；nil = 不注册路由）
-	enableAPI   bool   // config.http.enable_api；false = 纯静态模式
-	webConsole  bool   // config.web.console
-	webDemo     bool   // config.web.demo
-	log         *slog.Logger
-	httpSrv     *http.Server
+	pairingPort  int               // 配对端口（QR 载荷用；config.pairing.port）
+	advertiseRes *netaddr.Resolver // QR host 解析（M1-G3；nil = 未注入，创建 session 时报错）
+	realtimeHub  *RealtimeHub      // WebSocket 事件通道（web.realtime=true 时注入；nil = 不注册路由）
+	enableAPI    bool              // config.http.enable_api；false = 纯静态模式
+	webConsole   bool              // config.web.console
+	webDemo      bool              // config.web.demo
+	log          *slog.Logger
+	httpSrv      *http.Server
 }
 
 // New 构造 Server（不启动）。
@@ -55,11 +57,12 @@ func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStor
 		settings:   setStore,
 		pairingMgr: pairingMgr,
 		// 默认全开（与 config.Default 对齐）；app.Build 会用配置显式覆盖。
-		pairingPort: pairing.DefaultPairingPort,
-		enableAPI:   true,
-		webConsole:  true,
-		webDemo:     true,
-		log:         log,
+		pairingPort:  pairing.DefaultPairingPort,
+		advertiseRes: netaddr.New(""), // 自动解析默认；app 注入配置化 resolver
+		enableAPI:    true,
+		webConsole:   true,
+		webDemo:      true,
+		log:          log,
 	}
 }
 
@@ -68,6 +71,9 @@ func (s *Server) WithRealtimeHub(h *RealtimeHub) *Server { s.realtimeHub = h; re
 
 // WithPairingPort 设置配对端口（QR 载荷 shid://pair?...&port=）。
 func (s *Server) WithPairingPort(p int) *Server { s.pairingPort = p; return s }
+
+// WithAdvertiseResolver 注入 MQTT advertise host 解析器（QR 载荷 host 用）。
+func (s *Server) WithAdvertiseResolver(r *netaddr.Resolver) *Server { s.advertiseRes = r; return s }
 
 // WithWebOptions 应用 http.enable_api / web.console / web.demo 开关。
 func (s *Server) WithWebOptions(enableAPI, console, demo bool) *Server {
@@ -94,7 +100,7 @@ func (s *Server) Routes() http.Handler {
 		protected.HandleFunc("/api/v1/api-keys/rotate", s.handleAPIKeysRotate) // POST 轮换（A12）
 		protected.HandleFunc("/api/v1/settings/lan-mode", s.handleSettingsLAN) // GET/POST LAN 模式（A11）
 		if s.pairingMgr != nil {
-			protected.HandleFunc("/api/v1/pairing/sessions", s.handlePairingSessions)        // POST 创建
+			protected.HandleFunc("/api/v1/pairing/sessions", s.handlePairingSessions)         // POST 创建
 			protected.HandleFunc("/api/v1/pairing/sessions/", s.handlePairingSessionsByToken) // GET {token}
 		}
 
