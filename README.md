@@ -143,7 +143,7 @@ bash smart-hid-controlhub/scripts/test-loop-f2.sh
 
 ## 发布与分发
 
-- **源码**：GitHub（主仓库）+ Gitee（镜像，只同步源码、不在镜像上构建）
+- **源码**：[GitHub 主仓库](https://github.com/LuoYaoSheng/smart-hid-workspace) + [Gitee 镜像](https://gitee.com/luoyaosheng/smart-hid-workspace)（只同步源码、不在镜像上构建）
 - **落地页与文档站**：GitHub Pages 托管
 - **下载包**：GitHub Releases 发布（ControlHub 双平台二进制 + 固件烧录包，附 SHA256）；Gitee 侧直接存放预编译包
 
