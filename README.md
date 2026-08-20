@@ -57,11 +57,21 @@ Smart HID 换了一条路：**让一块 ESP32-S3 以真实 USB 键盘 + 鼠标�
 | `smart-hid-controlhub/` | 本地控制程序：HTTP API + 内嵌 MQTT Broker + 系统托盘 + 本地控制台 + 动态配对 | Go，SQLite |
 | `smart-hid-web/` | 官网落地页 + 文档站 + 下载中心 | 原生 ES5，零构建静态站 |
 | `protocols/` | MQTT Command / ACK / Status JSON Schema 与示例 | JSON Schema |
-| `docs/` | 设计资料包（PRD / 架构 / 协议 / 详细设计 / 路线图 / 验收清单） | Markdown |
+| `docs/current/` | ✅ **当前事实源**（状态 / 架构 / 路线 / 验收 / 规则） | Markdown |
+| `docs/archive/` | ⛔ 历史设计资料包（SUPERSEDED，禁止指导实现） | Markdown |
 
 > 配套独立仓库 [smart-ble](https://github.com/LuoYaoSheng/smart-ble)：BLE Toolkit+ 微信小程序（设备配网 / 诊断），BLE Provisioning 协议与 MQTT Command Schema 的 TS 事实源所在。
->
-> 注：`docs/` 资料包为历史设计镜像，保留了设计推演全过程（含已从代码库移除的商业授权层设计记录），按时间线阅读更有味道。
+
+## 📌 事实源与开发治理（贡献者 / AI Agent 必读）
+
+本仓库按「唯一事实入口」治理：**新会话只需要先读这份 README**，即可进入正确开发状态。
+
+1. **当前事实源**在 [`docs/current/`](docs/current/)：[CURRENT_STATE](docs/current/CURRENT_STATE.md)（是什么 / 不是什么 / 完成度）、[ARCHITECTURE](docs/current/ARCHITECTURE.md)、[ROADMAP](docs/current/ROADMAP.md)、[ACCEPTANCE](docs/current/ACCEPTANCE.md)、[DEVELOPMENT_RULES](docs/current/DEVELOPMENT_RULES.md)、[HARDENING_BACKLOG](docs/current/HARDENING_BACKLOG.md)
+2. **协议事实源**：HTTP API = `smart-hid-controlhub/docs/openapi.yaml`；MQTT 消息 = `protocols/schemas/`（TS 权威源在 smart-ble 仓）
+3. **历史资料** [`docs/archive/`](docs/archive/) 是 2026-08-11 设计资料包快照（`status: SUPERSEDED`），含已移除的 Cloud / Trial / License / 商业化设计——**仅作历史记录，不得作为实现依据**
+4. **禁止复活**：不得因历史文档存在而重新实现 Trial / License / Cloud / Commercial / Order / Payment / Entitlement / Usage Gate（见 [DEVELOPMENT_RULES §2](docs/current/DEVELOPMENT_RULES.md)）
+5. **当前路线**按 Milestone/Gate 推进：M1-G1 治理基线已完成，下一 Gate 是 M1-G2 Core Correctness（见 [ROADMAP](docs/current/ROADMAP.md)），未获明确指示不提前实施
+6. 提交前可跑治理守卫：`bash scripts/check-governance.sh`
 
 ## 快速开始
 
@@ -124,23 +134,16 @@ bash smart-hid-controlhub/scripts/test-loop-f2.sh
 
 - 控制链路不出局域网，系统本身没有云端
 - 控制中心 ControlHub：控制 API 默认只听 `127.0.0.1`；LAN API 需用户显式开启 + Bearer API Key；内嵌 MQTT Broker 带认证与 ACL；配对端口仅在配对会话期开放
-- 设计层面的威胁模型见 `docs/` 资料包各协议文档
+- 已知风险与加固计划登记在 [HARDENING_BACKLOG](docs/current/HARDENING_BACKLOG.md)（按 Gate 逐项处理）
 
 ## 文档
 
-| 文档 | 内容 |
-|---|---|
-| `docs/01_PRODUCT_PRD.md` | 产品 PRD |
-| `docs/02_SYSTEM_ARCHITECTURE.md` | 系统架构与仓库拆分 |
-| `docs/03_BLE_PROVISIONING_PROTOCOL_V1.1.md` | BLE 配网协议 |
-| `docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md` | MQTT 协议与 ControlHub HTTP API |
-| `docs/05_CONTROLHUB_DETAIL_DESIGN_V1.0.md` | ControlHub 详细设计 |
-| `docs/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md` | 固件详细设计 |
-| `docs/08_MINIAPP_HID_MODULE_V1.2.md` | 小程序 HID 模块 |
-| `docs/09_LOCAL_DEVELOPMENT_ROADMAP.md` | 开发路线图 |
-| `docs/10_ACCEPTANCE_CHECKLIST.md` | 验收清单 |
+当前事实文档（`docs/current/`，详见上方治理区块）；历史设计资料在
+[`docs/archive/`](docs/archive/)（SUPERSEDED，含旧 PRD / 架构 / 协议推演 /
+路线图 / 验收清单，仅供回溯）。
 
-其他事实源：协议 JSON Schema（`protocols/schemas/`）、ControlHub HTTP API（`smart-hid-controlhub/docs/openapi.yaml`，在线版见官网 API 文档页）。
+其他事实源：协议 JSON Schema（`protocols/schemas/`）、ControlHub HTTP API
+（`smart-hid-controlhub/docs/openapi.yaml`，在线版见官网 API 文档页）。
 
 ## 反馈与贡献
 
