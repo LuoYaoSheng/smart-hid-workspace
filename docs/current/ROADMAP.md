@@ -12,8 +12,9 @@ authority: canonical
 ## 当前位置
 
 ```text
-M1-G1 ✅ DONE（2026-08-20，本文档所在轮次）
-M1-G2 ⏳ NEXT —— 等待用户明确说「继续 M1-G2」后才能开始
+M1-G1 ✅ DONE（2026-08-20，治理基线）
+M1-G2 ✅ DONE（2026-08-20，核心正确性：幂等/原子配对/并发安全/ACK 边界/深度校验）
+M1-G3 ⏳ NEXT —— 等待用户明确说「继续 M1-G3」后才能开始
 ```
 
 ## M1 — Product Foundation Hardening（产品化加固）
@@ -23,10 +24,10 @@ M1-G2 ⏳ NEXT —— 等待用户明确说「继续 M1-G2」后才能开始
 唯一事实入口（根 README → docs/current/）、历史资料降级（docs/archive/）、
 开发规则、验收清单重建、hardening backlog、治理守卫脚本。
 
-### G2 Core Correctness（下一个 Gate，未开始）
+### G2 Core Correctness ✅（2026-08-20 完成）
 
-request_id 并发去重、waiter 合并、DB 错误处理、配对 token 原子消费、
-RealtimeHub 并发修正、ACK 校验、payload 深度校验、`go test -race`。
+request_id 并发去重与服务端幂等、waiter join、DB 错误处理、配对 token 原子消费、
+RealtimeHub 并发修正、ACK 三方绑定校验、payload 深度校验、`go test -race` 固化。
 明细见 [HARDENING_BACKLOG](HARDENING_BACKLOG.md)。
 
 ### G3 Network / Provisioning Foundation（未开始）

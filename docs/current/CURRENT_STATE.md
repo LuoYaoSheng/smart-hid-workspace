@@ -78,11 +78,14 @@ DO NOT IMPLEMENT：
 - HTTP API：11 path，事实源 `smart-hid-controlhub/docs/openapi.yaml`
 - 内嵌 MQTT broker（mochi-mqtt）+ PerDeviceHook：hub 账号 + 每设备随机凭据 + per-device topic ACL
 - 命令闭环：POST → publish（QoS1，严禁 retain）→ 同步等 ACK；TTL 内未终态返回 202
-- 配对：Web 建 session → 动态 QR（`shid://pair?...`）→ 设备 POST `:17892` 换 MQTT 凭据（一次性 token，5 分钟）
-- API Key：SHA-256 入库、明文不落库、可轮换；HTTP 用 Bearer，WebSocket 用 query key
+- **request_id 服务端幂等（M1-G2）**：并发同命令 join（publish 恰一次）；同 id 异命令 409 request_id_conflict；终态后重放直接返回既有结果（不再执行 HID）；指纹 = device/type/action/canonical payload（键序无关）
+- **payload 服务端深度校验（M1-G2）**：键名（镜像固件 keymap）、hotkey ≤8 键、lease 范围、dx/dy ≤4096、wheel 硬限 [-127,127]（固件单次 int8 强转）、count 1-10、button 枚举
+- 配对：Web 建 session → 动态 QR（`shid://pair?...`）→ 设备 POST `:17892` 换 MQTT 凭据（一次性 token，5 分钟，**单事务原子消费**——并发恰一次成功，失败可重试）
+- **ACK 三方绑定（M1-G2）**：topic 设备 == ack.device_id == 在途请求期望设备；非法 ACK 记 warning 丢弃
+- API Key：SHA-256 入库、明文不落库、可轮换；HTTP 用 Bearer，WebSocket 用 query key；**首启明文只落 0600 文件，不进日志（M1-G2）**
 - Web 三页面：控制台 `/`、模拟键鼠演示台 `/demo.html`（可视化键盘 / 触控板 / 实体键盘直通 / 文本连打 / 多设备广播）、实时事件通道 `/api/v1/realtime`
 - 配置面：`http.lan_mode` / `http.enable_api`、`mqtt.*`、`pairing.enabled` / `pairing.port`、`web.console` / `web.demo` / `web.realtime`；缺省 = 全开内置默认
-- SQLite 持久化：migrations 0001 / 0002
+- SQLite 持久化：migrations 0001 / 0002 / 0004（commands.fingerprint）
 - 系统托盘常驻（`-tray`）与 headless 双生命周期
 
 ## 固件能力清单（按代码核对）
@@ -95,7 +98,8 @@ DO NOT IMPLEMENT：
 
 ## 验证状态（诚实边界）
 
-- `go test ./...` 全绿；`test-loop-f2.sh` 28/28（mock-device 端到端，无需硬件）
+- `go test ./...` 全绿（含并发压力用例）；`go test -race ./...` 全绿；并发包高倍重复通过
+- `test-loop-f2.sh` 28/28（真二进制 + mock-device 端到端，无需硬件；含幂等重放与日志零明文断言）
 - 配置面 e2e、WebSocket e2e、演示台 Playwright 真浏览器实测均通过（2026-08-20）
 - 以上**全部基于 mock / 本机环境**：没有任何真机验证（ESP32-S3 烧写、USB 枚举、
   BIOS / 登录界面、三操作系统、soak 均未执行）

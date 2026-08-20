@@ -70,7 +70,7 @@ func Build(cfgPath string) (*App, error) {
 		return nil, err
 	}
 
-	// API Key：apikey.Store 持久化；首次启动生成 + 写文件 + 日志一次。
+	// API Key：apikey.Store 持久化；首次启动生成 + 写 0600 文件一次。
 	keys := apikey.New(store.DB, log.With("component", "apikey"))
 	initialKeyPath := filepath.Join(cfg.DataDir, "initial-api-key.txt")
 	if raw, err := keys.EnsureInitial("initial"); err != nil {
@@ -78,10 +78,9 @@ func Build(cfgPath string) (*App, error) {
 		return nil, fmt.Errorf("init api key: %w", err)
 	} else if raw != "" {
 		_ = os.WriteFile(initialKeyPath, []byte(raw+"\n"), 0o600)
-		log.Info("api key generated (first run)",
-			"key", raw,
-			"saved_to", initialKeyPath,
-			"note", "delete this file after saving the key; rotate via POST /api/v1/api-keys/rotate")
+		// 安全约束：明文只落 0600 文件，绝不进普通日志（logInitialKeyGenerated
+		// 结构上不接收 key 参数，防止未来回归）。
+		logInitialKeyGenerated(log, initialKeyPath)
 	} else {
 		if _, err := os.Stat(initialKeyPath); err == nil {
 			log.Info("api key ready", "initial_key_file", initialKeyPath, "note", "still present; delete after saving")
@@ -290,6 +289,15 @@ func (a *App) shutdown() {
 }
 
 // --- tray.Controller 实现 ---
+
+// logInitialKeyGenerated 记录首启 API Key 的生成事件。
+// 刻意不接收明文 key 参数：日志只含文件路径，明文只存在于 0600 的
+// initial-api-key.txt（M1-G2 安全修正：raw key 禁止进入普通日志）。
+func logInitialKeyGenerated(log *slog.Logger, path string) {
+	log.Info("initial api key generated",
+		"saved_to", path,
+		"note", "key is ONLY in this 0600 file; delete it after saving; rotate via POST /api/v1/api-keys/rotate")
+}
 
 // HTTPPort 返回本地 HTTP 端口，供 tray "打开控制台" 使用。
 func (a *App) HTTPPort() int { return a.cfg.HTTP.Port }

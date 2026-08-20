@@ -13,7 +13,7 @@ Smart HID 本地控制程序：接收第三方程序的 HTTP 指令，经内嵌 
 ## 快速开始
 
 ```bash
-# 直接运行（无 config.yaml 时使用内置默认值；首次启动生成 API Key 打印到日志并落盘 data/initial-api-key.txt）
+# 直接运行（无 config.yaml 时使用内置默认值；首次启动生成 API Key，仅落盘 data/initial-api-key.txt（0600，不进日志））
 go run ./cmd/controlhub
 
 # 指定配置

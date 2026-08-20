@@ -90,10 +90,9 @@ chmod +x controlhub-darwin-arm64
 
 # Windows
 controlhub-windows-amd64.exe</code></pre>
-    <p>启动日志会打印一行 API Key（前缀 <code>chk_</code>），形如：</p>
-<pre><code>[controlhub] http api listening on 127.0.0.1:17890
-[controlhub] mqtt broker  listening on 127.0.0.1:17891
-[controlhub] api_key = chk_a1b2c3d4e5f6...      ← 记下这串</code></pre>
+    <p>首次启动会生成 API Key（前缀 <code>chk_</code>），只写入 <code>data/initial-api-key.txt</code>（不进日志）：</p>
+<pre><code>cat data/initial-api-key.txt
+chk_a1b2c3d4e5f6...      ← 记下后删除该文件</code></pre>
     <p>健康检查（无需鉴权）：</p>
 <pre><code>curl http://127.0.0.1:17890/api/v1/health
 # {"status":"ok", ...}</code></pre>
@@ -162,7 +161,7 @@ controlhub-windows-amd64.exe</code></pre>
       <p>ESP32-S3 的 HID 输出未接到目标电脑，或目标电脑未枚举出 USB 键鼠。检查 USB 线（必须数据线）和目标电脑设备管理器。</p>
     </details>
     <details><summary>命令返回 <code>401</code></summary>
-      <p>API Key 不对。重启 ControlHub 看日志里的 <code>api_key</code>，或在 <code>config.yaml</code> 的 <code>http.api_key</code> 固定一个。</p>
+      <p>API Key 不对。首次启动的 Key 在 <code>data/initial-api-key.txt</code>；也可以在 <code>config.yaml</code> 的 <code>api_key</code> 固定一个，或用 <code>POST /api/v1/api-keys/rotate</code> 轮换。</p>
     </details>
     <details><summary>命令返回 <code>expired</code></summary>
       <p><code>ttl_ms</code> 内未执行完（设备忙或离线）。调大 <code>ttl_ms</code>，或检查设备是否 <code>usb_hid_ready</code>。</p>

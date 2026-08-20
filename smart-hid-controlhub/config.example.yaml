@@ -33,7 +33,7 @@ web:
   demo: true      # 模拟键鼠演示台（/demo.html）
   realtime: true  # WebSocket 实时事件通道（/api/v1/realtime，设备状态/命令回执推送）
 
-# API Key：留空则首次启动随机生成，写入 data_dir/initial-api-key.txt 并打印到日志一次
+# API Key：留空则首次启动随机生成，仅写入 data_dir/initial-api-key.txt（0600，不进日志）
 api_key: ""
 
 # 数据目录（SQLite、日志）

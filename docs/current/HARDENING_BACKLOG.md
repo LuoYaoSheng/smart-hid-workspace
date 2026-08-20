@@ -8,19 +8,32 @@ authority: canonical
 > M1-G1 审计（2026-08-20，基线 5c2e5dc）逐项核实过的已知问题。
 > 本文件只记录与排期，**不在 G1 修**；各项归属的 Gate 开工前再细化方案。
 
-## M1-G2 Core Correctness
+## M1-G2 Core Correctness ✅（2026-08-20 完成）
 
-| # | 问题 | 证据（file:line） | 说明 |
-|---|---|---|---|
-| 1 | request_id 无服务端去重，客户端可任意传 | command/validator.go:30（仅查空与长度） | 同 id 并发 = 重复投递风险 |
-| 2 | 并发同 request_id 覆盖 pending chan | command/engine.go:120-129 | 后到者覆盖 map 项；先到者 defer 提前 delete 对方项 |
-| 3 | DB 写错误被丢弃 `_, _ =` | command/engine.go:81, 114 | INSERT 失败（如 UNIQUE 冲突）静默吞掉 |
-| 4 | 配对 token 消费非原子（TOCTOU） | pairing/manager.go:144-169 | 读-查-写三步无事务；UPDATE 无 `WHERE status='pending'` 守卫，同 token 并发可双发凭据 |
-| 5 | 配对凭据签发与 session 标记跨事务 | pairing/manager.go:156-169 | IssueDeviceCredentials 独立事务成功后，标记 session 失败会出现凭据已发但 session 仍 pending |
-| 6 | RealtimeHub 锁外读 len(h.subs) | api/realtime.go:47 | Broadcast 早退路径与 subscribe/unsubscribe 并发时是数据竞争（-race 候选） |
-| 7 | ACK 字段不做校验（信任边界） | command/engine.go:59-90 | execution_ms / device_id 与 topic 不比对；靠 broker ACL 兜底 |
-| 8 | payload 深度校验缺失 | command/validator.go:22-23 注释自认 | type/action 合法即放行，字段级校验全在设备侧 |
-| 9 | `go test -race ./...` 未纳入常态 | — | G1 只跑一次记录，修复与固化在 G2 |
+原登记 9 项全部落地（commit 见 git log M1-G2a~d）：
+
+| # | 原问题 | 处置 |
+|---|---|---|
+| 1 | request_id 无服务端去重 | ✅ 幂等注册表 + fingerprint（sha256(device/type/action/canonical payload)，键序无关） |
+| 2 | 并发同 request_id 覆盖 waiter | ✅ 单一 owner execution；同指纹 join 等同一结果；异指纹 409 request_id_conflict |
+| 3 | DB 写错误被丢弃 | ✅ INSERT 错误分类：UNIQUE→重放/冲突判定，其余→500 且不 publish；终态 ACK 落库失败记 Error |
+| 4 | 配对 token 消费 TOCTOU | ✅ 单事务 CAS（UPDATE...WHERE status='pending' AND expires_at>=now，RowsAffected==1）|
+| 5 | 凭据签发与 session 跨事务 | ✅ issueDeviceCredentialsTx 与 session 状态同事务；失败整体回滚，无半状态 |
+| 6 | RealtimeHub 锁外读 len | ✅ RWMutex + 快照广播；订阅 channel 永不 close（无 send-on-closed 路径） |
+| 7 | ACK 信任边界 | ✅ 三方绑定（topic device == ack.device_id == 在途 execution 期望设备）+ protocol/status 合法性；非法 ACK 记 warning 丢弃 |
+| 8 | payload 深度校验缺失 | ✅ ValidatePayload：键名（镜像固件 keymap，大小写不敏感）/hotkey≤8/lease 范围/dx,dy≤4096/wheel 硬限[-127,127]（固件 int8 强转）/count 1-10/button 枚举 |
+| 9 | `go test -race` 未纳入常态 | ✅ 全仓 -race 绿；并发包 -count 高倍通过；50 并发配对消费 / 20 并发同 id join 等压力测试在库 |
+
+request_id 语义（现行）：**Idempotency Key**——首次执行；并发同命令 join（恰好 publish 一次）；同 id 异命令 409；终态后重放直接返回既有结果（不再执行 HID）；非终态重放按 202 语义（不重发）。迁移：commands 表新增 fingerprint 列（0004）。
+
+### G2 期间新发现（Deferred，不属 G2 修复范围）
+
+| 发现 | 归属 |
+|---|---|
+| 固件 `key[8]`/`keys[8][8]` 缓冲截断：≥8 字符键名（BACKSPACE/CAPSLOCK/PAGEDOWN）被截断后设备端 lookup 失败→rejected（keymap 有名无实） | 固件任务（M2 或独立固件修复） |
+| mock-device 不校验键名（与固件 keymap 分叉，历史上 LEFTSHIFT 等伪键名能通过 e2e） | mock 改进（低优先） |
+| WS realtime 认证用 query key + CheckOrigin 放行（LAN 有意取舍）→ ticket 化认证 | M1-G3 评估 |
+| replay 返回的 ACK 无 boot_id（commands 表未存设备侧 boot_id） | 记录，影响极小 |
 
 ## M1-G3 Network / Provisioning
 

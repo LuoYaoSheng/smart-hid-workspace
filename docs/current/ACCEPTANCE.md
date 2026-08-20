@@ -24,6 +24,10 @@ authority: canonical
 - [x] 命令闭环：executed / rejected / TTL 超时 202（test-loop-f2 28/28，mock）
 - [x] 设备在线 / 离线 / boot_id 变化识别（mock e2e）
 - [x] 配对 session 一次性 token + QR 载荷端口跟随配置（e2e）
+- [x] 配对 token 原子单次消费：50 并发恰 1 成功、失败可重试、无半状态（M1-G2，-race）
+- [x] request_id 幂等：并发同命令 join（publish 恰一次）/ 异命令 409 / 终态重放不重发（M1-G2，-race）
+- [x] wrong-device ACK 无法认领在途请求（三方绑定，M1-G2）
+- [x] payload 服务端深度校验（键名/范围/枚举，合法 fixtures 全兼容，M1-G2）
 - [x] Web 三页面：控制台 / 演示台 / realtime（Playwright 实测）
 - [x] 多设备广播与状态芯片条（双 mock e2e）
 - [ ] Tray 长时间运行稳定性（未做 soak）
@@ -51,12 +55,12 @@ authority: canonical
 - [ ] BLE Provision 全链路（小程序 ↔ 固件）—— PLANNED，M1-G3
 - [ ] NVS 运行时配置 / 重配网 —— PLANNED，M1-G3
 
-## F. Security（已知风险已登记，修复排 G2/G3）
+## F. Security（G2 已修项打勾；其余排 G3）
 
 - [x] 控制链路不出局域网，无云端组件
 - [x] API Key / 设备凭据明文不落库（SHA-256）
-- [x] 配对端口只在配对链路使用，token 一次性 + 5 分钟过期
-- [ ] 首次 API Key 明文进日志 —— 已登记，G2 处理
+- [x] 首次 API Key 明文不进日志（只落 0600 文件；结构性防回归 + e2e 断言日志零 chk_，M1-G2）
+- [x] 配对端口只在配对链路使用，token 一次性 + 5 分钟过期 + 原子消费（M1-G2）
 - [ ] MQTT 默认密码弱 + host 三用 —— 已登记，G3 处理
 - [ ] WS CheckOrigin 全放行（LAN 场景有意为之）—— 已登记，随 G3 评估
 
