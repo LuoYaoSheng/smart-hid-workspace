@@ -38,8 +38,8 @@ var wsUpgrader = websocket.Upgrader{
 // 订阅 channel 只由 subscribe 创建、只从 subs map 移除、永不 close：
 // 不存在 send on closed channel 路径。
 type RealtimeHub struct {
-	log *slog.Logger
-	mu  sync.RWMutex
+	log  *slog.Logger
+	mu   sync.RWMutex
 	subs map[chan []byte]struct{}
 }
 

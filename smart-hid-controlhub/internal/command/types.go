@@ -9,13 +9,13 @@ const ProtocolVersion = "1.0"
 
 // 镜像自 hid-command-schema.ts COMMAND_CONSTANTS。
 const (
-	QueueSize         = 32   // ESP32 侧命令队列深度
-	PayloadMaxBytes   = 2048 // 单条命令 payload 最大字节
-	DedupCacheSize    = 256  // request_id 去重缓存条目（设备侧）
-	TTLMsMin          = 100
-	TTLMsMax          = 10000
-	RequestIDMaxLen   = 96
-	DeviceIDPattern   = `^HID-[A-Z0-9]{8}$`
+	QueueSize          = 32   // ESP32 侧命令队列深度
+	PayloadMaxBytes    = 2048 // 单条命令 payload 最大字节
+	DedupCacheSize     = 256  // request_id 去重缓存条目（设备侧）
+	TTLMsMin           = 100
+	TTLMsMax           = 10000
+	RequestIDMaxLen    = 96
+	DeviceIDPattern    = `^HID-[A-Z0-9]{8}$`
 	StaleDeviceSession = "STALE_DEVICE_SESSION"
 )
 
@@ -41,11 +41,11 @@ const (
 type MouseAction string
 
 const (
-	MouseMove      MouseAction = "move"
-	MouseClick     MouseAction = "click"
+	MouseMove       MouseAction = "move"
+	MouseClick      MouseAction = "click"
 	MouseButtonDown MouseAction = "button_down"
 	MouseButtonUp   MouseAction = "button_up"
-	MouseWheel     MouseAction = "wheel"
+	MouseWheel      MouseAction = "wheel"
 )
 
 type SystemAction string
@@ -78,14 +78,14 @@ type MousePayload struct {
 // SmartHidCommand 是 MQTT command envelope（8 必填字段）。
 // 镜像自 hid-command-schema.ts SmartHidCommand。
 type SmartHidCommand struct {
-	Protocol      string      `json:"protocol"`         // 必填，const "1.0"
-	RequestID     string      `json:"request_id"`       // 必填，≤96 字符
-	DeviceID      string      `json:"device_id"`        // 必填，^HID-[A-Z0-9]{8}$
-	TargetBootID  string      `json:"target_boot_id"`   // 必填
-	Type          CommandType `json:"type"`             // 必填 keyboard|mouse|system
-	Action        string      `json:"action"`           // 必填，依 type 校验
-	TTLMs         int         `json:"ttl_ms"`           // 必填 [100,10000]
-	Payload       interface{} `json:"payload"`          // 必填，依 type/action 解析
+	Protocol     string      `json:"protocol"`       // 必填，const "1.0"
+	RequestID    string      `json:"request_id"`     // 必填，≤96 字符
+	DeviceID     string      `json:"device_id"`      // 必填，^HID-[A-Z0-9]{8}$
+	TargetBootID string      `json:"target_boot_id"` // 必填
+	Type         CommandType `json:"type"`           // 必填 keyboard|mouse|system
+	Action       string      `json:"action"`         // 必填，依 type 校验
+	TTLMs        int         `json:"ttl_ms"`         // 必填 [100,10000]
+	Payload      interface{} `json:"payload"`        // 必填，依 type/action 解析
 }
 
 // AckStatus 是 ACK 状态枚举（6 值）。
@@ -118,12 +118,12 @@ func (s AckStatus) IsSuccess() bool {
 // SmartHidAck 是 MQTT ack envelope（6 必填字段 + 可选 execution_ms）。
 // 镜像自 hid-command-schema.ts SmartHidAck。
 type SmartHidAck struct {
-	Protocol    string    `json:"protocol"`       // "1.0"
-	RequestID   string    `json:"request_id"`     // 回显 Command
+	Protocol    string    `json:"protocol"`   // "1.0"
+	RequestID   string    `json:"request_id"` // 回显 Command
 	DeviceID    string    `json:"device_id"`
-	BootID      string    `json:"boot_id"`        // 设备当前 boot_id
-	Status      AckStatus `json:"status"`         // 6 值之一
-	Code        int       `json:"code"`           // 0 成功，非 0 错误
+	BootID      string    `json:"boot_id"` // 设备当前 boot_id
+	Status      AckStatus `json:"status"`  // 6 值之一
+	Code        int       `json:"code"`    // 0 成功，非 0 错误
 	ExecutionMs int       `json:"execution_ms,omitempty"`
 }
 

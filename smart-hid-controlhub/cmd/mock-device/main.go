@@ -6,12 +6,13 @@
 //  2. 作为 smart-hid-firmware/ 下 C 代码的行为参考（两侧语义对齐）。
 //
 // 与 C 固件的对应：
-//   dedup          ↔ components/command_engine/dedup_cache.c
-//   boot_id 校验   ↔ command_engine.c + device_identity.c
-//   TTL 过期       ↔ command_engine worker
-//   lease          ↔ hid_engine.c tick_leases（mock 用后台 goroutine 模拟）
-//   release_all    ↔ hid_engine_release_all
-//   queue_full     ↔ command_engine queue(32)
+//
+//	dedup          ↔ components/command_engine/dedup_cache.c
+//	boot_id 校验   ↔ command_engine.c + device_identity.c
+//	TTL 过期       ↔ command_engine worker
+//	lease          ↔ hid_engine.c tick_leases（mock 用后台 goroutine 模拟）
+//	release_all    ↔ hid_engine_release_all
+//	queue_full     ↔ command_engine queue(32)
 //
 // 注意：本程序不真正发 USB HID Report（USB 行为由 C 代码负责），仅模拟执行耗时
 // 并维护"逻辑按下"状态用于 lease 语义。--verbose 可打印详细决策。
@@ -36,14 +37,14 @@ import (
 )
 
 const (
-	protocolVersion       = "1.0"
-	queueSize             = 32
-	dedupCacheSize        = 256
-	ttlMinMs       int    = 100
-	ttlMaxMs       int    = 10000
-	requestIDMaxLn int    = 96
-	staleStr       string = "STALE_DEVICE_SESSION"
-	defaultExecMs         = 6
+	protocolVersion        = "1.0"
+	queueSize              = 32
+	dedupCacheSize         = 256
+	ttlMinMs        int    = 100
+	ttlMaxMs        int    = 10000
+	requestIDMaxLn  int    = 96
+	staleStr        string = "STALE_DEVICE_SESSION"
+	defaultExecMs          = 6
 )
 
 /* ============================================================
@@ -138,10 +139,10 @@ func (d *DedupCache) Clear() {
  * 后台 goroutine 每秒扫一次，过期自动 release（仅日志，无真实 USB）。
  * ============================================================ */
 type LeaseManager struct {
-	mu         sync.Mutex
-	keysDown   map[string]int64 // keyName → deadline unix ms
-	buttonsDn  map[string]int64 // buttonName → deadline unix ms
-	log        *slog.Logger
+	mu        sync.Mutex
+	keysDown  map[string]int64 // keyName → deadline unix ms
+	buttonsDn map[string]int64 // buttonName → deadline unix ms
+	log       *slog.Logger
 }
 
 func NewLeaseManager(log *slog.Logger) *LeaseManager {
@@ -379,7 +380,9 @@ func (d *Device) simulateExec(c command) int {
 			}
 			d.lease.KeyDown(key, p.LeaseMs)
 		case "key_up":
-			var p struct{ Key string `json:"key"` }
+			var p struct {
+				Key string `json:"key"`
+			}
 			_ = json.Unmarshal(c.Payload, &p)
 			d.lease.KeyUp(p.Key)
 		}
@@ -397,7 +400,9 @@ func (d *Device) simulateExec(c command) int {
 			}
 			d.lease.ButtonDown(btn, p.LeaseMs)
 		case "button_up":
-			var p struct{ Button string `json:"button"` }
+			var p struct {
+				Button string `json:"button"`
+			}
 			_ = json.Unmarshal(c.Payload, &p)
 			btn := p.Button
 			if btn == "" {

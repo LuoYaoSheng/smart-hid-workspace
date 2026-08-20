@@ -25,11 +25,11 @@ func (s *Server) handleDevicesList(w http.ResponseWriter, r *http.Request) {
 	}
 	devs := s.devices.List()
 	type devOut struct {
-		DeviceID     string `json:"device_id"`
-		BootID       string `json:"boot_id"`
-		Online       bool   `json:"online"`
-		USBHIDReady  bool   `json:"usb_hid_ready"`
-		Firmware     string `json:"firmware"`
+		DeviceID    string `json:"device_id"`
+		BootID      string `json:"boot_id"`
+		Online      bool   `json:"online"`
+		USBHIDReady bool   `json:"usb_hid_ready"`
+		Firmware    string `json:"firmware"`
 	}
 	out := make([]devOut, 0, len(devs))
 	for _, d := range devs {
@@ -62,11 +62,11 @@ func (s *Server) handleDeviceOrCommand(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"device_id":    d.DeviceID,
-			"boot_id":      d.BootID,
-			"online":       d.Online,
+			"device_id":     d.DeviceID,
+			"boot_id":       d.BootID,
+			"online":        d.Online,
 			"usb_hid_ready": d.USBHIDReady,
-			"firmware":     d.Firmware,
+			"firmware":      d.Firmware,
 		})
 		return
 	}

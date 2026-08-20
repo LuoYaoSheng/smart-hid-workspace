@@ -28,11 +28,11 @@ type pairResult struct {
 // url 形如 "http://127.0.0.1:17892/api/v1/pairing/device"。
 func doPair(url, token, deviceID, bootID string, log *slog.Logger) (*pairResult, error) {
 	body, _ := json.Marshal(map[string]string{
-		"token":    token,
+		"token":     token,
 		"device_id": deviceID,
-		"boot_id":  bootID,
-		"firmware": "1.0.0-mock",
-		"hardware": "mock-v1",
+		"boot_id":   bootID,
+		"firmware":  "1.0.0-mock",
+		"hardware":  "mock-v1",
 	})
 	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {

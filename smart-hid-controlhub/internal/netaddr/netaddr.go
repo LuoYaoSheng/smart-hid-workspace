@@ -43,9 +43,9 @@ type Dialer func(peer net.IP) (net.IP, error)
 
 // Resolver 解析 advertise host。零值不可用，用 New。
 type Resolver struct {
-	explicit   string
-	snapshots  SnapshotLister
-	dial       Dialer
+	explicit  string
+	snapshots SnapshotLister
+	dial      Dialer
 }
 
 // New 创建 resolver。explicit 为 mqtt.advertise_host（空 = 自动解析）。

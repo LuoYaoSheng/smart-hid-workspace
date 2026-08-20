@@ -16,13 +16,13 @@ import (
 
 // Config 是 ControlHub 运行配置。
 type Config struct {
-	HTTP     HTTPConfig     `yaml:"http"`
-	MQTT     MQTTConfig     `yaml:"mqtt"`
-	Pairing  PairingConfig  `yaml:"pairing"`
-	Web      WebConfig      `yaml:"web"`
-	APIKey   string         `yaml:"api_key"`
-	DataDir  string         `yaml:"data_dir"`
-	LogLevel string         `yaml:"log_level"`
+	HTTP     HTTPConfig    `yaml:"http"`
+	MQTT     MQTTConfig    `yaml:"mqtt"`
+	Pairing  PairingConfig `yaml:"pairing"`
+	Web      WebConfig     `yaml:"web"`
+	APIKey   string        `yaml:"api_key"`
+	DataDir  string        `yaml:"data_dir"`
+	LogLevel string        `yaml:"log_level"`
 }
 
 type HTTPConfig struct {

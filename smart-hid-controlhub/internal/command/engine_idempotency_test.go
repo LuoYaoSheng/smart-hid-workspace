@@ -180,7 +180,7 @@ func TestTerminalRequestReplay(t *testing.T) {
 	}
 }
 
-// TestReplayLegacyEmptyFingerprint —— 升级前旧行 fingerprint=''：
+// TestReplayLegacyEmptyFingerprint —— 升级前旧行 fingerprint=”：
 // 不判冲突，按既有终态回放。
 func TestReplayLegacyEmptyFingerprint(t *testing.T) {
 	client := &mockClient{}

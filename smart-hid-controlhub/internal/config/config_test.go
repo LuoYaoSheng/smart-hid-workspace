@@ -85,7 +85,7 @@ func TestLoad_ValidOverride(t *testing.T) {
 }
 
 // TestMQTTBindHostDefault 默认 bind 0.0.0.0：LAN 设备可达是产品主场景
-//（broker 有 per-device 凭据 + ACL 保护，见 docs/current/ARCHITECTURE）。
+// （broker 有 per-device 凭据 + ACL 保护，见 docs/current/ARCHITECTURE）。
 func TestMQTTBindHostDefault(t *testing.T) {
 	t.Chdir(t.TempDir())
 	c, err := Load("")
@@ -107,11 +107,11 @@ func TestMQTTBindHostDefault(t *testing.T) {
 func TestLegacyMQTTHostConfig(t *testing.T) {
 	t.Chdir(t.TempDir())
 	cases := []struct {
-		name             string
-		yamlHost         string
-		wantBind         string
-		wantAdvertise    string
-		wantLegacyFlag   bool
+		name           string
+		yamlHost       string
+		wantBind       string
+		wantAdvertise  string
+		wantLegacyFlag bool
 	}{
 		{"LAN IP", "192.168.1.20", "192.168.1.20", "192.168.1.20", true},
 		{"loopback", "127.0.0.1", "127.0.0.1", "", true},

@@ -16,17 +16,17 @@ func payloadCmd(typ CommandType, action string, payload any) *SmartHidCommand {
 func TestValidatePayload_ValidFixtures(t *testing.T) {
 	valid := map[string]*SmartHidCommand{
 		// 键盘：README/openapi/demo 常用形态
-		"tap-enter":          payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "ENTER"}),
-		"tap-enter-hold":     payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "ENTER", "hold_ms": 40}),
-		"tap-letter":         payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "a"}),
-		"tap-letter-upper":   payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "Z"}),
-		"tap-digit":          payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "DIGIT5"}),
-		"tap-pgdn-alias":     payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "PGDN"}),
-		"hotkey-3":           payloadCmd(TypeKeyboard, "hotkey", map[string]any{"keys": []any{"CTRL", "SHIFT", "S"}}),
-		"hotkey-mod-alias":   payloadCmd(TypeKeyboard, "hotkey", map[string]any{"keys": []any{"WIN", "R"}}),
-		"hotkey-single":      payloadCmd(TypeKeyboard, "hotkey", map[string]any{"keys": []any{"F5"}, "hold_ms": 60}),
-		"key-down-lease":     payloadCmd(TypeKeyboard, "key_down", map[string]any{"key": "SHIFT", "lease_ms": 2000}),
-		"key-up":             payloadCmd(TypeKeyboard, "key_up", map[string]any{"key": "SHIFT"}),
+		"tap-enter":        payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "ENTER"}),
+		"tap-enter-hold":   payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "ENTER", "hold_ms": 40}),
+		"tap-letter":       payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "a"}),
+		"tap-letter-upper": payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "Z"}),
+		"tap-digit":        payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "DIGIT5"}),
+		"tap-pgdn-alias":   payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "PGDN"}),
+		"hotkey-3":         payloadCmd(TypeKeyboard, "hotkey", map[string]any{"keys": []any{"CTRL", "SHIFT", "S"}}),
+		"hotkey-mod-alias": payloadCmd(TypeKeyboard, "hotkey", map[string]any{"keys": []any{"WIN", "R"}}),
+		"hotkey-single":    payloadCmd(TypeKeyboard, "hotkey", map[string]any{"keys": []any{"F5"}, "hold_ms": 60}),
+		"key-down-lease":   payloadCmd(TypeKeyboard, "key_down", map[string]any{"key": "SHIFT", "lease_ms": 2000}),
+		"key-up":           payloadCmd(TypeKeyboard, "key_up", map[string]any{"key": "SHIFT"}),
 		// 鼠标：demo 触控板/按键/滚轮
 		"move-both":          payloadCmd(TypeMouse, "move", map[string]any{"dx": -320, "dy": 180}),
 		"move-dx-only":       payloadCmd(TypeMouse, "move", map[string]any{"dx": 12}),
@@ -39,8 +39,8 @@ func TestValidatePayload_ValidFixtures(t *testing.T) {
 		"wheel-up":           payloadCmd(TypeMouse, "wheel", map[string]any{"delta": -1}),
 		"wheel-boundary":     payloadCmd(TypeMouse, "wheel", map[string]any{"delta": 127}),
 		// 系统
-		"release-all-empty":  payloadCmd(TypeSystem, "release_all", map[string]any{}),
-		"release-all-nil":    payloadCmd(TypeSystem, "release_all", nil),
+		"release-all-empty": payloadCmd(TypeSystem, "release_all", map[string]any{}),
+		"release-all-nil":   payloadCmd(TypeSystem, "release_all", nil),
 		// 键名大小写不敏感（固件 strcasecmp）
 		"tap-lowercase-name": payloadCmd(TypeKeyboard, "tap", map[string]any{"key": "enter"}),
 	}

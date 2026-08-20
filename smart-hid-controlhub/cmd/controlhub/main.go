@@ -18,12 +18,21 @@ import (
 	"os"
 
 	"smart-hid-controlhub/internal/app"
+	"smart-hid-controlhub/internal/buildinfo"
 )
 
 func main() {
 	cfgPath := flag.String("config", "", "path to config.yaml (default: built-in defaults)")
 	trayMode := flag.Bool("tray", false, "run with system tray (CH-P3); default is headless")
+	showVer := flag.Bool("version", false, "print version/build info and exit")
 	flag.Parse()
+
+	if *showVer {
+		fmt.Println(buildinfo.Summary())
+		return
+	}
+	// 启动横幅：版本事实源 = 根 VERSION（M1-G4 ldflags 注入）
+	fmt.Println(buildinfo.Summary())
 
 	var err error
 	if *trayMode {

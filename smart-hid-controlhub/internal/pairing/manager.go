@@ -66,9 +66,9 @@ type PairingResult struct {
 
 // Manager 管理 pairing_sessions + device_credentials 表。
 type Manager struct {
-	db      *sql.DB
-	log     *slog.Logger
-	ttlSec  int
+	db       *sql.DB
+	log      *slog.Logger
+	ttlSec   int
 	mqttPort int // broker 端口（固定）；host 由调用方按请求路径解析后传入 CompleteSession
 }
 

@@ -19,7 +19,6 @@ const (
 	// KeyLANModeEnabled 控制 HTTP API 是否监听 0.0.0.0（true）或 127.0.0.1（false）。
 	// 验收 A11 "LAN API 需要显式开启"。默认 false。
 	KeyLANModeEnabled = "lan_mode_enabled"
-
 )
 
 // Defaults 内置默认值。Get* 找不到 key 时回退。

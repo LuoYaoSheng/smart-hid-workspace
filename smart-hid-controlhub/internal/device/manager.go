@@ -1,6 +1,8 @@
 // Package device 实现 Device Manager。
 // 职责：跟踪设备 online/boot_id/usb_hid_ready/firmware（通过订阅 status topic 更新）；
-//       提供查询能力供 HTTP 层与 Command Engine 使用。
+//
+//	提供查询能力供 HTTP 层与 Command Engine 使用。
+//
 // Phase 1：内存 map + SQLite 持久化；不做配对（CH-06 跳过）。
 package device
 
@@ -16,12 +18,12 @@ import (
 
 // Device 是设备运行态（内存视图）。
 type Device struct {
-	DeviceID     string
-	BootID       string
-	Online       bool
-	USBHIDReady  bool
-	Firmware     string
-	LastSeenAt   time.Time
+	DeviceID    string
+	BootID      string
+	Online      bool
+	USBHIDReady bool
+	Firmware    string
+	LastSeenAt  time.Time
 }
 
 // Manager 管理已知设备。

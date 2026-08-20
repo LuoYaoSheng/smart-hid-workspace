@@ -4,6 +4,7 @@
 #include "device_identity.h"
 
 #include <string.h>
+#include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_timer.h"
@@ -14,9 +15,6 @@ static const char *TAG = "device_identity";
 
 #define NVS_NAMESPACE  "identity"
 #define NVS_KEY_DEVICE "device_id"
-
-/* 固件版本（与 sdkconfig / build tag 一致；F4 OTA 后由 OTA metadata 覆盖） */
-#define FIRMWARE_VERSION "1.0.0-f1f2"
 
 static char s_device_id[SMART_HID_DEVICE_ID_MAX_LEN] = {0};
 static char s_boot_id[SMART_HID_BOOT_ID_MAX_LEN]     = {0};
@@ -108,5 +106,7 @@ const char *device_identity_get_boot_id(void) {
 }
 
 const char *device_identity_get_firmware(void) {
-    return FIRMWARE_VERSION;
+    /* 版本事实源 = 仓库根 VERSION（CMake 注入 PROJECT_VER → esp_app_desc）。
+     * 运行时从镜像头读取，OTA 后自然变为新镜像版本。 */
+    return esp_app_get_description()->version;
 }

@@ -70,6 +70,7 @@ data_dir: $DATA
 log_level: info
 YAML
 "$BIN_DIR/controlhub" -config "$CFG" >"$WORKDIR/controlhub.log" 2>&1 &
+# shellcheck disable=SC2034  # CH_PID 保留供手动调试；清理走 pkill 模式
 CH_PID=$!
 sleep 0.5
 

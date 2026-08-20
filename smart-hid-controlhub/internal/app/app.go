@@ -20,6 +20,7 @@ import (
 
 	"smart-hid-controlhub/internal/api"
 	"smart-hid-controlhub/internal/apikey"
+	"smart-hid-controlhub/internal/buildinfo"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/config"
 	"smart-hid-controlhub/internal/device"
@@ -35,21 +36,21 @@ import (
 
 // App 持有所有运行时依赖与生命周期控制。
 type App struct {
-	cfg          *config.Config
-	log          *slog.Logger
-	store        *storage.Store
-	keys         *apikey.Store
-	settings     *settings.Store
-	dm           *device.Manager
-	broker       *mqtt.Broker
-	hubClient    pahomqtt.Client
-	mqttUser     string // 内部 MQTT 凭据（随机或配置；绝不写日志）
-	mqttPass     string
-	engine       *command.Engine
-	apiSrv       *api.Server
-	pairingMgr   *pairing.Manager
-	pairingSrv   *pairing.DeviceServer
-	realtimeHub  *api.RealtimeHub
+	cfg         *config.Config
+	log         *slog.Logger
+	store       *storage.Store
+	keys        *apikey.Store
+	settings    *settings.Store
+	dm          *device.Manager
+	broker      *mqtt.Broker
+	hubClient   pahomqtt.Client
+	mqttUser    string // 内部 MQTT 凭据（随机或配置；绝不写日志）
+	mqttPass    string
+	engine      *command.Engine
+	apiSrv      *api.Server
+	pairingMgr  *pairing.Manager
+	pairingSrv  *pairing.DeviceServer
+	realtimeHub *api.RealtimeHub
 
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -65,6 +66,9 @@ func Build(cfgPath string) (*App, error) {
 		return nil, err
 	}
 	log := logging.NewLogger(cfg.LogLevel).With("component", "controlhub")
+	log.Info("controlhub starting",
+		"version", buildinfo.Version, "commit", buildinfo.Commit,
+		"build_date", buildinfo.Date, "dirty", buildinfo.Dirty)
 
 	// SQLite
 	dbPath := filepath.Join(cfg.DataDir, "controlhub.db")

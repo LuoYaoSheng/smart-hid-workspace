@@ -53,19 +53,28 @@ func fields(errs []*ValidationError) []string {
 func TestValidateCommand_ValidBaseline(t *testing.T) {
 	// 全字段合法的命令不应有任何校验错误。
 	for name, mutate := range map[string]func(*SmartHidCommand){
-		"keyboard tap":   func(c *SmartHidCommand) { c.Type = TypeKeyboard; c.Action = string(KBTap) },
+		"keyboard tap": func(c *SmartHidCommand) { c.Type = TypeKeyboard; c.Action = string(KBTap) },
 		"keyboard hotkey": func(c *SmartHidCommand) {
-			c.Type = TypeKeyboard; c.Action = string(KBHotkey)
+			c.Type = TypeKeyboard
+			c.Action = string(KBHotkey)
 			c.Payload = KeyboardPayload{Keys: []string{"CTRL", "C"}}
 		},
 		"keyboard key_down": func(c *SmartHidCommand) { c.Type = TypeKeyboard; c.Action = string(KBKeyDown) },
 		"keyboard key_up":   func(c *SmartHidCommand) { c.Type = TypeKeyboard; c.Action = string(KBKeyUp) },
-		"mouse move":        func(c *SmartHidCommand) { c.Type = TypeMouse; c.Action = string(MouseMove); c.Payload = MousePayload{DX: 10, DY: -5} },
-		"mouse click":       func(c *SmartHidCommand) { c.Type = TypeMouse; c.Action = string(MouseClick); c.Payload = MousePayload{Button: "left"} },
-		"mouse button_down": func(c *SmartHidCommand) { c.Type = TypeMouse; c.Action = string(MouseButtonDown) },
-		"mouse button_up":   func(c *SmartHidCommand) { c.Type = TypeMouse; c.Action = string(MouseButtonUp) },
-		"mouse wheel":       func(c *SmartHidCommand) { c.Type = TypeMouse; c.Action = string(MouseWheel) },
-		"system release_all": func(c *SmartHidCommand) { c.Type = TypeSystem; c.Action = string(SysReleaseAll) },
+		"mouse move": func(c *SmartHidCommand) {
+			c.Type = TypeMouse
+			c.Action = string(MouseMove)
+			c.Payload = MousePayload{DX: 10, DY: -5}
+		},
+		"mouse click": func(c *SmartHidCommand) {
+			c.Type = TypeMouse
+			c.Action = string(MouseClick)
+			c.Payload = MousePayload{Button: "left"}
+		},
+		"mouse button_down":    func(c *SmartHidCommand) { c.Type = TypeMouse; c.Action = string(MouseButtonDown) },
+		"mouse button_up":      func(c *SmartHidCommand) { c.Type = TypeMouse; c.Action = string(MouseButtonUp) },
+		"mouse wheel":          func(c *SmartHidCommand) { c.Type = TypeMouse; c.Action = string(MouseWheel) },
+		"system release_all":   func(c *SmartHidCommand) { c.Type = TypeSystem; c.Action = string(SysReleaseAll) },
 		"ttl at min boundary":  func(c *SmartHidCommand) { c.TTLMs = TTLMsMin },
 		"ttl at max boundary":  func(c *SmartHidCommand) { c.TTLMs = TTLMsMax },
 		"device_id all digits": func(c *SmartHidCommand) { c.DeviceID = "HID-12345678" },
