@@ -32,6 +32,7 @@ type Engine struct {
 	devices    *device.Manager
 	db         *storage.Store
 	log        *slog.Logger
+	ackObs     func(*SmartHidAck) // 可选：终态 ACK 观察者（实时事件通道用；nil = 无）
 
 	mu       sync.RWMutex
 	pending  map[string]chan *SmartHidAck // request_id -> ack chan
@@ -46,6 +47,12 @@ func New(client pahomqtt.Client, dm *device.Manager, db *storage.Store, log *slo
 		log:        log,
 		pending:    make(map[string]chan *SmartHidAck),
 	}
+}
+
+// WithAckObserver 注入终态 ACK 观察者（每条终态 ACK 调用一次；不得阻塞）。
+func (e *Engine) WithAckObserver(fn func(*SmartHidAck)) *Engine {
+	e.ackObs = fn
+	return e
 }
 
 // HandleAck 是订阅 ack topic 的回调。解析 ACK，路由到对应 request_id 的 pending chan。
@@ -75,6 +82,10 @@ func (e *Engine) HandleAck(_ pahomqtt.Client, msg pahomqtt.Message) {
 			`UPDATE commands SET status=?, code=?, execution_ms=?, acked_at=? WHERE request_id=?`,
 			string(ack.Status), ack.Code, ack.ExecutionMs, time.Now().Unix(), ack.RequestID,
 		)
+		// 实时事件通道（nil = 未接入）
+		if e.ackObs != nil {
+			e.ackObs(&ack)
+		}
 	}
 }
 

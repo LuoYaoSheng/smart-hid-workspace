@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>模拟键鼠演示台 — Smart HID</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌨️</text></svg>">
   <style>
     :root {
       --bg: #0b1220; --panel: #111a2c; --panel2: #0e1626;
@@ -122,6 +123,7 @@
 <body>
   <div class="top">
     <h1>⌨️ 模拟键鼠演示台 <small>浏览器输入 → ESP32-S3 → 目标电脑真实键鼠</small></h1>
+    <span id="ws-dot" class="ws-off" title="WebSocket 实时通道">⚡ 实时通道</span>
     <a href="index.html">← 返回控制台</a>
   </div>
 
@@ -144,6 +146,12 @@
     <div><div class="lbl">rejected/失败</div><b id="st-bad" class="bad-text">0</b></div>
     <div><div class="lbl">往返延迟</div><b id="st-rtt">— ms</b></div>
     <div><div class="lbl">最近结果</div><b id="st-last" style="font-size:13px">—</b></div>
+  </div>
+
+  <!-- 实时事件流（WebSocket 推送；未连接时隐藏） -->
+  <div class="card" id="events-card" style="margin-bottom:14px" hidden>
+    <h2>⚡ 实时事件流 <span class="muted" id="events-sub">（多端打开本页可观战）</span></h2>
+    <div id="events" style="display:flex;flex-direction:column;gap:4px;font-size:12px;font-family:ui-monospace,Menlo,monospace;"></div>
   </div>
 
   <div class="grid">

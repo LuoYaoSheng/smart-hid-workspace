@@ -55,6 +55,27 @@ paths:
               example: { status: ok, protocol: "1.0", device_cnt: 1 }
 
   # -------------------------------------------------------------------------
+  # WebSocket 实时事件通道（OS-3b）。浏览器 WS 无法带 Authorization header，
+  # 鉴权用 query 参数 ?key=<api-key>（LAN 场景）。只下行：hello / device / ack。
+  /realtime:
+    get:
+      summary: WebSocket 实时事件通道（需 web.realtime=true）
+      description: |
+        升级为 WebSocket 后服务端推送 JSON 事件（只下行，控制命令仍走 HTTP 闭环）：
+          {"type":"hello","data":{"server":"smart-hid-controlhub","protocol":"1.0"},"ts":...}
+          {"type":"device","data":{"device_id":"HID-00000001","boot_id":"B-...","online":true,"usb_hid_ready":true,"firmware":"..."},"ts":...}
+          {"type":"ack","data":{"request_id":"...","device_id":"HID-00000001","status":"executed","code":0,"execution_ms":6},"ts":...}
+        保活：服务端 30s ping。鉴权：?key=<api-key>（升级前校验，错误返回 401）。
+      tags: [realtime]
+      parameters:
+        - name: key
+          in: query
+          required: true
+          schema: { type: string, example: chk_xxx }
+      responses:
+        '101': { description: 协议升级成功（WebSocket） }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /devices:
     get:
       summary: 设备列表

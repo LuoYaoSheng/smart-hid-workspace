@@ -46,6 +46,7 @@ type App struct {
 	apiSrv       *api.Server
 	pairingMgr   *pairing.Manager
 	pairingSrv   *pairing.DeviceServer
+	realtimeHub  *api.RealtimeHub
 
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -129,9 +130,19 @@ func Build(cfgPath string) (*App, error) {
 	// Engine + API server（构造时不启动）
 	engine := command.New(hubClient, dm, store, log.With("component", "engine"))
 
+	// WebSocket 实时事件通道（web.realtime=true）：设备状态 + 终态 ACK 广播
+	var realtimeHub *api.RealtimeHub
+	if cfg.Web.Realtime {
+		realtimeHub = api.NewRealtimeHub(log.With("component", "realtime"))
+		engine.WithAckObserver(func(ack *command.SmartHidAck) {
+			realtimeHub.Broadcast("ack", ack)
+		})
+	}
+
 	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, log.With("component", "api")).
 		WithPairingPort(cfg.Pairing.Port).
-		WithWebOptions(cfg.HTTP.EnableAPI, cfg.Web.Console, cfg.Web.Demo)
+		WithWebOptions(cfg.HTTP.EnableAPI, cfg.Web.Console, cfg.Web.Demo).
+		WithRealtimeHub(realtimeHub)
 
 	return &App{
 		cfg:        cfg,
@@ -182,6 +193,9 @@ func (a *App) Start() error {
 				return
 			}
 			a.dm.UpsertStatus(&st)
+			if a.realtimeHub != nil {
+				a.realtimeHub.Broadcast("device", &st)
+			}
 			a.log.Debug("status updated", "device_id", st.DeviceID, "online", st.Online, "boot_id", st.BootID)
 		}
 		if t := a.hubClient.Subscribe(statusSub, 1, statusHandler); t.Wait() && t.Error() != nil {

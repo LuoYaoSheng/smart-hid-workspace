@@ -21,6 +21,10 @@
     blastText: $('blast-text'), btnBlast: $('btn-blast'), blastState: $('blast-state'),
   };
 
+  var ws = null;
+  var wsEvents = [];
+  var wsFails = 0; // 连续失败计数（旧 key 场景停止无限重连，换 key 后重置）
+
   var state = {
     apiKey: localStorage.getItem('smarthid_apikey') || '',
     device: null,          // 选中的设备对象 {device_id, boot_id, online, usb_hid_ready}
@@ -114,6 +118,9 @@
     state.apiKey = el.apiKey.value.trim();
     localStorage.setItem('smarthid_apikey', state.apiKey);
     refreshDevices();
+    if (ws) { try { ws.close(); } catch (e) {} }
+    wsFails = 0; // 手动连接重置失败计数
+    connectWS();
   });
   el.apiKey.addEventListener('keydown', function (e) { if (e.key === 'Enter') el.btnKey.click(); });
 
@@ -425,9 +432,64 @@
     })();
   });
 
+  // ---------- WebSocket 实时事件通道（不可用时静默降级为纯 HTTP） ----------
+
+  var wsDot = $('ws-dot');
+
+  function connectWS() {
+    if (!state.apiKey || ws) return;
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    try {
+      ws = new WebSocket(proto + '//' + location.host + '/api/v1/realtime?key=' + encodeURIComponent(state.apiKey));
+    } catch (e) { ws = null; return; }
+    ws.onopen = function () {
+      wsFails = 0;
+      wsDot.className = 'ws-on';
+      wsDot.textContent = '⚡ 实时通道 已连接';
+      $('events-card').hidden = false;
+    };
+    ws.onmessage = function (ev) {
+      var msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      handleEvent(msg);
+    };
+    ws.onclose = function () {
+      ws = null;
+      wsDot.className = 'ws-off';
+      wsDot.textContent = '⚡ 实时通道（HTTP 模式）';
+      wsFails++;
+      if (wsFails >= 5) return; // 连续失败（如旧 key）不再重连；重新点「连接」会重置
+      setTimeout(function () { if (state.apiKey) connectWS(); }, 3000);
+    };
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
+  }
+
+  function handleEvent(msg) {
+    var d = msg.data || {};
+    var line = '';
+    if (msg.type === 'hello') line = 'hello · 服务端已连接';
+    else if (msg.type === 'device') line = 'device · ' + d.device_id + (d.online ? ' 上线' : ' 离线') + (d.usb_hid_ready ? ' · HID 就绪' : '');
+    else if (msg.type === 'ack') line = 'ack · ' + d.request_id + ' → ' + d.status + (d.execution_ms ? ' · ' + d.execution_ms + 'ms' : '');
+    else line = msg.type;
+    pushEvent(line);
+    if (msg.type === 'device' && state.device && d.device_id === state.device.device_id) {
+      el.devState.textContent = d.online && d.usb_hid_ready
+        ? '● 已连接 ' + d.device_id
+        : '○ 设备未就绪，命令会被拒绝';
+    }
+  }
+
+  function pushEvent(line) {
+    var t = new Date();
+    var hh = ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ':' + ('0' + t.getSeconds()).slice(-2);
+    wsEvents.unshift(hh + '  ' + line);
+    if (wsEvents.length > 8) wsEvents.length = 8;
+    $('events').innerHTML = wsEvents.map(function (e) { return '<div>' + e + '</div>'; }).join('');
+  }
+
   // ---------- 启动 ----------
 
   buildKbd();
-  if (state.apiKey) refreshDevices();
+  if (state.apiKey) { refreshDevices(); connectWS(); }
   updateStats();
 })();

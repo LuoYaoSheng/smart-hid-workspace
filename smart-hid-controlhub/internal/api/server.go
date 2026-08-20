@@ -10,10 +10,13 @@
 package api
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -32,8 +35,9 @@ type Server struct {
 	devices     *device.Manager
 	keys        *apikey.Store
 	settings    *settings.Store
-	pairingMgr  *pairing.Manager
-	pairingPort int    // 配对端口（QR 载荷用；config.pairing.port）
+	pairingMgr   *pairing.Manager
+	pairingPort  int          // 配对端口（QR 载荷用；config.pairing.port）
+	realtimeHub  *RealtimeHub // WebSocket 事件通道（web.realtime=true 时注入；nil = 不注册路由）
 	enableAPI   bool   // config.http.enable_api；false = 纯静态模式
 	webConsole  bool   // config.web.console
 	webDemo     bool   // config.web.demo
@@ -59,6 +63,9 @@ func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStor
 	}
 }
 
+// WithRealtimeHub 注入实时事件通道（web.realtime=true）。
+func (s *Server) WithRealtimeHub(h *RealtimeHub) *Server { s.realtimeHub = h; return s }
+
 // WithPairingPort 设置配对端口（QR 载荷 shid://pair?...&port=）。
 func (s *Server) WithPairingPort(p int) *Server { s.pairingPort = p; return s }
 
@@ -74,6 +81,9 @@ func (s *Server) Routes() http.Handler {
 
 	if s.enableAPI {
 		mux.HandleFunc("/api/v1/health", s.handleHealth)
+		if s.realtimeHub != nil {
+			mux.HandleFunc("/api/v1/realtime", s.handleRealtime) // WebSocket（key 鉴权在 handler 内）
+		}
 
 		// 受保护路由（需 Bearer）
 		protected := http.NewServeMux()
@@ -166,6 +176,16 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
+}
+
+// Hijack 透传给底层 writer（WebSocket Upgrade 需要；内嵌接口字段只提升接口方法集，
+// 不补这个方法 gorilla Upgrade 会因 Hijacker 断言失败返回 500）。
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("response writer does not support hijack")
+	}
+	return h.Hijack()
 }
 
 // --- 响应辅助 ---
