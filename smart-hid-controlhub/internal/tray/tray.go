@@ -32,7 +32,6 @@ type Controller interface {
 	RotateAPIKey() (string, error) // "重置 API Key"菜单触发
 	LANModeEnabled() bool          // LAN 模式 checkbox 当前状态
 	SetLANMode(bool) error         // LAN 模式 toggle（持久化，下次启动生效）
-	RefreshLicense() (int, int, error) // CL-6c "刷新 License"菜单触发 → (ok, failed, err)
 }
 
 // Run 启动托盘，阻塞直到用户选"退出"。
@@ -57,7 +56,6 @@ func onReady(c Controller, log *slog.Logger) {
 	systray.AddSeparator()
 
 	mRotate := systray.AddMenuItem("重置 API Key", "Rotate API key (will invalidate current key)")
-	mRefresh := systray.AddMenuItem("刷新 License", "Refresh licenses from cloud (renewal pickup)")
 	mLAN := systray.AddMenuItemCheckbox("LAN 模式",
 		"Allow LAN access to HTTP API (restart required)",
 		c.LANModeEnabled())
@@ -85,14 +83,6 @@ func onReady(c Controller, log *slog.Logger) {
 				// 不在托盘显示明文，避免肩窥泄漏；用户需到控制台或 initial-api-key.txt 取新 key
 				log.Info("api key rotated from tray", "key_prefix", raw[:12]+"...")
 				systray.SetTooltip("API key rotated. Open console with the new key.")
-			case <-mRefresh.ClickedCh:
-				ok, failed, err := c.RefreshLicense()
-				if err != nil {
-					log.Warn("refresh license from tray", "err", err)
-					systray.SetTooltip("Refresh: " + err.Error())
-					continue
-				}
-				systray.SetTooltip(fmt.Sprintf("License refreshed: %d ok, %d failed", ok, failed))
 			case <-mLAN.ClickedCh:
 				newState := !c.LANModeEnabled()
 				if err := c.SetLANMode(newState); err != nil {

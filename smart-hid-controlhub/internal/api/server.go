@@ -7,7 +7,6 @@
 // Phase 4（CH-P2）：API key 持久化（apikey.Store 替代 ephemeral string）+
 //
 //	POST /api-keys/rotate（A12）+ GET /api-keys。
-//	Entitlement 门控 Phase 6 接入（CH-P6）。
 package api
 
 import (
@@ -20,13 +19,10 @@ import (
 	"time"
 
 	"smart-hid-controlhub/internal/apikey"
-	"smart-hid-controlhub/internal/cloud"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/device"
-	"smart-hid-controlhub/internal/license"
 	"smart-hid-controlhub/internal/pairing"
 	"smart-hid-controlhub/internal/settings"
-	"smart-hid-controlhub/internal/trial"
 	"smart-hid-controlhub/internal/web"
 )
 
@@ -37,30 +33,22 @@ type Server struct {
 	keys        *apikey.Store
 	settings    *settings.Store
 	pairingMgr  *pairing.Manager
-	trialMgr    *trial.Manager
-	licenseMgr  *licmgr.Manager
-	cloudCli    *cloud.Client // CL-6b：在线激活/刷新用；nil = 离线模式
 	log         *slog.Logger
 	httpSrv     *http.Server
 }
 
 // New 构造 Server（不启动）。
-// pairingMgr / trialMgr / licenseMgr 可为 nil（开发/测试场景）。
-func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStore *settings.Store, pairingMgr *pairing.Manager, trialMgr *trial.Manager, licenseMgr *licmgr.Manager, log *slog.Logger) *Server {
+// pairingMgr 可为 nil（开发/测试场景）。
+func New(engine *command.Engine, dm *device.Manager, keys *apikey.Store, setStore *settings.Store, pairingMgr *pairing.Manager, log *slog.Logger) *Server {
 	return &Server{
 		engine:     engine,
 		devices:    dm,
 		keys:       keys,
 		settings:   setStore,
 		pairingMgr: pairingMgr,
-		trialMgr:   trialMgr,
-		licenseMgr: licenseMgr,
 		log:        log,
 	}
 }
-
-// WithCloudClient 注入 Cloud 出站客户端（CL-6b）。nil 表示纯离线模式。
-func (s *Server) WithCloudClient(c *cloud.Client) *Server { s.cloudCli = c; return s }
 
 // Routes 返回 http.Handler（带鉴权中间件 + 路由分发）。
 func (s *Server) Routes() http.Handler {
@@ -75,15 +63,6 @@ func (s *Server) Routes() http.Handler {
 	protected.HandleFunc("/api/v1/api-keys", s.handleAPIKeysList)            // GET list
 	protected.HandleFunc("/api/v1/api-keys/rotate", s.handleAPIKeysRotate)   // POST 轮换（A12）
 	protected.HandleFunc("/api/v1/settings/lan-mode", s.handleSettingsLAN)   // GET/POST LAN 模式（A11）
-	protected.HandleFunc("/api/v1/usage", s.handleUsage)                     // GET 当前 Trial 用量（CH-P6）
-	protected.HandleFunc("/api/v1/usage/all", s.handleUsageAll)              // GET 所有设备用量
-	if s.licenseMgr != nil {
-		protected.HandleFunc("/api/v1/license", s.handleLicenseStatus)         // GET 当前 license 状态
-		protected.HandleFunc("/api/v1/license/import", s.handleLicenseImport)  // POST 离线导入
-		protected.HandleFunc("/api/v1/license/list", s.handleLicenseList)      // GET 所有 license
-		protected.HandleFunc("/api/v1/license/activate-code", s.handleActivateByCode) // CL-6c POST 激活码在线激活
-		protected.HandleFunc("/api/v1/license/refresh", s.handleRefreshLicense)       // CL-6c POST 在线刷新
-	}
 	if s.pairingMgr != nil {
 		protected.HandleFunc("/api/v1/pairing/sessions", s.handlePairingSessions)        // POST 创建
 		protected.HandleFunc("/api/v1/pairing/sessions/", s.handlePairingSessionsByToken) // GET {token}
@@ -97,15 +76,6 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("/api/v1/api-keys", auth)
 	mux.Handle("/api/v1/api-keys/rotate", auth)
 	mux.Handle("/api/v1/settings/lan-mode", auth)
-	mux.Handle("/api/v1/usage", auth)
-	mux.Handle("/api/v1/usage/all", auth)
-	if s.licenseMgr != nil {
-		mux.Handle("/api/v1/license", auth)
-		mux.Handle("/api/v1/license/import", auth)
-		mux.Handle("/api/v1/license/list", auth)
-		mux.Handle("/api/v1/license/activate-code", auth)
-		mux.Handle("/api/v1/license/refresh", auth)
-	}
 	if s.pairingMgr != nil {
 		mux.Handle("/api/v1/pairing/sessions", auth)
 		mux.Handle("/api/v1/pairing/sessions/", auth)

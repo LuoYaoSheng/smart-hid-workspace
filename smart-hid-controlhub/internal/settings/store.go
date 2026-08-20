@@ -2,9 +2,9 @@
 //
 // 存储介质：settings 表（CH-P1 migration 0002 创建），key/value/updated_at 三列。
 // 与 config.yaml 的区别：config 是启动配置（端口、密码、log level），
-// settings 是运行时可改的状态（LAN 模式开关、Trial 配额等）。
+// settings 是运行时可改的状态（LAN 模式开关等）。
 //
-// CH-P4 引入；CH-P6 会扩展 Trial 相关 key。
+
 package settings
 
 import (
@@ -20,18 +20,11 @@ const (
 	// 验收 A11 "LAN API 需要显式开启"。默认 false。
 	KeyLANModeEnabled = "lan_mode_enabled"
 
-	// KeyTrialQuotaSeconds 每设备 Trial 总有效控制时间（秒）。CH-P6 使用。默认 1800。
-	KeyTrialQuotaSeconds = "trial_quota_seconds"
-
-	// KeyTrialIdleTimeoutSeconds Trial Session 闲置超时（秒）。CH-P6 使用。默认 300。
-	KeyTrialIdleTimeoutSeconds = "trial_idle_timeout_seconds"
 )
 
 // Defaults 内置默认值。Get* 找不到 key 时回退。
 var Defaults = map[string]string{
-	KeyLANModeEnabled:          "false",
-	KeyTrialQuotaSeconds:       "1800",
-	KeyTrialIdleTimeoutSeconds: "300",
+	KeyLANModeEnabled: "false",
 }
 
 // Store 是 settings 表的 CRUD 封装。

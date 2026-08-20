@@ -27,8 +27,8 @@ func TestGet_Defaults(t *testing.T) {
 	if v := s.Get(KeyLANModeEnabled); v != "false" {
 		t.Errorf("lan default = %q, want false", v)
 	}
-	if v := s.Get(KeyTrialQuotaSeconds); v != "1800" {
-		t.Errorf("quota default = %q, want 1800", v)
+	if v := s.Get("demo_int_key"); v != "" {
+		t.Errorf("unknown int key default = %q, want empty", v)
 	}
 	if v := s.Get("nonexistent_key"); v != "" {
 		t.Errorf("unknown key = %q, want empty", v)
@@ -71,13 +71,13 @@ func TestBool(t *testing.T) {
 
 func TestInt(t *testing.T) {
 	s := newStore(t)
-	if v := s.GetInt(KeyTrialQuotaSeconds, 999); v != 1800 {
-		t.Errorf("default quota = %d, want 1800", v)
+	if v := s.GetInt("demo_int_key", 999); v != 999 {
+		t.Errorf("unknown key fallback = %d, want 999", v)
 	}
-	if err := s.SetInt(KeyTrialQuotaSeconds, 3600); err != nil {
+	if err := s.SetInt("demo_int_key", 3600); err != nil {
 		t.Fatal(err)
 	}
-	if v := s.GetInt(KeyTrialQuotaSeconds, 0); v != 3600 {
+	if v := s.GetInt("demo_int_key", 0); v != 3600 {
 		t.Errorf("after SetInt = %d, want 3600", v)
 	}
 	// 非数字 fallback

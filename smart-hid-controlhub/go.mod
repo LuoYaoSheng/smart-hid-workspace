@@ -27,4 +27,3 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 )
 
-replace smart-hid-cloud => ../smart-hid-cloud

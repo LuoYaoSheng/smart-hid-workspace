@@ -28,8 +28,8 @@ func TestMigrate_FreshDB(t *testing.T) {
 	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
 		t.Fatalf("query max version: %v", err)
 	}
-	if version != 3 {
-		t.Fatalf("expected latest version 3 (CL-3a 加 0003), got %d", version)
+	if version != 2 {
+		t.Fatalf("expected latest version 2, got %d", version)
 	}
 }
 
@@ -43,8 +43,8 @@ func TestMigrate_Idempotent(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
-	if n != 3 {
-		t.Fatalf("expected 3 recorded, got %d", n)
+	if n != 2 {
+		t.Fatalf("expected 2 recorded, got %d", n)
 	}
 }
 
@@ -54,8 +54,7 @@ func TestMigrate_Phase45TablesExist(t *testing.T) {
 		"schema_migrations", "app_meta", "settings",
 		"devices", "commands",
 		"device_credentials", "pairing_sessions",
-		"trial_usage", "trial_sessions",
-		"api_keys", "licenses", "security_events",
+		"api_keys", "security_events",
 	}
 	rows, err := db.Query(`SELECT name FROM sqlite_master WHERE type='table'`)
 	if err != nil {

@@ -134,12 +134,7 @@ func (s *Server) handleSendCommand(w http.ResponseWriter, r *http.Request, devic
 	case command.AckDuplicate:
 		writeJSON(w, http.StatusOK, ack) // 200 + status=duplicate（幂等）
 	case command.AckRejected:
-		// CH-P6：CodeTrialExpired → 402 Payment Required（其余 rejected → 422）
-		if ack.Code == command.CodeTrialExpired {
-			writeJSON(w, http.StatusPaymentRequired, ack)
-		} else {
-			writeJSON(w, http.StatusUnprocessableEntity, ack)
-		}
+		writeJSON(w, http.StatusUnprocessableEntity, ack)
 	case command.AckExpired:
 		writeJSON(w, http.StatusGatewayTimeout, ack)
 	default:

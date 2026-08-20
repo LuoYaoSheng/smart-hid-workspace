@@ -50,7 +50,10 @@ func TestDeviceServer_BadToken(t *testing.T) {
 	body, _ := json.Marshal(DeviceReq{
 		Token: "nonexistent-token", DeviceID: "HID-ABCD1234", BootID: "boot-1",
 	})
-	resp, _ := http.Post(ts.URL, "application/json", bytes.NewReader(body))
+	resp, err := http.Post(ts.URL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusGone {
 		t.Errorf("status = %d, want 410 Gone", resp.StatusCode)
@@ -62,7 +65,10 @@ func TestDeviceServer_MissingFields(t *testing.T) {
 	ts := newDeviceTestServer(t, m)
 
 	body, _ := json.Marshal(DeviceReq{Token: "x"}) // 缺 device_id
-	resp, _ := http.Post(ts.URL, "application/json", bytes.NewReader(body))
+	resp, err := http.Post(ts.URL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
@@ -73,7 +79,10 @@ func TestDeviceServer_MethodNotAllowed(t *testing.T) {
 	m, _ := newMgr(t)
 	ts := newDeviceTestServer(t, m)
 
-	resp, _ := http.Get(ts.URL)
+	resp, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("GET status = %d, want 405", resp.StatusCode)

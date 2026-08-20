@@ -36,9 +36,7 @@
       desc: '创建配对 session（返 token + QR payload）', body: {} },
     { method: 'GET',    path: '/api/v1/pairing/sessions/TOKEN_PLACEHOLDER',
       desc: '查询配对 session 状态（path 里填实际 token）', body: null },
-    { method: 'GET',    path: '/api/v1/usage',
       desc: '查 Trial 用量（默认单设备自动选择）', body: null },
-    { method: 'GET',    path: '/api/v1/usage/all',
       desc: '列出所有设备 Trial 用量', body: null },
   ];
 

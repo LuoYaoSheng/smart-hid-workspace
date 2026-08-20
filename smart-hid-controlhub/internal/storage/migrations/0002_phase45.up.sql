@@ -5,14 +5,11 @@
 --
 -- 本 migration 引入的表/列：
 --   app_meta            键值配置/状态
---   settings            用户可改的运行时配置（lan_mode_enabled, trial_quota_seconds, ...）
+--   settings            用户可改的运行时配置（lan_mode_enabled, ...）
 --   devices 新列        device_name / paired_at / is_paired / machine_anchor
 --   device_credentials  配对成功后签发的每设备 MQTT 凭据
 --   pairing_sessions    配对会话生命周期
---   trial_usage         每设备累计用量（device_id + machine_anchor 联合主键）
---   trial_sessions      每个有效控制会话的记录
 --   api_keys            API key 持久化（哈希存储）
---   licenses            本地 License 存档（V1 留空，Phase 6 实装）
 --   security_events     安全审计日志
 --
 -- 注意：SQLite ALTER TABLE ADD COLUMN 不支持 IF NOT EXISTS；
@@ -60,28 +57,6 @@ CREATE TABLE IF NOT EXISTS pairing_sessions (
 CREATE INDEX IF NOT EXISTS idx_pairing_status  ON pairing_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_pairing_expires ON pairing_sessions(expires_at);
 
--- trial_usage：每设备累计用量
-CREATE TABLE IF NOT EXISTS trial_usage (
-    device_id       TEXT NOT NULL,
-    machine_anchor  TEXT NOT NULL,
-    used_seconds    REAL NOT NULL DEFAULT 0,
-    session_count   INTEGER NOT NULL DEFAULT 0,
-    last_session_at INTEGER,
-    PRIMARY KEY (device_id, machine_anchor)
-);
-
--- trial_sessions：每个有效控制会话
-CREATE TABLE IF NOT EXISTS trial_sessions (
-    session_id          TEXT PRIMARY KEY,
-    device_id           TEXT NOT NULL,
-    machine_anchor      TEXT NOT NULL,
-    started_at          INTEGER NOT NULL,
-    ended_at            INTEGER,
-    accumulated_seconds REAL NOT NULL DEFAULT 0,
-    FOREIGN KEY (device_id) REFERENCES devices(device_id)
-);
-CREATE INDEX IF NOT EXISTS idx_trial_sessions_device ON trial_sessions(device_id);
-
 -- api_keys：API key 持久化（哈希存储，明文只在生成时返回一次）
 CREATE TABLE IF NOT EXISTS api_keys (
     key_id       TEXT PRIMARY KEY,               -- chk_<前 8 字符>
@@ -90,18 +65,6 @@ CREATE TABLE IF NOT EXISTS api_keys (
     revoked_at   INTEGER,
     last_used_at INTEGER,
     label        TEXT NOT NULL DEFAULT ''
-);
-
--- licenses：本地 License 存档（V1 留空，Phase 6 实装）
-CREATE TABLE IF NOT EXISTS licenses (
-    license_id    TEXT PRIMARY KEY,
-    device_id     TEXT,
-    plan_id       TEXT,
-    valid_from    INTEGER,
-    expires_at    INTEGER,
-    features_json TEXT,
-    signature     TEXT,
-    imported_at   INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
 -- security_events：安全审计日志

@@ -20,21 +20,16 @@ import (
 
 	"smart-hid-controlhub/internal/api"
 	"smart-hid-controlhub/internal/apikey"
-	"smart-hid-controlhub/internal/cloud"
 	"smart-hid-controlhub/internal/command"
 	"smart-hid-controlhub/internal/config"
 	"smart-hid-controlhub/internal/device"
-	"smart-hid-controlhub/internal/entitle"
 	"smart-hid-controlhub/internal/logging"
-	licmgr "smart-hid-controlhub/internal/license"
 	"smart-hid-controlhub/internal/mqtt"
 	"smart-hid-controlhub/internal/pairing"
 	"smart-hid-controlhub/internal/protocol"
 	"smart-hid-controlhub/internal/settings"
 	"smart-hid-controlhub/internal/storage"
-	"smart-hid-controlhub/internal/sys"
 	"smart-hid-controlhub/internal/tray"
-	"smart-hid-controlhub/internal/trial"
 )
 
 // App 持有所有运行时依赖与生命周期控制。
@@ -51,10 +46,6 @@ type App struct {
 	apiSrv       *api.Server
 	pairingMgr   *pairing.Manager
 	pairingSrv   *pairing.DeviceServer
-	trialMgr     *trial.Manager
-	cloudCli     *cloud.Client     // CL-6b：在线激活/刷新；nil = 纯离线
-	licenseMgr   *licmgr.Manager   // CL-6c：本地 license 管理（refresher/手动刷新用）
-	refresher    *licmgr.Refresher // CL-6c：后台自动刷新循环；nil = 离线模式
 
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -131,39 +122,7 @@ func Build(cfgPath string) (*App, error) {
 	// Engine + API server（构造时不启动）
 	engine := command.New(hubClient, dm, store, log.With("component", "engine"))
 
-	// Trial Manager（CH-P6/7）：依赖 settings + DB + machine anchor
-	machineAnchor := sys.GetMachineAnchor()
-	log.Info("machine anchor resolved", "anchor", machineAnchor)
-	trialMgr := trial.New(trial.NewSQLStore(store.DB), setStore, machineAnchor, log.With("component", "trial"))
-
-	// License Manager（CL-3a）：Ed25519 验签 + 公钥 embed
-	licenseMgr, err := licmgr.New(store.DB, log.With("component", "license"))
-	if err != nil {
-		_ = store.Close()
-		return nil, fmt.Errorf("init license manager: %w", err)
-	}
-
-	// CL-3c：Entitlement 闸门 = license 优先 + trial 兜底
-	// （engine.WithEntitlement 替换 CH-P6 的 trial 直调）
-	entitleGate := entitle.New(licenseMgr, trialMgr, log.With("component", "entitle"))
-	engine.WithEntitlement(entitleGate).WithTrial(trialMgr)
-
-	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, trialMgr, licenseMgr, log.With("component", "api"))
-
-	// CL-6b：Cloud 出站客户端（在线激活/刷新）。base_url 为空 = 纯离线模式（New 返 nil）。
-	cloudCli := cloud.New(cfg.Cloud.BaseURL, log.With("component", "cloud"))
-	if cloudCli != nil {
-		apiSrv.WithCloudClient(cloudCli)
-		log.Info("cloud client enabled (online activation/refresh)", "base_url", cfg.Cloud.BaseURL)
-	} else {
-		log.Info("cloud base_url empty — offline mode (no online activation/refresh)")
-	}
-
-	// CL-6c：后台 License 刷新器（仅在线模式启动）
-	var refresher *licmgr.Refresher
-	if cloudCli != nil {
-		refresher = licmgr.NewRefresher(licenseMgr, cloudCli, log.With("component", "refresher"), 0)
-	}
+	apiSrv := api.New(engine, dm, keys, setStore, pairingMgr, log.With("component", "api"))
 
 	return &App{
 		cfg:        cfg,
@@ -178,10 +137,6 @@ func Build(cfgPath string) (*App, error) {
 		apiSrv:     apiSrv,
 		pairingMgr: pairingMgr,
 		pairingSrv: pairingSrv,
-		trialMgr:   trialMgr,
-		cloudCli:   cloudCli,
-		licenseMgr: licenseMgr,
-		refresher:  refresher,
 	}, nil
 }
 
@@ -243,14 +198,6 @@ func (a *App) Start() error {
 			}
 		}()
 
-		// Trial idle checker（goroutine）
-		a.trialMgr.Start()
-
-		// CL-6c：License 后台刷新循环（仅在线模式）
-		if a.refresher != nil {
-			a.refresher.Start(a.ctx)
-		}
-
 		a.started = true
 		a.log.Info("controlhub started",
 			"http_addr", fmt.Sprintf("%s:%d", a.cfg.HTTP.Host, a.cfg.HTTP.Port),
@@ -299,10 +246,6 @@ func (a *App) shutdown() {
 	if !a.started {
 		return
 	}
-	// 先停 Trial（flush 所有 active session 累计量到 trial_usage）
-	if a.trialMgr != nil {
-		a.trialMgr.Close()
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = a.apiSrv.Shutdown(ctx)
@@ -329,17 +272,6 @@ func (a *App) HTTPPort() int { return a.cfg.HTTP.Port }
 // RotateAPIKey 暴露给 tray 菜单调用。
 func (a *App) RotateAPIKey() (string, error) {
 	return a.keys.Rotate("tray")
-}
-
-// RefreshLicense 暴露给 tray 菜单调用（CL-6c）。
-// 立即向 Cloud 刷新全部本地 License。离线模式返 error 提示。
-// 返回 (成功数, 失败数, error)。
-func (a *App) RefreshLicense() (int, int, error) {
-	if a.refresher == nil {
-		return 0, 0, fmt.Errorf("offline mode (cloud base_url not configured)")
-	}
-	ok, failed := a.refresher.RefreshAllNow()
-	return ok, failed, nil
 }
 
 // LANModeEnabled 返回当前 LAN 模式开关状态（从 settings 读，反映持久化值）。

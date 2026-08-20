@@ -23,8 +23,3 @@ data_dir: "./data"
 # 日志级别：debug / info / warn / error
 log_level: "info"
 
-# Smart HID Cloud 连接（CL-6b 在线激活/刷新）。
-# 留空 = 纯离线模式（仅支持 .license 文件离线导入，不能在线消费激活码或刷新）。
-# 配置后：控制台 License 面板可输入激活码在线激活；License 后台自动周期刷新续期。
-cloud:
-  base_url: ""  # 例：http://127.0.0.1:17880/api/v1（指向 Cloud 的 API 根）

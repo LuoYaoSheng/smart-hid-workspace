@@ -17,7 +17,6 @@ type Config struct {
 	APIKey   string         `yaml:"api_key"`
 	DataDir  string         `yaml:"data_dir"`
 	LogLevel string         `yaml:"log_level"`
-	Cloud    CloudConfig    `yaml:"cloud"` // CL-6b：在线激活/刷新所需的 Cloud 地址
 }
 
 type HTTPConfig struct {
@@ -25,11 +24,6 @@ type HTTPConfig struct {
 	Port int    `yaml:"port"`
 }
 
-// CloudConfig 是 Smart HID Cloud 的连接信息（CL-6b）。
-// BaseURL 形如 "http://127.0.0.1:17880/api/v1"。留空 = 纯离线模式（不消费激活码、不刷新）。
-type CloudConfig struct {
-	BaseURL string `yaml:"base_url"`
-}
 
 type MQTTConfig struct {
 	Host     string `yaml:"host"`

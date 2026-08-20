@@ -83,12 +83,6 @@
     // CH-P5：配对面板
     pairCreate: $('pair-create'), pairResult: $('pair-result'),
     pairHint: $('pair-hint'), pairTimer: $('pair-timer'),
-    // CH-P6：Trial 用量
-    usageResult: $('usage-result'), refreshUsage: $('refresh-usage'),
-    // CL-6c：License 面板
-    licRefresh: $('lic-refresh'), licStatus: $('lic-status'),
-    licActivateForm: $('lic-activate-form'), licCode: $('lic-code'),
-    licResult: $('lic-result'),
   };
 
   // ---------- API 调用 ----------
@@ -466,101 +460,7 @@
     el.pairTimer.textContent = '剩余 ' + mm + ':' + (ss < 10 ? '0' + ss : ss);
   }
 
-  // ---------- Trial 用量面板（CH-P6） ----------
-  async function fetchUsage() {
-    if (!state.apiKey) { el.usageResult.textContent = '输入 API Key 后显示。'; return; }
-    el.usageResult.textContent = '加载中…';
-    const r = await api('GET', '/usage/all');
-    if (!r.ok) {
-      el.usageResult.textContent = '加载失败（HTTP ' + r.status + '）';
-      return;
-    }
-    const usages = r.json.usages || [];
-    if (usages.length === 0) {
-      el.usageResult.textContent = '暂无设备（先配对一台设备后再查询）';
-      return;
-    }
-    el.usageResult.innerHTML = '';
-    usages.forEach((u) => {
-      const div = document.createElement('div');
-      div.className = 'usage-row';
-      const pct = u.quota_seconds > 0 ? Math.min(100, Math.round(u.used_seconds / u.quota_seconds * 100)) : 0;
-      const remainingMin = Math.max(0, u.remaining_seconds / 60).toFixed(1);
-      const status = u.expired ? '<span class="tag error">已过期</span>'
-        : (u.session_active ? '<span class="tag pending">Session 中</span>' : '<span class="tag success">可用</span>');
-      const devLabel = document.createElement('div');
-      devLabel.innerHTML = '<code>' + escapeText(u.device_id) + '</code> ' + status;
-      const bar = document.createElement('div');
-      bar.className = 'usage-bar';
-      bar.innerHTML = '<div class="usage-fill' + (u.expired ? ' expired' : '') + '" style="width:' + pct + '%"></div>';
-      const meta = document.createElement('div');
-      meta.className = 'muted small';
-      meta.textContent = '已用 ' + u.used_seconds.toFixed(1) + 's / ' + u.quota_seconds + 's · 剩 ' + remainingMin + ' 分钟';
-      div.appendChild(devLabel);
-      div.appendChild(bar);
-      div.appendChild(meta);
-      el.usageResult.appendChild(div);
-    });
-  }
 
-  function escapeText(s) {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
-  }
-
-  // ---------- License（CL-6c）----------
-  function fmtDate(unixSec) {
-    if (!unixSec) return '—';
-    return new Date(unixSec * 1000).toLocaleString('zh-CN');
-  }
-
-  async function fetchLicenseStatus() {
-    if (!state.apiKey) { el.licStatus.textContent = '输入 API Key 后显示。'; return; }
-    const r = await api('GET', '/license/list');
-    if (!r.ok) { el.licStatus.innerHTML = '<span class="bad">加载失败：' + esc(r.json?.message || r.error || r.status) + '</span>'; return; }
-    const lics = r.json?.licenses || [];
-    if (!lics.length) {
-      el.licStatus.innerHTML = '<span class="muted">暂无 License。在下方输入激活码在线激活，或离线导入 .license 文件。</span>';
-      return;
-    }
-    el.licStatus.innerHTML = lics.map((l) => {
-      const cls = l.status === 'ACTIVE' ? 'ok' : 'bad';
-      const remain = l.time_remaining_seconds != null
-        ? ' · 剩 ' + Math.max(0, Math.floor(l.time_remaining_seconds / 86400)) + ' 天' : '';
-      return '<div class="lic-row"><span class="badge ' + cls + '">' + esc(l.status) + '</span>' +
-        '<span class="muted">' + esc(l.device_id) + '</span>' +
-        '<span class="small muted">到期 ' + fmtDate(l.expires_at) + remain + '</span></div>';
-    }).join('');
-  }
-
-  async function activateByCode(e) {
-    e.preventDefault();
-    el.licResult.textContent = '';
-    const code = el.licCode.value.trim();
-    if (!code) { el.licResult.innerHTML = '<span class="bad">请输入激活码</span>'; return; }
-    el.licResult.innerHTML = '<span class="muted">激活中…</span>';
-    const r = await api('POST', '/license/activate-code', { code });
-    if (!r.ok) {
-      el.licResult.innerHTML = '<span class="bad">激活失败：' + esc(r.json?.message || r.json?.error || r.error || r.status) + '</span>';
-      return;
-    }
-    el.licCode.value = '';
-    el.licResult.innerHTML = '<span class="ok">激活成功（' + esc(r.json?.status || 'ACTIVE') + '）</span>';
-    fetchLicenseStatus();
-  }
-
-  async function refreshLicense() {
-    el.licResult.innerHTML = '<span class="muted">刷新中…</span>';
-    const r = await api('POST', '/license/refresh', {});
-    if (!r.ok) {
-      el.licResult.innerHTML = '<span class="bad">刷新失败：' + esc(r.json?.message || r.json?.error || r.error || r.status) + '</span>';
-      return;
-    }
-    el.licResult.innerHTML = '<span class="ok">刷新完成：' + r.json?.refreshed + ' 成功' +
-      (r.json?.failed ? '，' + r.json.failed + ' 失败' : '') + '</span>';
-    fetchLicenseStatus();
-  }
 
   // ---------- 事件绑定 ----------
   el.authForm.addEventListener('submit', (e) => {
@@ -570,7 +470,6 @@
     pollHealth();
     pollDevices();
     fetchLAN();
-    fetchLicenseStatus();
   });
 
   el.refreshDevices.addEventListener('click', pollDevices);
@@ -582,9 +481,6 @@
   el.rotateKey.addEventListener('click', rotateAPIKey);
   el.lanToggle.addEventListener('change', toggleLAN);
   el.pairCreate.addEventListener('click', createPairingSession);
-  el.refreshUsage.addEventListener('click', fetchUsage);
-  el.licActivateForm.addEventListener('submit', activateByCode);
-  el.licRefresh.addEventListener('click', refreshLicense);
 
   // ---------- 启动 ----------
   function start() {
@@ -593,14 +489,11 @@
     pollHealth();
     pollDevices();
     fetchLAN();
-    fetchUsage();
-    fetchLicenseStatus();
     // 定时刷新（仅健康与设备；命令状态按需查询）
     state.healthTimer = setInterval(pollHealth, 5000);
     state.deviceTimer = setInterval(() => {
       if (state.apiKey && el.composer.hidden) pollDevices(); // 编辑器打开时暂停刷新，避免选中设备被替换
     }, 4000);
-    state.usageTimer = setInterval(fetchUsage, 15000);
   }
 
   document.addEventListener('DOMContentLoaded', start);
