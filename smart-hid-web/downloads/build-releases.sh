@@ -159,22 +159,22 @@ PYEOF
 # ----------------------------------------------------------
 # 7) README_RELEASE.md（诚实状态：BUILD VERIFIED ≠ HARDWARE VERIFIED）
 # ----------------------------------------------------------
-cat > "$DL/README_RELEASE.md" <<EOF
-# Smart HID Release v$VERSION
+cat > "$DL/README_RELEASE.md" <<'EOF_TMPL'
+# Smart HID Release v@VERSION@
 
 | 项 | 值 |
 |---|---|
-| version | $VERSION |
-| commit | $COMMIT |
-| build time (UTC) | $BUILD_TIME |
-| dirty build | $DIRTY |
+| version | @VERSION@ |
+| commit | @COMMIT@ |
+| build time (UTC) | @BUILD_TIME@ |
+| dirty build | @DIRTY@ |
 
 ## 内容
 
-- \`controlhub/\`：ControlHub 桌面程序（macOS arm64 / Windows amd64），\`-version\` 可查版本
-- \`firmware/\`：ESP32-S3 固件烧录包（\`flash.sh\` 一键烧录；esptool 需要）
-- 校验：\`shasum -c controlhub/controlhub-SHA256SUMS\`、\`shasum -c firmware/firmware-SHA256SUMS\`，
-  或核对 \`manifest.json\` 中每个 artifact 的 sha256
+- `controlhub/`：ControlHub 桌面程序（macOS arm64 / Windows amd64），`-version` 可查版本
+- `firmware/`：ESP32-S3 固件烧录包（`flash.sh` 一键烧录；esptool 需要）
+- 校验：`shasum -c controlhub/controlhub-SHA256SUMS`、`shasum -c firmware/firmware-SHA256SUMS`，
+  或核对 `manifest.json` 中每个 artifact 的 sha256
 
 ## 平台
 
@@ -190,7 +190,10 @@ Hardware NOT VERIFIED —— 未在任何真实 ESP32-S3 上烧录/验证
 ```
 
 USB HID 实效、BLE 配网真机链路、BIOS/登录界面均未做硬件验收（M2-G1 独立任务）。
-EOF
+EOF_TMPL
+# 引用 heredoc 保护反引号/``` 围栏；占位符在此替换
+sed -i '' -e "s/@VERSION@/$VERSION/g" -e "s/@COMMIT@/$COMMIT/g" \
+  -e "s/@BUILD_TIME@/$BUILD_TIME/g" -e "s/@DIRTY@/$DIRTY/g" "$DL/README_RELEASE.md"
 
 echo ""
 echo "完成。产物："
