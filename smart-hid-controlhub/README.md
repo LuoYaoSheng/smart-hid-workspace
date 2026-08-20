@@ -1,246 +1,112 @@
 # smart-hid-controlhub
 
-Windows 本地控制程序。接收第三方 HTTP API 指令，通过 MQTT 下发给 ESP32-S3，并管理 Trial / License / 设备配对。
-
-## 角色定位
+Smart HID 本地控制程序：接收第三方程序的 HTTP 指令，经内嵌 MQTT Broker 下发给 ESP32-S3，由设备以真实 USB HID 键鼠输出到目标电脑。
 
 ```text
-第三方程序 ──HTTP──▶ ControlHub ──MQTT──▶ ESP32-S3 ──USB HID──▶ 目标电脑
+第三方程序 ──HTTP:17890──▶ ControlHub ──MQTT:17891──▶ ESP32-S3 ──USB HID──▶ 目标电脑
+                              │ ▲
+                              │ └─ 设备配对 :17892（仅配对会话期开放）
 ```
 
-实时控制不依赖互联网。License 云端签发、本地离线验签（Ed25519）。
+实时控制完全本地，无云、无账号、无授权门禁。技术栈：Go 标准库 net/http + [mochi-mqtt](https://github.com/mochi-mqtt/server)（内嵌 Broker，per-device 凭据 + ACL）+ SQLite（modernc 纯 Go 驱动）+ [gorilla/websocket](https://github.com/gorilla/websocket)（实时事件通道）。
 
-## 技术栈（推荐）
+## 快速开始
 
-- Go
-- `net/http`（HTTP API + Local Web UI）
-- Embedded MQTT Broker（端口 17891）
-- SQLite（持久化）
-- `go:embed`（嵌入 Web 资源）
-- Windows tray
-- Windows DPAPI（敏感数据保护）
-- `crypto/ed25519`（License 验签，只内置 Public Key）
+```bash
+# 直接运行（无 config.yaml 时使用内置默认值；首次启动生成 API Key 打印到日志并落盘 data/initial-api-key.txt）
+go run ./cmd/controlhub
 
-## 建议模块结构
+# 指定配置
+go run ./cmd/controlhub -config config.yaml
 
-来自资料包 `starter/controlhub`：
-
-```text
-cmd/controlhub
-internal/app
-internal/config
-internal/api
-internal/web
-internal/tray
-internal/pairing
-internal/mqtt
-internal/device
-internal/command
-internal/trial
-internal/license
-internal/entitlement
-internal/storage
-internal/securestore
-internal/logging
-docs/openapi.yaml
+# 系统托盘模式（macOS/Windows；systray 需主线程）
+go run ./cmd/controlhub -tray
 ```
 
-## 网络（建议端口）
+预编译二进制（macOS arm64 / Windows amd64）见仓库 `smart-hid-web/downloads/controlhub/` 或 [Releases](https://github.com/LuoYaoSheng/smart-hid-workspace/releases)。
 
-```text
-17890  Local HTTP / Web          （默认 127.0.0.1）
-17891  MQTT                       （LAN 可达，需认证 + ACL）
-17892  Device Pairing HTTP        （LAN 可达，只接受 Active Pairing Session）
-```
+## 配置参考
 
-LAN API 必须用户显式开启；除 `/health` 外，控制 API 使用 Bearer API Key。
+复制 `config.example.yaml` 为 `config.yaml` 按需修改；全部默认开启，老配置文件无新字段时行为不变：
 
-## 内部模块
-
-```text
-ControlHub.exe
-├── Tray
-├── Local Web UI
-├── HTTP API
-├── Pairing HTTP
-├── Embedded MQTT Broker
-├── Device Manager
-├── Command Engine
-├── Trial Manager
-├── License Manager
-├── Entitlement Manager
-├── Secure Store
-├── SQLite
-└── Logging
-```
-
-## Command Engine 处理顺序
-
-```text
-API Auth → Schema → Device → Device Ready → Entitlement → Rate Limit
-→ Idempotency → Queue → MQTT → ACK → Trial Update → Response
-```
-
-Entitlement 必须在 Publish MQTT 前完成。
-
-## 开发里程碑
-
-| 里程碑 | 内容 |
-|--------|------|
-| CH-01 | App / Config / Logging |
-| CH-02 | SQLite / Migration |
-| CH-03 | HTTP / Web |
-| CH-04 | MQTT |
-| CH-05 | Device Manager |
-| CH-06 | Pairing |
-| CH-07 | Command HTTP → MQTT → ACK |
-| CH-08 | Tray / Single Instance |
-| CH-09 | Trial |
-| CH-10 | License |
-| CH-11 | Installer / Firewall / Signing |
-
-第一里程碑：HTTP → MQTT → ESP32 → ACK。
-
-## 数据目录（Windows）
-
-```text
-%LOCALAPPDATA%\SmartHID\ControlHub\
-├── controlhub.db
-├── license.dat
-├── logs/
-├── cache/
-└── backup/
-```
-
-## 当前状态
-
-✅ **Phase 1 已实现并通过端到端验证**（2026-08-11）。
-
-实现里程碑：CH-01 App/Config/Logging、CH-02 SQLite、CH-03 HTTP、CH-04 MQTT、CH-05 Device Manager、CH-07 Command HTTP→MQTT→ACK。
-
-✅ **F2 可靠性语义参考实现 + 验证**（2026-08-11）。
-
-`cmd/mock-device` 已升级为 ESP32-S3 固件 F1+F2 阶段的 Go 语义参考实现，与 `../smart-hid-firmware/components/` 下的 C 代码一一对照：
-- dedup（环形 256）/ boot_id 校验 / TTL 过期 / queue(32) 满 / lease 超时自动释放 / system.release_all / MQTT 断开 release_all
-- 验证脚本 `scripts/test-loop-f2.sh` 28/28 全过
-
-✅ **Web 管理界面（CH-03 Web）+ 单元测试安全网**（2026-08-11）。
-
-- `internal/web/` 内嵌单页 Web UI（设备列表 / 命令编辑器 / 命令查询），经 `go:embed` 打进二进制，零构建步骤
-- `internal/command/` + `internal/device/` 单元测试覆盖校验边界、设备生命周期、命令闭环全路径（`-race` 无竞争，覆盖率 command 89% / device 93%）
-
-✅ **Phase 4 产品化 + Phase 5 Trial（CH-P1 ~ CH-P9）**（2026-08-12）。
-
-9 步增量交付，从脚手架级 CLI 升级为可双击运行的桌面产品形态：
-
-| 步骤 | 内容 | 验收 |
+| 字段 | 默认 | 说明 |
 |---|---|---|
-| CH-P1 | 版本化 SQLite migration + Phase 4/5 schema 扩展（11 张表）| 自动测试 4 用例 |
-| CH-P2 | API key 持久化（hash 入库）+ 重置 endpoint + 单实例锁 | A12 |
-| CH-P3 | Tray（fyne.io/systray）+ app.Run 重构（headless/tray 双模式）| A1/A3，macOS 验证 |
-| CH-P4 | LAN 模式开关（默认 localhost，显式开启 0.0.0.0）+ Web UI 设置面板 | A11 |
-| CH-P5 | Per-device MQTT auth hook + 配对系统 + mock-device --pair 端到端 | A7，真机验证全通 |
-| CH-P6 | Trial Manager + Entitlement gate + `GET /usage` | D1/D2/D3/D4/D5 |
-| CH-P7 | machine_anchor 重装防绕过（Win MachineGuid/Mac UUID/Linux machine-id）| D6 |
-| CH-P8 | Windows 打包资产（manifest + NSIS + Makefile + 交叉编译脚本）| A1/A2，代码完整待 Windows 机验证 |
-| CH-P9 | openapi.yaml 补全（Pairing/Usage/APIKeys/Settings）+ Web UI Trial 面板 | — |
+| `http.host` / `http.port` | `127.0.0.1` / `17890` | 本地 HTTP 服务（API + 内置页面） |
+| `http.lan_mode` | `false` | 启动即监听 `0.0.0.0`（控制台运行时开关持久化后优先） |
+| `http.enable_api` | `true` | `false` = 不注册 `/api/v1`（纯静态模式） |
+| `mqtt.port` | `17891` | 内嵌 MQTT Broker（hub 自用 + 设备接入，per-device 凭据） |
+| `pairing.enabled` / `pairing.port` | `true` / `17892` | 设备侧配对服务（QR 载荷端口同步生效） |
+| `web.console` / `web.demo` | `true` / `true` | 控制台 / 模拟键鼠演示台页面开关 |
+| `web.realtime` | `true` | WebSocket 实时事件通道 |
+| `api_key` | 空 | 留空则首启随机生成（`chk_` 前缀，哈希落库） |
 
-新增端点：`POST /api-keys/rotate`、`GET/POST /settings/lan-mode`、`POST /pairing/sessions`、`GET /pairing/sessions/{token}`、`POST /pairing/device`（设备侧 :17892）、`GET /usage`、`GET /usage/all`。
+安全基线：HTTP 默认只听回环；LAN 模式需显式开启；控制 API 全部 Bearer API Key 鉴权；API Key 可经 `POST /api/v1/api-keys/rotate` 或托盘菜单轮换。
 
-新增模块：`internal/{apikey, sys, settings, pairing, trial}`。
+## 内置 Web 界面
 
-跳过（待硬件/Windows 测试机/Phase 6）：
-- CH-10 License 验签 + CH-11 Installer 实机构建（Phase 6 Cloud 落地后）
-- Phase 3 固件 Provision Mode（ESP32 真实 BLE 配网，待硬件）
-- Trial e2e 真命令流验证（单测已覆盖 D1-D5，真机 e2e 待硬件）
+| 页面 | 路径 | 说明 |
+|---|---|---|
+| 控制台 | `/` | 设备列表 / 命令编辑器 / API Key / LAN 模式 / 配对（QR） |
+| **模拟键鼠演示台** | `/demo.html` | 浏览器遥控另一台电脑：可视化键盘（修饰键锁定组合）、实体键盘直通、触控板（增量合流）、文本连打；**设备芯片条** 1-click 切换主控，**🎯 广播模式**把每次操作同时发给所有就绪设备 |
+| 实时事件通道 | `/api/v1/realtime?key=` | WebSocket 只下行推送 `hello` / `device` / `ack` 事件——演示页的事件流面板即由它驱动，多端打开可实时观战 |
 
-### License 在线激活 / 刷新（CL-6 实装）
+页面均零构建（go:embed 内嵌静态资源），静态本身不鉴权，控制调用由前端携带 Bearer Key 请求 `/api/v1/*`。
 
-Cloud 落地后，ControlHub 接入两个在线闭环（依赖 `cloud.base_url` 配置）：
+## 设备配对
 
-**激活码在线激活** —— admin 在 Cloud 后台生成激活码后，用户在控制台 License 面板输入码即可在线激活：
-- Web UI「License」面板：状态列表 + 激活码输入框 + 「刷新全部」按钮
-- 本地 API：`POST /api/v1/license/activate-code {code, device_id?}`
-- 流程：ControlHub → Cloud `POST /activation/consume` → 签名 License → 本地 `Import`（验签+upsert）→ ACTIVE
+ControlHub 生成配对会话（QR 载荷 `shid://pair?token=...&host=<lan-ip>&port=<pairing.port>`）→ 设备 Provision Mode 扫码接入 `:17892` → 签发**每设备独立 MQTT 凭据**（含 per-device ACL，设备只能收发自己的 topic）→ 上线。配对服务仅会话期开放。
 
-**License 刷新（续期）** —— admin 在 Cloud 续期后，ControlHub 自动拉取最新 License：
-- 后台自动刷新：启动后 + 每 6h best-effort 拉取全部本地 License（离线降级不中断）
-- 手动：托盘「刷新 License」菜单项 / Web UI「刷新全部」/ 本地 API `POST /api/v1/license/refresh {device_id?}`
-- 续期模型：Cloud 同 license_id 重签延长 expires_at（不新建 id），ControlHub 用原 license_id 刷新即拿到新有效期
+## HTTP API
 
-配置（`config.yaml`）：
-```yaml
-cloud:
-  base_url: "http://127.0.0.1:17880/api/v1"  # 留空 = 纯离线模式（仅支持 .license 文件导入）
-```
-
-离线模式下仍可用原有 `POST /api/v1/license/import`（.license 文件导入）路径，两路径互通（同一签名格式 + 同一 `licmgr.Import` 落点）。
-
-### 运行（本地）
+完整契约见 `docs/openapi.yaml`（11 paths：devices / commands / api-keys / settings / pairing / realtime）。示例：
 
 ```bash
-cd smart-hid-controlhub
+KEY=chk_xxx
+curl -H "Authorization: Bearer $KEY" http://127.0.0.1:17890/api/v1/devices
 
-# 构建
-go build -o bin/controlhub ./cmd/controlhub
-go build -o bin/mock-device ./cmd/mock-device
-
-# Headless 模式（信号循环，向后兼容）
-./bin/controlhub -config config.example.yaml
-
-# Tray 模式（CH-P3，主线程跑 systray 事件循环；macOS 菜单栏出图标）
-./bin/controlhub -tray -config config.example.yaml
-
-# Phase 1 端到端验证（启 ControlHub + mock-device + curl ENTER）
-./scripts/test-loop.sh
-
-# F2 可靠性语义验证（dedup/boot_id/TTL/lease/release_all/queue_full/MQTT disconnect）
-./scripts/test-loop-f2.sh
-
-# CH-P5 配对端到端（mock-device 走 ControlHub pairing 拿 dev_ 凭据 → PerDeviceHook 鉴权）
-# 1. 启 ControlHub（含 :17892 设备侧 pairing listener）
-# 2. 通过 Web UI 或 API 创建 pairing session 取 token
-# 3. mock-device --pair-url http://127.0.0.1:17892/api/v1/pairing/device \
-#                --pair-token <token> --device-id HID-AAAA1111
-
-# 单元测试（validator / device / engine，含 -race）
-go test ./internal/command/ ./internal/device/ -race -count=1
+curl -X POST -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+  -d '{"protocol":"1.0","request_id":"t1","device_id":"HID-00000001","target_boot_id":"B-xxx","type":"keyboard","action":"tap","ttl_ms":2000,"payload":{"key":"ENTER","hold_ms":40}}' \
+  http://127.0.0.1:17890/api/v1/devices/HID-00000001/commands
 ```
 
-验证通过的链路：`curl → ControlHub HTTP → MQTT → mock-device → USB HID(模拟) → ACK`
-- `POST /api/v1/devices/HID-00000001/commands` 发 keyboard tap ENTER → HTTP 200 status=executed
-- `GET /api/v1/commands/{request_id}` 查询命令状态
-- 错误 API Key → 401；错误 boot_id → 422 status=rejected（STALE_DEVICE_SESSION）
-- 同 request_id 重发 → status=duplicate；TTL 越界 → 400
-- key_down + lease_ms + release_all → 清空 pressed keys
+命令闭环：校验 → 设备就绪检查 → publish MQTT(QoS1) → 等终态 ACK（TTL 内）→ `200 executed` / `422 rejected` / `504 expired` / `202` 未回执。可靠性语义（request_id 去重、boot_id 防旧命令、TTL、lease 超时释放、断线 release_all）在设备侧保证，见仓库根 README。
 
-### 配置
-
-- 默认端口：HTTP 17890 / MQTT 17891
-- API Key：`config.yaml` 未指定时启动随机生成并打印到日志
-- 示例配置：`config.example.yaml`
-
-### Web 管理界面（CH-03）
-
-ControlHub 内嵌一个单页 Web 管理界面（`internal/web/`，经 `go:embed` 打进二进制，零额外文件、零构建步骤）：
+## 测试与验证
 
 ```bash
-./bin/controlhub
-# 浏览器打开 http://127.0.0.1:17890/
+go test ./...                 # 全模块单测（api/command/device/pairing/config/web/realtime...）
+
+# 可靠性语义 28 项端到端（真二进制 + mock-device，无需硬件）
+bash scripts/test-loop-f2.sh
 ```
 
-1. 从 ControlHub 启动日志复制 API Key（`chk_...`），粘贴到顶栏输入框并保存（存在浏览器 localStorage）
-2. 设备列表自动轮询；启动 `mock-device` 或真实 ESP32-S3 后设备自动出现
-3. 点设备行的「发送命令」打开命令编辑器：选类型（键盘/鼠标/系统）+ 动作，payload 表单按动作动态生成
-4. 发送后实时显示 ACK 结果（executed / duplicate / rejected / expired / accepted-未终态）
-5. 「查询命令状态」按 request_id 查询任意命令的 ACK 终态
+`cmd/mock-device` 是固件的 Go 参考实现（含 dedup/boot_id/TTL/lease/queue 语义），也是零硬件开发的联调伙伴——配对后即成为一台"虚拟 ESP32"。
 
-静态资源（`/`、`/app.js`、`/style.css`）本身不鉴权；真正的控制调用由前端携带 Bearer Key 请求 `/api/v1/*`。
+## 构建
 
-详见 `../docs/05_CONTROLHUB_DETAIL_DESIGN_V1.0.md` 与 `../docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md`。
+```bash
+go build ./cmd/controlhub                    # 本机
+# 双平台交叉编译 + SHA256 + 固件打包（工作区根目录执行）
+bash ../smart-hid-web/downloads/build-releases.sh
+```
 
-## 相关
+## 目录结构
 
-- HTTP API 事实源：`./docs/openapi.yaml`（占位）
-- MQTT 协议公开定义：`../../smart-ble/core/protocols/hid-command-schema.ts`
-- 验收清单：`../docs/10_ACCEPTANCE_CHECKLIST.md` §A
+```text
+cmd/controlhub/        入口（headless / -tray 托盘模式）
+cmd/mock-device/       设备模拟器（可靠性语义参考实现，联调用）
+internal/app/          装配与生命周期（Build/Start/Wait/Stop）
+internal/api/          HTTP API + 静态托管 + WebSocket 实时通道
+internal/command/      命令引擎（校验/publish/等 ACK/持久化 + ACK 观察者）
+internal/device/       设备注册表与状态
+internal/mqtt/         内嵌 Broker（per-device 凭据 + ACL）+ hub 客户端
+internal/pairing/      配对会话 + 设备侧 listener + QR 载荷
+internal/apikey/       API Key（哈希存储/轮换/首启生成）
+internal/settings/     运行时可改设置（LAN 模式）
+internal/storage/      SQLite + 迁移
+internal/web/          go:embed 静态资源（控制台/演示台）+ 页面门禁
+internal/tray/         系统托盘
+internal/protocol/     协议类型（Status 等；Command/Ack 事实源在 smart-ble）
+```
+
+协议事实源：MQTT Command/Ack Schema 的 TypeScript 定义在 [smart-ble](https://github.com/LuoYaoSheng/smart-ble)（`core/protocols/`），JSON Schema 镜像见工作区 `protocols/schemas/`。
