@@ -150,7 +150,8 @@ controlhub-windows-amd64.exe</code></pre>
       <li>B 电脑：浏览器打开 <code>http://&lt;A 的局域网 IP&gt;:17890/demo.html</code>（同 Wi-Fi/网段）</li>
       <li>填入 API Key → 选择设备 → 开始：<strong>点可视化键盘打字、拖触控板移动 A 电脑光标、或用 B 的实体键盘直通输入</strong>——A 电脑收到的是真实键鼠输入，打开记事本即可看到逐字打出</li>
     </ol>
-    <p>页面顶部实时显示往返延迟与 executed 计数；<strong>⛔ 释放所有按键</strong>随时急停（演示的正是系统的可靠性语义：lease 兜底 + release_all）。</p>
+    <p>页面顶部实时显示往返延迟与 executed 计数；<strong>⚡ 实时通道</strong>指示灯亮起后，事件流面板实时推送设备状态与命令回执——第二块屏幕打开同一页面即可<strong>实时观战</strong>；<strong>⛔ 释放所有按键</strong>随时急停（演示的正是系统的可靠性语义：lease 兜底 + release_all）。</p>
+    <p>这些服务都可在 <code>config.yaml</code> 里开关与改端口（演示台 <code>web.demo</code>、控制台 <code>web.console</code>、实时通道 <code>web.realtime</code>、API <code>http.enable_api</code>、配对端口 <code>pairing.port</code>），详见仓库 README 的「配置参考」。</p>
 
     <!-- troubleshoot -->
     <h2 id="troubleshoot">排错</h2>
