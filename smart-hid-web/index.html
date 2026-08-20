@@ -24,11 +24,9 @@
       <li><a href="#docs">文档</a></li>
       <li><a href="#download">下载</a></li>
       <li><a href="video.html" class="nav-video">视频</a></li>
-      <li><a href="license.html" class="nav-lic">授权</a></li>
       <li><a href="#feedback">反馈</a></li>
     </ul>
     <div class="nav-cta">
-      <a class="btn btn-ghost btn-sm" href="app.html">控制台</a>
       <a class="btn btn-primary btn-sm" href="docs/quick-start.html">快速开始</a>
     </div>
     <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
@@ -53,7 +51,7 @@
         <a class="btn btn-ghost btn-lg" href="#download">下载软件</a>
       </div>
       <div class="hero-tags">
-        <span>HTTP API</span><span>MQTT</span><span>USB HID</span><span>ESP32-S3</span><span>离线验签</span>
+        <span>HTTP API</span><span>MQTT</span><span>USB HID</span><span>ESP32-S3</span><span>开源</span>
       </div>
     </div>
     <div class="hero-visual">
@@ -180,8 +178,8 @@
   <div class="container">
     <div class="section-head">
       <span class="kicker">ARCHITECTURE</span>
-      <h2>五个组件，各司其职</h2>
-      <p class="lead">实时控制链路与账号授权链路解耦。设备控制永远不需要云端参与。</p>
+      <h2>三个组件，各司其职</h2>
+      <p class="lead">整条控制链路都在你手里。设备控制不需要任何云端参与。</p>
     </div>
 
     <div class="comp-grid">
@@ -193,22 +191,12 @@
       <div class="comp-card highlight">
         <div class="comp-tag">本地核心</div>
         <h3>ControlHub</h3>
-        <p>Windows 本地程序。HTTP API + 内嵌 MQTT Broker + 设备管理 + 命令引擎 + 试用 + License 离线验签 + 托盘 + 本地 Web 控制台。</p>
+        <p>本地控制程序。HTTP API + 内嵌 MQTT Broker + 设备管理 + 命令引擎 + 动态配对 + 托盘常驻 + 本地 Web 控制台。</p>
       </div>
       <div class="comp-card">
         <div class="comp-tag">配网</div>
         <h3>BLE Toolkit+</h3>
         <p>微信小程序。BLE 搜索 Smart HID → 配网 → 设置 Wi-Fi → ControlHub 配对 → 诊断。开源个人小程序，无支付无会员。</p>
-      </div>
-      <div class="comp-card">
-        <div class="comp-tag">门户</div>
-        <h3>Smart HID Web</h3>
-        <p>账号、套餐、订单、License、设备授权、离线 License 下载。支付状态以服务端回调为准。</p>
-      </div>
-      <div class="comp-card">
-        <div class="comp-tag">云端</div>
-        <h3>Smart HID Cloud</h3>
-        <p>User / Plan / Order / Payment / License / Activation。License 云端签名，ControlHub 本地验签。</p>
       </div>
     </div>
   </div>
@@ -253,51 +241,19 @@
         <p>实时控制永远不经过云。ControlHub 内嵌 Broker，断网也能用。云侧只持授权关系，不伪造设备在线状态。</p>
       </div>
       <div class="why-item">
-        <div class="why-ico">⏱️</div>
-        <h3>免费试用不阉割</h3>
-        <p>键盘、鼠标、HTTP API、本地 MQTT 全部可用。仅按"累计有效控制时间"计费——无操作不消耗，配置/诊断免费。</p>
+        <div class="why-ico">🧩</div>
+        <h3>全标准协议</h3>
+        <p>HTTP、MQTT、USB HID 都是业界标准。任何能发 HTTP 请求的语言，一行代码即可驱动。</p>
       </div>
       <div class="why-item">
-        <div class="why-ico">🗝️</div>
-        <h3>离线授权</h3>
-        <p>License 云端签名、本地验签，主绑 ESP32 Device ID。激活后无需联网即可验证，稳定可靠。</p>
+        <div class="why-ico">🛠️</div>
+        <h3>开箱即用</h3>
+        <p>下载即用，无账号、无订阅、无云端依赖——运行起来就是完全体，功能一个不少。</p>
       </div>
       <div class="why-item">
         <div class="why-ico">🔌</div>
         <h3>零侵入目标</h3>
         <p>目标电脑看到的是标准 USB 键鼠，无需驱动、无需控制端。适合自动化测试与受控环境联动。</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ LICENSE TEASER ============ -->
-<section class="section license-teaser" id="license">
-  <div class="container lt-inner">
-    <div class="lt-copy">
-      <span class="kicker light">LICENSE</span>
-      <h2>先用后买，按设备授权</h2>
-      <p class="lt-lead">
-        试用不阉割键鼠功能，只按累计有效控制时间计费；付费以设备为单位，
-        License 云端签名、本地离线验签——断网也能用。
-      </p>
-      <div class="lt-points">
-        <span>⏱️ 无操作不计费</span>
-        <span>🎯 一机一授权</span>
-        <span>🔓 离线验签</span>
-      </div>
-      <a class="btn btn-light btn-lg" href="license.html">查看授权与套餐 →</a>
-    </div>
-    <div class="lt-cards">
-      <div class="lt-card">
-        <div class="lt-name">免费试用</div>
-        <div class="lt-price">¥0</div>
-        <div class="lt-desc">全功能，累计控制时间制</div>
-      </div>
-      <div class="lt-card lt-card-accent">
-        <div class="lt-name">设备授权</div>
-        <div class="lt-price">即将公布</div>
-        <div class="lt-desc">绑定 ESP32 Device，离线可用</div>
       </div>
     </div>
   </div>
@@ -451,46 +407,24 @@
     <div class="section-head">
       <span class="kicker">FEEDBACK</span>
       <h2>需求与反馈</h2>
-      <p class="lead">想要什么能力？遇到了 Bug？直接告诉我们——被采纳的需求会出现在开发路线上。</p>
+      <p class="lead">想要什么能力？遇到了 Bug？直接提 Issue——被采纳的需求会出现在开发路线上。</p>
     </div>
 
     <div class="fb-card">
-      <form class="fb-form" id="fb-form" novalidate>
-        <div class="fb-pills" aria-label="反馈类型">
-          <label class="fb-pill"><input type="radio" name="category" value="feature" checked><span>🚀 功能需求</span></label>
-          <label class="fb-pill"><input type="radio" name="category" value="bug"><span>🐛 Bug 报告</span></label>
-          <label class="fb-pill"><input type="radio" name="category" value="other"><span>💬 其他</span></label>
-        </div>
-        <div class="fb-field">
-          <label for="fb-title">标题</label>
-          <input class="fb-input" id="fb-title" name="title" maxlength="80" placeholder="一句话描述你的需求或问题（3–80 字）" required>
-        </div>
-        <div class="fb-field">
-          <label for="fb-body">详细说明</label>
-          <textarea class="fb-textarea" id="fb-body" name="body" rows="4" maxlength="2000" placeholder="复现步骤、期望行为、使用场景……（5–2000 字）" required></textarea>
-        </div>
-        <div class="fb-field">
-          <label for="fb-contact">联系方式（可选）</label>
-          <input class="fb-input" id="fb-contact" name="contact" maxlength="120" placeholder="邮箱等，便于我们回访">
-        </div>
-        <!-- honeypot：正常用户不可见不可填，bot 填了会被静默丢弃 -->
-        <input class="fb-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <div class="fb-foot">
-          <button type="submit" class="btn btn-primary" id="fb-submit">提交反馈</button>
-          <span class="fb-note">无需注册，匿名提交 · 每 IP 每小时限 5 条</span>
-        </div>
-        <div class="fb-msg" id="fb-msg" role="alert"></div>
-      </form>
-
-      <div class="fb-ok" id="fb-ok" hidden>
-        <div class="fb-ok-ico">✅</div>
-        <h3>已收到，感谢反馈！</h3>
-        <p>编号 <code class="mono" id="fb-ok-id"></code>。被采纳后会出现在 <a href="docs/roadmap.html">开发路线</a> 的「来自社区的需求」里。</p>
-        <button class="btn btn-outline" id="fb-again" type="button">再提一条</button>
+      <div class="fb-links">
+        <a class="fb-link" href="https://github.com/LuoYaoSheng/smart-hid-workspace/issues" target="_blank" rel="noopener">
+          <span class="fb-link-ico">🐙</span>
+          <span class="fb-link-title">GitHub Issue</span>
+          <span class="fb-link-desc">功能需求 / Bug 报告 / 方案讨论</span>
+        </a>
+        <a class="fb-link" href="https://gitee.com/luoyaosheng/smart-hid-workspace/issues" target="_blank" rel="noopener">
+          <span class="fb-link-ico">🔥</span>
+          <span class="fb-link-title">Gitee Issue</span>
+          <span class="fb-link-desc">国内访问更快，内容双向同步</span>
+        </a>
       </div>
+      <p class="fb-note-c">提 Issue 前建议先看一眼 <a href="docs/roadmap.html">开发路线</a>，也许你想要的能力已经在计划里。</p>
     </div>
-
-    <p class="fb-devhint">开发者也可以直接提 <a href="https://gitee.com/luoyaosheng/smart-hid-workspace/issues" target="_blank" rel="noopener">Gitee Issue</a>。</p>
   </div>
 </section>
 
@@ -523,7 +457,6 @@
         <a href="#components">系统组成</a>
         <a href="#why">设计原则</a>
         <a href="video.html">演示视频</a>
-        <a href="license.html">授权与套餐</a>
         <a href="#feedback">需求与反馈</a>
       </div>
       <div>
