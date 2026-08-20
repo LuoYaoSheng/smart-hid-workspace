@@ -33,6 +33,7 @@ Smart HID 换了一条路：**让一块 ESP32-S3 以真实 USB 键盘 + 鼠标�
 - **动态设备配对**：ControlHub 生成 Pairing QR（`shid://pair?...`），避免预烧凭证；设备靠 BLE 扫描识别
 - **BLE 配网**：通过 [smart-ble](https://github.com/LuoYaoSheng/smart-ble)（微信小程序 BLE Toolkit+）完成 Wi-Fi 配网与设备诊断
 - **产品化完成度**：系统托盘常驻、本地 Web 控制台、SQLite 持久化、API Key 鉴权与轮换、LAN 模式开关
+- **网页模拟键鼠**：ControlHub 内置演示台 `/demo.html`——另一台电脑用浏览器里的可视化键盘/触控板/实体键盘直通遥控本机，实时显示往返延迟，演示零门槛
 
 ### 可靠性语义
 
