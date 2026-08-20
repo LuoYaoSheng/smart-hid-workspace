@@ -144,8 +144,8 @@ bash smart-hid-controlhub/scripts/test-loop-f2.sh
 ## 发布与分发
 
 - **源码**：[GitHub 主仓库](https://github.com/LuoYaoSheng/smart-hid-workspace) + [Gitee 镜像](https://gitee.com/luoyaosheng/smart-hid-workspace)（只同步源码、不在镜像上构建）
-- **落地页与文档站**：GitHub Pages 托管
-- **下载包**：GitHub Releases 发布（ControlHub 双平台二进制 + 固件烧录包，附 SHA256）；Gitee 侧直接存放预编译包
+- **落地页与文档站**：GitHub Pages 托管 —— <https://luoyaosheng.github.io/smart-hid-workspace/>
+- **下载包**：[GitHub Releases](https://github.com/LuoYaoSheng/smart-hid-workspace/releases)（ControlHub 双平台二进制 + 固件烧录包，附 SHA256）；Gitee 侧直接存放预编译包
 
 ## 反馈与贡献
 
@@ -154,7 +154,7 @@ bash smart-hid-controlhub/scripts/test-loop-f2.sh
 
 ## 开源协议
 
-待定（候选 MIT / Apache-2.0，正式公开发布前确定）。
+[Apache-2.0](LICENSE)
 
 ## 相关项目
 
