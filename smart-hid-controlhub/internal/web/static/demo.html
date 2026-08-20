@@ -47,7 +47,19 @@
     button:disabled { opacity: .45; cursor: not-allowed; }
     .conn { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .conn input[type="password"] { width: 240px; }
-    .conn select { min-width: 200px; }
+    #btn-broadcast.on { background: rgba(245, 158, 11, .18); border-color: #f59e0b; color: #fcd34d; font-weight: 700; }
+    .chipbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 6px 12px; border-radius: 999px; font-size: 13px;
+      background: var(--panel2); border: 1px solid var(--line); cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .chip:hover:not(:disabled) { border-color: var(--accent); }
+    .chip.active { background: var(--accent-soft); border-color: var(--accent); color: #bfdbfe; }
+    .chip.dim { opacity: .45; cursor: not-allowed; }
+    .chip-dot { width: 8px; height: 8px; border-radius: 50%; background: #475569; }
+    .chip-dot.on { background: var(--ok); box-shadow: 0 0 8px rgba(34,197,94,.7); }
     .btn-stop {
       background: rgba(239, 68, 68, .14); border-color: rgba(239, 68, 68, .5);
       color: #fca5a5; font-weight: 700; padding: 8px 14px;
@@ -132,11 +144,11 @@
     <div class="conn">
       <input type="password" id="api-key" placeholder="API Key（与控制台共用）" autocomplete="off">
       <button id="btn-key">连接</button>
-      <select id="device-sel"><option value="">— 未连接 —</option></select>
-      <span id="dev-state" class="muted"></span>
-      <span style="flex:1"></span>
+      <button id="btn-broadcast" title="开启后每次操作同时发给所有就绪设备">🎯 广播：关</button>
       <button class="btn-stop" id="btn-release">⛔ 释放所有按键</button>
     </div>
+    <div class="chipbar" id="device-chips"><span class="muted">未连接</span></div>
+    <div id="dev-state" class="muted" style="margin-top:6px"></div>
   </div>
 
   <!-- 状态栏 -->

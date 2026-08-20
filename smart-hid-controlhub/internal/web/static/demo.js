@@ -1,8 +1,9 @@
-// demo.js — 模拟键鼠演示台（OS-2）
+// demo.js — 模拟键鼠演示台（OS-2 建立；OS-3 加实时通道；OS-4 加多设备/广播）
 //
 // 全部命令经既有 POST /api/v1/devices/{id}/commands → MQTT → ESP32 → USB HID。
 // 设计要点：
-//   - 合流与限流：触控板 move 增量聚合、≤16 次/秒发送；在途上限 8，超出丢最旧（防设备队列 32 打满）
+//   - 多设备：芯片条 1-click 切换主控；🎯 广播模式把每次操作发给所有就绪设备（各独立 request_id）
+//   - 合流与限流：触控板 move 增量聚合、≤16 次/秒发送；在途上限 8×目标数，超出丢弃
 //   - 修饰键组合：可视化键盘锁定式；直通模式跟踪式（有修饰发 hotkey，无修饰发 key_down/key_up 对）
 //   - lease 兜底：key_down/button_down 均带 lease_ms，断连/丢 key_up 时设备侧自动释放
 (function () {
@@ -10,8 +11,8 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var el = {
-    apiKey: $('api-key'), btnKey: $('btn-key'), deviceSel: $('device-sel'), devState: $('dev-state'),
-    btnRelease: $('btn-release'),
+    apiKey: $('api-key'), btnKey: $('btn-key'), deviceChips: $('device-chips'), devState: $('dev-state'),
+    btnBroadcast: $('btn-broadcast'), btnRelease: $('btn-release'),
     stSent: $('st-sent'), stOk: $('st-ok'), stBad: $('st-bad'), stRtt: $('st-rtt'), stLast: $('st-last'),
     mVk: $('m-vk'), mPt: $('m-pt'), viewVk: $('view-vk'), viewPt: $('view-pt'),
     fnToggle: $('fn-toggle'), fnRows: $('fn-rows'), vkbd: $('vkbd'),
@@ -27,14 +28,17 @@
 
   var state = {
     apiKey: localStorage.getItem('smarthid_apikey') || '',
-    device: null,          // 选中的设备对象 {device_id, boot_id, online, usb_hid_ready}
+    devices: [],           // 全部已配对设备 [{device_id,boot_id,online,usb_hid_ready,firmware}]
+    device: null,          // 主控设备（芯片条选中）
+    broadcast: false,      // 🎯 广播模式：命令发往所有就绪设备
     sent: 0, ok: 0, bad: 0,
-    inFlight: 0, maxInFlight: 8,
+    inFlight: 0,
     mods: {},              // 可视化键盘修饰键锁定 {CTRL:true,...}
     ptMods: {},            // 直通模式修饰键按下状态
-    button: 'left',
+    button: localStorage.getItem('smarthid_demo_button') || 'left',
     blastRunning: false,
   };
+  var MAX_INFLIGHT_PER_TARGET = 8;
 
   // ---------- API ----------
 
@@ -60,15 +64,26 @@
     return 'demo_' + Date.now() + '_' + rand;
   }
 
-  // 发一条 HID 命令（带统计/在途限流/键帽回联动效钩子）
-  function send(type, action, payload, onAck) {
-    if (!state.device) { setLast('未选择设备', true); return; }
-    if (state.inFlight >= state.maxInFlight) { return; } // 限流：丢弃，不排队
+  // ---------- 目标解析 / 命令分发 ----------
+
+  // 本次操作的目标设备列表：广播=所有就绪设备；否则=[主控]
+  function targets() {
+    if (state.broadcast) {
+      return state.devices.filter(function (d) { return d.online && d.usb_hid_ready; });
+    }
+    return state.device ? [state.device] : [];
+  }
+
+  // 发一条 HID 命令到指定设备（统计/在途限流/键帽回联动效钩子）
+  function sendTo(dev, type, action, payload, onAck) {
+    if (!dev) { setLast('未选择设备', true); return; }
+    var cap = Math.max(MAX_INFLIGHT_PER_TARGET, targets().length * MAX_INFLIGHT_PER_TARGET);
+    if (state.inFlight >= cap) { return; } // 限流：丢弃，不排队
     var cmd = {
       protocol: '1.0',
       request_id: genRequestId(),
-      device_id: state.device.device_id,
-      target_boot_id: state.device.boot_id,
+      device_id: dev.device_id,
+      target_boot_id: dev.boot_id,
       type: type, action: action,
       ttl_ms: 2000,
       payload: payload || {},
@@ -99,6 +114,18 @@
       .catch(function () { state.inFlight--; state.bad++; updateStats(); });
   }
 
+  // 分发到当前目标集（广播=N 台各一条；单发=主控一条）。onAck 仅在首个成功时触发（键帽闪亮）。
+  function dispatch(type, action, payload, onAck) {
+    var ts = targets();
+    if (!ts.length) { setLast(state.broadcast ? '无就绪设备可广播' : '未选择设备', true); return; }
+    var fired = false;
+    ts.forEach(function (d) {
+      sendTo(d, type, action, payload, function (ok, json) {
+        if (ok && !fired) { fired = true; if (onAck) onAck(ok, json); }
+      });
+    });
+  }
+
   function updateStats(rtt) {
     el.stSent.textContent = state.sent;
     el.stOk.textContent = state.ok;
@@ -111,14 +138,16 @@
     el.stLast.style.fontSize = '13px';
   }
 
-  // ---------- 连接区 ----------
+  // ---------- 连接区 / 设备芯片条 ----------
 
   el.apiKey.value = state.apiKey;
   el.btnKey.addEventListener('click', function () {
     state.apiKey = el.apiKey.value.trim();
     localStorage.setItem('smarthid_apikey', state.apiKey);
     refreshDevices();
-    if (ws) { try { ws.close(); } catch (e) {} }
+    // 主动断开旧连接：先摘 onclose（避免触发重连计时）再同步置空（close 是异步的，
+    // 否则 connectWS 的 if (ws) return 会把新连接拦掉）
+    if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} ws = null; }
     wsFails = 0; // 手动连接重置失败计数
     connectWS();
   });
@@ -130,40 +159,76 @@
     api('GET', '/devices').then(function (r) {
       if (!r.ok) { el.devState.textContent = '❌ ' + (r.json && r.json.error || r.status); return; }
       var devs = (r.json && r.json.devices) || [];
-      var prev = state.device && state.device.device_id;
-      el.deviceSel.innerHTML = '<option value="">— 选择设备 —</option>' + devs.map(function (d) {
-        var ready = d.online && d.usb_hid_ready;
-        return '<option value="' + d.device_id + '"' + (d.device_id === prev ? ' selected' : '') + '>' +
-          d.device_id + (ready ? ' ✓就绪' : '（未就绪）') + '</option>';
-      }).join('');
-      if (prev) { // 恢复选中
+      state.devices = devs;
+      if (state.device) { // 保留主控选中（刷新 boot_id/状态）
         for (var i = 0; i < devs.length; i++) {
-          if (devs[i].device_id === prev) selectDevice(devs[i]);
+          if (devs[i].device_id === state.device.device_id) state.device = devs[i];
         }
       }
+      if (!state.device) { // 默认选第一台就绪设备
+        for (var j = 0; j < devs.length; j++) {
+          if (devs[j].online && devs[j].usb_hid_ready) { state.device = devs[j]; break; }
+        }
+      }
+      renderChips();
+      updateDevStateText();
+      updateBroadcastBtn();
       el.devState.textContent = devs.length ? '' : '暂无设备（先在控制台完成配对）';
+      if (devs.length) updateDevStateText(); // 有设备时 devState 显示主控/广播态而非空
     });
   }
 
-  function selectDevice(d) {
-    state.device = d;
-    el.devState.textContent = d.online && d.usb_hid_ready
-      ? '● 已连接 ' + d.device_id
-      : '○ 设备未就绪，命令会被拒绝';
+  function renderChips() {
+    if (!state.devices.length) { el.deviceChips.innerHTML = '<span class="muted">暂无设备</span>'; return; }
+    el.deviceChips.innerHTML = state.devices.map(function (d) {
+      var ready = d.online && d.usb_hid_ready;
+      var active = state.device && d.device_id === state.device.device_id;
+      return '<button class="chip' + (active ? ' active' : '') + (ready ? '' : ' dim') + '" data-id="' + d.device_id + '"' +
+        (ready ? '' : ' disabled') + ' title="' + d.device_id + (ready ? '' : '（未就绪）') + '">' +
+        '<span class="chip-dot' + (ready ? ' on' : '') + '"></span>' + d.device_id + '</button>';
+    }).join('');
   }
-  el.deviceSel.addEventListener('change', function () {
-    var id = el.deviceSel.value;
-    if (!id) { state.device = null; el.devState.textContent = ''; return; }
-    api('GET', '/devices').then(function (r) {
-      var devs = (r.json && r.json.devices) || [];
-      for (var i = 0; i < devs.length; i++) {
-        if (devs[i].device_id === id) { selectDevice(devs[i]); break; }
+
+  el.deviceChips.addEventListener('click', function (e) {
+    var chip = e.target.closest ? e.target.closest('.chip') : null;
+    if (!chip || chip.disabled) return;
+    var id = chip.dataset.id;
+    state.devices.forEach(function (d) {
+      if (d.device_id === id && d.online && d.usb_hid_ready) {
+        state.device = d;
+        renderChips();
+        updateDevStateText();
       }
     });
   });
 
+  function updateDevStateText() {
+    if (state.broadcast) {
+      var n = targets().length;
+      el.devState.textContent = n ? '🎯 广播 → ' + n + ' 台设备' : '🎯 广播（无就绪设备）';
+    } else if (state.device) {
+      el.devState.textContent = state.device.online && state.device.usb_hid_ready
+        ? '● 已连接 ' + state.device.device_id
+        : '○ 设备未就绪，命令会被拒绝';
+    } else {
+      el.devState.textContent = '';
+    }
+  }
+
+  // 广播开关
+  el.btnBroadcast.addEventListener('click', function () {
+    state.broadcast = !state.broadcast;
+    updateBroadcastBtn();
+    updateDevStateText();
+  });
+  function updateBroadcastBtn() {
+    var n = targets().length;
+    el.btnBroadcast.textContent = state.broadcast ? '🎯 广播：开' + (n ? '（' + n + ' 台）' : '') : '🎯 广播：关';
+    el.btnBroadcast.className = state.broadcast ? 'on' : '';
+  }
+
   el.btnRelease.addEventListener('click', function () {
-    send('system', 'release_all', {});
+    dispatch('system', 'release_all', {});
   });
 
   // ---------- 模式切换 ----------
@@ -194,13 +259,10 @@
   for (var f = 1; f <= 12; f++) FNROW.push(['F' + f, 'F' + f]);
 
   function buildKbd() {
-    // 功能键
     el.fnRows.innerHTML = '<div class="krow">' + FNROW.map(function (k) {
       return '<div class="key" data-key="' + k[1] + '">' + k[0] + '</div>';
     }).join('') + '</div>';
-    // 主区
     var html = '';
-    // 修饰键行
     html += '<div class="krow">' + MODS.map(function (m) {
       return '<div class="key mod" data-mod="' + m + '">' + m + '</div>';
     }).join('') + ARROWS.map(function (k) {
@@ -216,7 +278,6 @@
     }).join('') + '</div>';
     el.vkbd.innerHTML = html;
 
-    // 事件委托
     el.vkbd.addEventListener('pointerdown', function (e) {
       var t = e.target.closest ? e.target.closest('.key') : null;
       if (!t) return;
@@ -243,12 +304,11 @@
     });
   }
 
-  // 发送一个键：有锁定修饰 → hotkey；否则 tap
   function pressKey(key, keyEl) {
     var mods = activeMods(state.mods);
     var payload = mods.length ? { keys: mods.concat([key]), hold_ms: 40 } : { key: key, hold_ms: 40 };
     var action = mods.length ? 'hotkey' : 'tap';
-    send('keyboard', action, payload, function (ok) {
+    dispatch('keyboard', action, payload, function (ok) {
       if (ok && keyEl) {
         keyEl.classList.add('hit');
         setTimeout(function () { keyEl.classList.remove('hit'); }, 220);
@@ -266,7 +326,6 @@
 
   // ---------- 实体键盘直通 ----------
 
-  // KeyboardEvent.code → HID 键名（固件 hid_keymap 支持集）
   var CODE_MAP = {
     Escape: 'ESC', Enter: 'ENTER', NumpadEnter: 'ENTER', Backspace: 'BACKSPACE', Tab: 'TAB',
     Space: 'SPACE', CapsLock: 'CAPSLOCK',
@@ -293,13 +352,13 @@
     if (e.code === 'Escape') { el.ptArea.blur(); return; }
     var hid = codeToHid(e.code);
     if (!hid) { setLast('不支持：' + e.code, true); return; }
-    if (CODE_MODS[e.code]) { state.ptMods[hid] = true; return; } // 修饰只跟踪
+    if (CODE_MODS[e.code]) { state.ptMods[hid] = true; return; }
     if (e.repeat) return;
     var mods = activeMods(state.ptMods);
     if (mods.length) {
-      send('keyboard', 'hotkey', { keys: mods.concat([hid]), hold_ms: 40 }); // hotkey 原子完成，无需 key_up
+      dispatch('keyboard', 'hotkey', { keys: mods.concat([hid]), hold_ms: 40 });
     } else {
-      send('keyboard', 'key_down', { key: hid, lease_ms: 2000 });
+      dispatch('keyboard', 'key_down', { key: hid, lease_ms: 2000 });
     }
   });
   el.ptArea.addEventListener('keyup', function (e) {
@@ -307,18 +366,23 @@
     if (!hid) return;
     if (CODE_MODS[e.code]) { delete state.ptMods[hid]; return; }
     var mods = activeMods(state.ptMods);
-    if (!mods.length) send('keyboard', 'key_up', { key: hid }); // 无修饰才需显式抬起
+    if (!mods.length) dispatch('keyboard', 'key_up', { key: hid });
   });
   el.ptArea.addEventListener('blur', clearPtMods);
   function clearPtMods() { state.ptMods = {}; }
 
   // ---------- 触控板 ----------
 
-  var MOVE_HZ = 16;                    // move 命令合流上限（次/秒）
+  var MOVE_HZ = 16;
   var MOVE_INTERVAL = 1000 / MOVE_HZ;
   var padAccX = 0, padAccY = 0, padTimer = null, padDown = false, lastPos = null;
 
   function sensFactor() { return parseInt(el.sens.value, 10) / 10; }
+
+  el.sens.value = localStorage.getItem('smarthid_demo_sens') || el.sens.value;
+  el.sens.addEventListener('change', function () {
+    localStorage.setItem('smarthid_demo_sens', el.sens.value);
+  });
 
   el.pad.addEventListener('pointerdown', function (e) {
     e.preventDefault();
@@ -339,12 +403,11 @@
       padTimer = setTimeout(flushMove, MOVE_INTERVAL);
     }
   });
-  function endPad(e) {
+  function endPad() {
     if (!padDown) return;
     padDown = false;
     el.pad.classList.remove('active');
     el.padDot.hidden = true;
-    if (e && e.type === 'pointerclick') return;
     clearTimeout(padTimer); padTimer = null;
     flushMove();
   }
@@ -356,7 +419,7 @@
     if (Math.abs(padAccX) < 1 && Math.abs(padAccY) < 1) { padAccX = 0; padAccY = 0; return; }
     var dx = Math.round(padAccX), dy = Math.round(padAccY);
     padAccX -= dx; padAccY -= dy;
-    send('mouse', 'move', { dx: dx, dy: dy }); // 大增量固件自动按 ±127 分包
+    dispatch('mouse', 'move', { dx: dx, dy: dy }); // 大增量固件自动按 ±127 分包
   }
   function moveDot(e) {
     var r = el.pad.getBoundingClientRect();
@@ -364,7 +427,6 @@
     el.padDot.style.top = (e.clientY - r.top) + 'px';
   }
 
-  // 滚轮 → 目标机滚轮（节流 80ms，聚合方向）
   var wheelTimer = null, wheelAcc = 0;
   el.pad.addEventListener('wheel', function (e) {
     e.preventDefault();
@@ -372,26 +434,31 @@
     if (!wheelTimer) {
       wheelTimer = setTimeout(function () {
         wheelTimer = null;
-        var d = Math.round(wheelAcc / 100); // 归一化为步数
+        var d = Math.round(wheelAcc / 100);
         wheelAcc = 0;
-        if (d) send('mouse', 'wheel', { delta: d });
+        if (d) dispatch('mouse', 'wheel', { delta: d });
       }, 80);
     }
   }, { passive: false });
 
-  // 按钮选择 + 单击/双击
   el.btnSel.addEventListener('click', function (e) {
     var b = e.target.dataset && e.target.dataset.b;
     if (!b) return;
     state.button = b;
+    localStorage.setItem('smarthid_demo_button', b);
     var btns = el.btnSel.querySelectorAll('button');
     for (var i = 0; i < btns.length; i++) btns[i].className = btns[i].dataset.b === b ? 'on' : '';
   });
+  // 初始化记忆的按钮选择
+  (function () {
+    var btns = el.btnSel.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) btns[i].className = btns[i].dataset.b === state.button ? 'on' : '';
+  })();
   el.btnClick.addEventListener('click', function () {
-    send('mouse', 'click', { button: state.button, count: 1 });
+    dispatch('mouse', 'click', { button: state.button, count: 1 });
   });
   el.btnDbl.addEventListener('click', function () {
-    send('mouse', 'click', { button: state.button, count: 2 });
+    dispatch('mouse', 'click', { button: state.button, count: 2 });
   });
 
   // ---------- 文本连打 ----------
@@ -400,6 +467,7 @@
     if (state.blastRunning) { state.blastRunning = false; el.btnBlast.textContent = '▶ 发送到目标电脑'; el.blastState.textContent = '已停止'; return; }
     var text = el.blastText.value;
     if (!text) { el.blastState.textContent = '请输入内容'; return; }
+    if (!targets().length) { el.blastState.textContent = state.broadcast ? '无就绪设备可广播' : '请先选择设备'; return; }
     var queue = [];
     var skipped = 0;
     for (var i = 0; i < text.length; i++) {
@@ -416,18 +484,18 @@
     if (!queue.length) { el.blastState.textContent = '没有可发送的字符（仅支持字母/数字/空格/换行）'; return; }
     state.blastRunning = true;
     el.btnBlast.textContent = '⏹ 停止';
-    var total = queue.length, idx = 0;
+    var total = queue.length, idx = 0, perTick = targets().length;
     (function step() {
       if (!state.blastRunning) return;
       if (idx >= total) {
         state.blastRunning = false;
         el.btnBlast.textContent = '▶ 发送到目标电脑';
-        el.blastState.textContent = '完成：' + total + ' 个字符' + (skipped ? '，跳过 ' + skipped + ' 个不支持的字符' : '');
+        el.blastState.textContent = '完成：' + total + ' 个字符' + (perTick > 1 ? ' × ' + perTick + ' 台' : '') + (skipped ? '，跳过 ' + skipped + ' 个不支持的字符' : '');
         return;
       }
       var c = queue[idx++];
-      el.blastState.textContent = '发送中 ' + idx + '/' + total;
-      send('keyboard', c.action, c.payload);
+      el.blastState.textContent = '发送中 ' + idx + '/' + total + (perTick > 1 ? ' ×' + perTick + '台' : '');
+      dispatch('keyboard', c.action, c.payload);
       setTimeout(step, 80);
     })();
   });
@@ -468,15 +536,26 @@
     var d = msg.data || {};
     var line = '';
     if (msg.type === 'hello') line = 'hello · 服务端已连接';
-    else if (msg.type === 'device') line = 'device · ' + d.device_id + (d.online ? ' 上线' : ' 离线') + (d.usb_hid_ready ? ' · HID 就绪' : '');
-    else if (msg.type === 'ack') line = 'ack · ' + d.request_id + ' → ' + d.status + (d.execution_ms ? ' · ' + d.execution_ms + 'ms' : '');
+    else if (msg.type === 'device') {
+      line = 'device · ' + d.device_id + (d.online ? ' 上线' : ' 离线') + (d.usb_hid_ready ? ' · HID 就绪' : '');
+      upsertDevice(d); // 芯片条实时更新
+    }
+    else if (msg.type === 'ack') line = 'ack · ' + d.device_id + ' · ' + d.request_id + ' → ' + d.status + (d.execution_ms ? ' · ' + d.execution_ms + 'ms' : '');
     else line = msg.type;
     pushEvent(line);
-    if (msg.type === 'device' && state.device && d.device_id === state.device.device_id) {
-      el.devState.textContent = d.online && d.usb_hid_ready
-        ? '● 已连接 ' + d.device_id
-        : '○ 设备未就绪，命令会被拒绝';
-    }
+  }
+
+  // WS device 事件 → 更新本地设备列表与芯片条（含主控设备状态文案）
+  function upsertDevice(d) {
+    var found = false;
+    state.devices.forEach(function (dev, i) {
+      if (dev.device_id === d.device_id) { state.devices[i] = d; found = true; }
+    });
+    if (!found) state.devices.push(d);
+    if (state.device && d.device_id === state.device.device_id) state.device = d;
+    renderChips();
+    updateDevStateText();
+    updateBroadcastBtn();
   }
 
   function pushEvent(line) {
@@ -490,6 +569,7 @@
   // ---------- 启动 ----------
 
   buildKbd();
+  updateBroadcastBtn();
   if (state.apiKey) { refreshDevices(); connectWS(); }
   updateStats();
 })();
