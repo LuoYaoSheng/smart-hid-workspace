@@ -55,8 +55,8 @@ func TestDeviceServer_BadToken(t *testing.T) {
 		t.Fatalf("post: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusGone {
-		t.Errorf("status = %d, want 410 Gone", resp.StatusCode)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 (token not found → pairing_token_invalid)", resp.StatusCode)
 	}
 }
 

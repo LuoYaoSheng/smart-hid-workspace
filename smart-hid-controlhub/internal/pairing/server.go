@@ -3,6 +3,7 @@ package pairing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -80,12 +81,17 @@ func (s *DeviceServer) handleDevice(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.Warn("pairing complete failed",
 			"device_id", req.DeviceID, "err", err)
-		// 区分错误：token 问题 → 404/410；device_id 问题 → 400
-		status := http.StatusBadRequest
-		if containsAny(err.Error(), "not found", "expired", "used") {
-			status = http.StatusGone
+		// 哨兵错误 → 稳定错误码；其余（格式/内部）→ 400/500。
+		switch {
+		case errors.Is(err, ErrTokenNotFound):
+			writeJSON(w, http.StatusNotFound, errBody{"pairing_token_invalid", "token not found"})
+		case errors.Is(err, ErrTokenExpired):
+			writeJSON(w, http.StatusGone, errBody{"pairing_token_expired", "token expired or revoked"})
+		case errors.Is(err, ErrTokenUsed):
+			writeJSON(w, http.StatusConflict, errBody{"pairing_token_used", "token already consumed"})
+		default:
+			writeJSON(w, http.StatusBadRequest, errBody{"pairing_failed", err.Error()})
 		}
-		writeJSON(w, status, errBody{"pairing_failed", err.Error()})
 		return
 	}
 	s.log.Info("pairing device served", "device_id", req.DeviceID)
@@ -105,23 +111,7 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-func containsAny(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if len(s) >= len(sub) && (s == sub || containsStr(s, sub)) {
-			return true
-		}
-	}
-	return false
-}
 
-func containsStr(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
-}
 
 // 引用 fmt 避免 unused（如果未来加日志细节）
 var _ = fmt.Sprintf

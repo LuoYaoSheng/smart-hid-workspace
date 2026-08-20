@@ -45,8 +45,15 @@ type Session struct {
 	CreatedAt int64  `json:"created_at"`
 	ExpiresAt int64  `json:"expires_at"`
 	UsedAt    *int64 `json:"used_at,omitempty"`
-	Status    string `json:"status"` // pending|success|expired|revoked
+	Status    string `json:"status"` // pending|consuming|success|expired|revoked
 }
+
+// CompleteSession 消费哨兵错误（HTTP 层映射稳定错误码）。
+var (
+	ErrTokenNotFound = fmt.Errorf("pairing token not found")
+	ErrTokenExpired  = fmt.Errorf("pairing token expired or revoked")
+	ErrTokenUsed     = fmt.Errorf("pairing token already used")
+)
 
 // PairingResult 是设备从 POST /api/v1/pairing/device 拿到的响应。
 type PairingResult struct {
@@ -131,8 +138,16 @@ func (m *Manager) GetSession(token string) (*Session, error) {
 	return &s, nil
 }
 
-// CompleteSession 设备侧调用：校验 token + device_id，签发凭据，标记 session。
-// 返回 PairingResult（含一次性明文密码）。
+// CompleteSession 设备侧调用：单事务原子消费 token（0→1 严格一次）并签发凭据。
+//
+// 事务内三步：
+//  1. CAS 认领：UPDATE ... WHERE status='pending' AND expires_at>=now，RowsAffected==1
+//     才是赢家（并发竞争者全部在此落败，不存在 TOCTOU）
+//  2. 签发凭据（devices upsert + device_credentials upsert，同事务）
+//  3. 标记 success
+//
+// 任一步失败整体 ROLLBACK —— 不会出现"凭据已发但 session 仍 pending"或反向半状态。
+// 返回 PairingResult（含一次性明文密码）；失败返回哨兵错误（ErrTokenUsed/Expired/NotFound）。
 func (m *Manager) CompleteSession(token, deviceID, bootID, firmware, hardware string) (*PairingResult, error) {
 	if !DeviceIDPattern.MatchString(deviceID) {
 		return nil, fmt.Errorf("invalid device_id format")
@@ -141,32 +156,58 @@ func (m *Manager) CompleteSession(token, deviceID, bootID, firmware, hardware st
 		return nil, fmt.Errorf("boot_id required")
 	}
 
-	s, err := m.GetSession(token)
-	if err != nil {
-		return nil, err
+	// 随机凭据在内存生成（不涉库，可在事务外）；持久化与 session 状态同事务。
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return nil, fmt.Errorf("gen password: %w", err)
 	}
-	if s == nil {
-		return nil, fmt.Errorf("token not found")
-	}
-	if s.Status != "pending" {
-		return nil, fmt.Errorf("token %s (already used or revoked)", s.Status)
-	}
-
-	// 签发凭据
-	username, password, err := m.IssueDeviceCredentials(deviceID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 标记 session
+	password := hex.EncodeToString(raw)
+	username := "dev_" + deviceID
+	hash := hashSha256(password)
 	now := time.Now().Unix()
-	_, err = m.db.Exec(
-		`UPDATE pairing_sessions SET device_id = ?, used_at = ?, status = 'success' WHERE token = ?`,
-		deviceID, now, token,
+
+	tx, err := m.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// 1) CAS 认领（pending + 未过期 → consuming）
+	res, err := tx.Exec(
+		`UPDATE pairing_sessions SET status='consuming', device_id=?, used_at=?
+		 WHERE token=? AND status='pending' AND expires_at >= ?`,
+		deviceID, now, token, now,
 	)
 	if err != nil {
+		return nil, fmt.Errorf("claim pairing session: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n != 1 {
+		// 认领失败：分类原因（读路径不影响事务，回滚后再查）。
+		_ = tx.Rollback()
+		committed = true // 已显式回滚，跳过 defer 的二次回滚
+		return nil, m.classifyConsumeFailure(token)
+	}
+
+	// 2) 凭据 + 设备 upsert（同事务）
+	if err := issueDeviceCredentialsTx(tx, deviceID, username, hash, now); err != nil {
+		return nil, err // defer 回滚
+	}
+
+	// 3) success 标记（同事务）
+	if _, err := tx.Exec(`UPDATE pairing_sessions SET status='success' WHERE token=?`, token); err != nil {
 		return nil, fmt.Errorf("mark session success: %w", err)
 	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
 
 	m.log.Info("pairing completed",
 		"device_id", deviceID, "boot_id", bootID,
@@ -181,35 +222,36 @@ func (m *Manager) CompleteSession(token, deviceID, bootID, firmware, hardware st
 	}, nil
 }
 
-// IssueDeviceCredentials 为 deviceID 生成 dev_<device_id> + 32 字节随机密码。
-// 撤销旧的 + 写入新 + upsert devices 行（is_paired=1）。返回明文密码（一次性）。
-func (m *Manager) IssueDeviceCredentials(deviceID string) (username, password string, err error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return "", "", fmt.Errorf("gen password: %w", err)
-	}
-	password = hex.EncodeToString(raw)
-	username = "dev_" + deviceID
-	hash := hashSha256(password)
-	now := time.Now().Unix()
-
-	tx, err := m.db.Begin()
+// classifyConsumeFailure CAS 认领失败后查实际状态，返回哨兵错误。
+func (m *Manager) classifyConsumeFailure(token string) error {
+	s, err := m.GetSession(token)
 	if err != nil {
-		return "", "", err
+		return err
 	}
-	// upsert devices 行（先建 FK 父行；is_paired=1）
+	if s == nil {
+		return ErrTokenNotFound
+	}
+	switch s.Status {
+	case "success", "consuming":
+		return ErrTokenUsed
+	case "expired", "revoked":
+		return ErrTokenExpired
+	default: // pending 且未过期却认领失败 —— 并发窗口理论不可达，防御性返回
+		return fmt.Errorf("pairing session state conflict (status=%s)", s.Status)
+	}
+}
+
+// issueDeviceCredentialsTx 在给定事务内 upsert 设备行 + 每设备凭据（单行旋转模式：
+// 历史用 security_events 留痕，本表只保留最新一份 active 凭据）。
+func issueDeviceCredentialsTx(tx *sql.Tx, deviceID, username, hash string, now int64) error {
 	if _, err := tx.Exec(
 		`INSERT INTO devices(device_id, boot_id, paired_at, is_paired, machine_anchor)
 		 VALUES(?, '', ?, 1, '')
 		 ON CONFLICT(device_id) DO UPDATE SET paired_at=excluded.paired_at, is_paired=1`,
 		deviceID, now,
 	); err != nil {
-		_ = tx.Rollback()
-		return "", "", fmt.Errorf("upsert device: %w", err)
+		return fmt.Errorf("upsert device: %w", err)
 	}
-	// 撤销旧凭据（如有）— 由于 device_credentials PK=device_id，单行旋转模式：
-	// 历史用 security_events 留痕，本表只保留最新一份 active 凭据。
-	// 写新凭据（INSERT OR REPLACE，等价于"撤销旧 + 写新"的合并语义）
 	if _, err := tx.Exec(
 		`INSERT INTO device_credentials(device_id, mqtt_username, mqtt_credential_hash, issued_at)
 		 VALUES(?, ?, ?, ?)
@@ -220,8 +262,29 @@ func (m *Manager) IssueDeviceCredentials(deviceID string) (username, password st
 		   revoked_at=NULL`,
 		deviceID, username, hash, now,
 	); err != nil {
+		return fmt.Errorf("upsert creds: %w", err)
+	}
+	return nil
+}
+
+// IssueDeviceCredentials 为 deviceID 生成 dev_<device_id> + 32 字节随机密码。
+// 撤销旧的 + 写入新 + upsert devices 行（is_paired=1）。返回明文密码（一次性）。
+// 独立事务版本；CompleteSession 走 issueDeviceCredentialsTx 与 session 同事务。
+func (m *Manager) IssueDeviceCredentials(deviceID string) (username, password string, err error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", "", fmt.Errorf("gen password: %w", err)
+	}
+	password = hex.EncodeToString(raw)
+	username = "dev_" + deviceID
+
+	tx, err := m.db.Begin()
+	if err != nil {
+		return "", "", err
+	}
+	if err := issueDeviceCredentialsTx(tx, deviceID, username, hashSha256(password), time.Now().Unix()); err != nil {
 		_ = tx.Rollback()
-		return "", "", fmt.Errorf("upsert creds: %w", err)
+		return "", "", err
 	}
 	if err := tx.Commit(); err != nil {
 		return "", "", err
