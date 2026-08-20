@@ -1,0 +1,9 @@
+# DEV 静态开发配置叠加层（M1-G3）：配合
+#   idf.py -B build-dev -DSDKCONFIG=sdkconfig.dev -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.dev.defaults" build
+# 产出 DEV 静态网络固件（生产构建不用本文件）。值请按需修改。
+CONFIG_SMART_HID_DEV_STATIC_CONFIG=y
+CONFIG_SMART_HID_WIFI_SSID="dev-net"
+CONFIG_SMART_HID_WIFI_PASSWORD="dev-pass"
+CONFIG_SMART_HID_MQTT_BROKER_HOST="192.168.1.100"
+CONFIG_SMART_HID_MQTT_USERNAME="controlhub"
+CONFIG_SMART_HID_MQTT_PASSWORD="dev-hub-pass"

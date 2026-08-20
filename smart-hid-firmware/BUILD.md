@@ -35,14 +35,13 @@ idf.py menuconfig
 | 配置 | 默认 | 说明 |
 |------|------|------|
 | `SMART_HID_DEVICE_ID` | `HID-00000001` | 首次烧录用，之后存 NVS |
-| `SMART_HID_MQTT_BROKER_HOST` | `192.168.1.100` | ControlHub LAN IP |
-| `SMART_HID_MQTT_BROKER_PORT` | `17891` | |
-| `SMART_HID_MQTT_USERNAME` | `controlhub` | |
-| `SMART_HID_MQTT_PASSWORD` | `change-me-in-production` | **生产必改** |
-| `SMART_HID_WIFI_SSID` | (空) | F1/F2 固定 |
-| `SMART_HID_WIFI_PASSWORD` | (空) | F1/F2 固定 |
+| `SMART_HID_DEV_STATIC_CONFIG` | **n** | **DEV ONLY**：显式开启后无 NVS 配置时用下面 Kconfig 连接（仅内存，绝不写 NVS）；生产保持 n |
+| `SMART_HID_WIFI_SSID` / `SMART_HID_WIFI_PASSWORD` | (空) | 仅 DEV 静态模式 |
+| `SMART_HID_MQTT_BROKER_HOST` / `PORT` | `192.168.1.100` / `17891` | 仅 DEV 静态模式 |
+| `SMART_HID_MQTT_USERNAME` / `PASSWORD` | (空) | 仅 DEV 静态模式；需与 ControlHub config.yaml 显式配置的 mqtt 账号一致（ControlHub 内部凭据默认每启动随机生成） |
 
-> F3+ 阶段 Wi-Fi/MQTT 改由 BLE 配网写入 NVS，Kconfig 仅作首次启动兜底。
+> M1-G3 起 Wi-Fi/MQTT 以 **NVS 运行时配置为正式事实源**（BLE Provisioning 写入）；
+> Kconfig 只是显式 DEV fallback，绝不覆盖 NVS。新设备默认进入 BLE Provision Mode。
 
 ## 4. 编译
 
@@ -103,8 +102,8 @@ F5 启用：
 |--------|------|------|
 | F1 | USB Keyboard/Mouse + 固定 Wi-Fi/MQTT + ControlHub | ✅ C 代码完成 + `idf.py build` 通过（未硬件验证） |
 | F2 | ACK / request_id / dedup / boot_id / TTL / lease / release_all / queue | ✅ C 代码完成 + 编译通过 + Go 参考验证 28/28 |
-| F3 | BLE Provision + Pairing | ⏳ 待开始 |
-| F4 | NVS Security + Trial Anchor + OTA Foundation | ⏳ |
+| F3 | BLE Provision + Pairing + NVS 运行时配置 | ✅ 源码完成 + 编译通过 + host 状态机单测（未硬件验证） |
+| F4 | NVS Encryption + OTA Foundation | ⏳ |
 | F5 | Production Security + Factory Tool | ⏳ |
 
 ## 10. 故障排查

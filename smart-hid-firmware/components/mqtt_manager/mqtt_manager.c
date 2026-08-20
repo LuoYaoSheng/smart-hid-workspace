@@ -13,11 +13,22 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "sdkconfig.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "mqtt_manager";
 
 static esp_mqtt_client_handle_t s_client = NULL;
 static volatile bool s_connected = false;
+
+/* 运行时配置（M1-G3）：非 NULL 时优先于 Kconfig */
+static struct {
+    char host[64];
+    uint16_t port;
+    char username[24];
+    char password[65];
+    bool set;
+} s_rt = { .set = false };
 
 /* command topic 收到回调（command_engine 注入；app_main 装配） */
 typedef void (*mqtt_cmd_handler_t)(const char *topic, const char *payload, int len);
@@ -112,19 +123,37 @@ static void mqtt_event_handler(void *args, esp_event_base_t base,
 }
 
 /* ----------------------------------------------------------------
- * init
+ * 运行时配置 + init
  * ---------------------------------------------------------------- */
+void mqtt_manager_configure(const char *host, uint16_t port,
+                            const char *username, const char *password) {
+    if (host == NULL || host[0] == '\0') return;
+    strlcpy(s_rt.host, host, sizeof(s_rt.host));
+    s_rt.port = port ? port : 17891;
+    if (username) strlcpy(s_rt.username, username, sizeof(s_rt.username));
+    if (password) strlcpy(s_rt.password, password, sizeof(s_rt.password));
+    s_rt.set = true;
+    ESP_LOGI(TAG, "runtime mqtt config set: host=%s port=%u user=%s",
+             s_rt.host, (unsigned)s_rt.port,
+             s_rt.username[0] ? s_rt.username : "-"); /* 密码绝不打日志 */
+}
+
 int mqtt_manager_init(void) {
+    const char *host = s_rt.set ? s_rt.host : CONFIG_SMART_HID_MQTT_BROKER_HOST;
+    int port         = s_rt.set ? s_rt.port   : CONFIG_SMART_HID_MQTT_BROKER_PORT;
+    const char *user = s_rt.set ? (s_rt.username[0] ? s_rt.username : NULL)
+                                : (strlen(CONFIG_SMART_HID_MQTT_USERNAME) ? CONFIG_SMART_HID_MQTT_USERNAME : NULL);
+    const char *pass = s_rt.set ? (s_rt.password[0] ? s_rt.password : NULL)
+                                : (strlen(CONFIG_SMART_HID_MQTT_PASSWORD) ? CONFIG_SMART_HID_MQTT_PASSWORD : NULL);
+
     /* LWT payload */
     char *lwt = build_status_json(false);
     char *lwt_topic = build_topic_str(SMART_HID_TOPIC_STATUS_FMT);
 
     esp_mqtt_client_config_t cfg = {
-        .broker.address.hostname = CONFIG_SMART_HID_MQTT_BROKER_HOST,
-        .broker.address.port     = CONFIG_SMART_HID_MQTT_BROKER_PORT,
+        .broker.address.hostname = host,
+        .broker.address.port     = port,
         .broker.address.transport = MQTT_TRANSPORT_OVER_TCP,
-        .credentials.username    = CONFIG_SMART_HID_MQTT_USERNAME,
-        .credentials.authentication.password = CONFIG_SMART_HID_MQTT_PASSWORD,
         .credentials.client_id   = device_identity_get_device_id(),
         .network.reconnect_timeout_ms = 3000,
         .buffer.size             = 4096,
@@ -137,6 +166,8 @@ int mqtt_manager_init(void) {
             .retain   = true,
         },
     };
+    if (user != NULL) cfg.credentials.username = user;
+    if (pass != NULL) cfg.credentials.authentication.password = pass;
 
     s_client = esp_mqtt_client_init(&cfg);
     if (lwt) free(lwt);
@@ -147,6 +178,17 @@ int mqtt_manager_init(void) {
     }
     esp_mqtt_client_register_event(s_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(s_client);
+    return 0;
+}
+
+int mqtt_manager_wait_connected(uint32_t timeout_ms) {
+    uint32_t waited = 0;
+    const uint32_t step = 100;
+    while (!s_connected) {
+        vTaskDelay(pdMS_TO_TICKS(step));
+        waited += step;
+        if (waited >= timeout_ms) return -1;
+    }
     return 0;
 }
 

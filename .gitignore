@@ -22,7 +22,9 @@ smart-hid-controlhub/vendor/
 
 # ESP32 (smart-hid-firmware)
 smart-hid-firmware/build/
+smart-hid-firmware/build-dev/
 smart-hid-firmware/sdkconfig.old
+smart-hid-firmware/sdkconfig.dev
 smart-hid-firmware/managed_components/
 
 # Node (smart-hid-web)

@@ -12,4 +12,8 @@ idf_component_register(
         command_engine
         hid_engine
         status_manager
+        runtime_config
+        provisioning
+        hub_pairing
+        ble_provision
 )

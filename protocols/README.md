@@ -1,11 +1,13 @@
 # protocols
 
-Smart HID 协议 Schema 与示例（MQTT Command / ACK / Status）。
+Smart HID 协议 Schema 与示例（MQTT Command / ACK / Status）+ BLE Provisioning 协议。
 
 ## 目录
 
 ```text
 protocols/
+├── ble/
+│   └── PROVISIONING_V1.md    # BLE 配网协议（canonical；UUID/分帧/状态机/错误码）
 ├── schemas/
 │   ├── command.schema.json   # SmartHidCommand envelope
 │   ├── ack.schema.json       # SmartHidAck
@@ -24,6 +26,7 @@ protocols/
 | 内容 | 事实源 |
 |------|--------|
 | MQTT Command Schema（公开 TypeScript 定义） | `smart-ble` 仓库 `core/protocols/hid-command-schema.ts` |
+| BLE Provisioning 协议 | `./ble/PROVISIONING_V1.md`（本仓 canonical） |
 | 本目录 JSON Schema（本仓共享校验） | `./schemas/*.schema.json` |
 
 TypeScript 定义（独立仓库 `smart-ble`）为权威事实源；本目录 JSON Schema 用于 ControlHub / Firmware 运行时校验，二者须保持一致。如需修订协议，先改 `smart-ble/core/protocols/` 的事实源，再同步本目录（见 docs/current/DEVELOPMENT_RULES §4）。

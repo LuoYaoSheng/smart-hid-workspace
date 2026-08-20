@@ -7,31 +7,38 @@ config SMART_HID_DEVICE_ID
         仅首次启动使用（NVS 未写入时）。后续 device_id 持久化在 NVS namespace=identity。
         格式：^HID-[A-Z0-9]{8}$
 
-config SMART_HID_MQTT_BROKER_HOST
-    string "MQTT broker host"
-    default "192.168.1.100"
+config SMART_HID_DEV_STATIC_CONFIG
+    bool "DEV ONLY — Kconfig 静态网络配置 fallback"
+    default n
     help
-        ControlHub 的 MQTT broker 地址（LAN IP）。
-        F1/F2 阶段固定，F3 后改由 BLE 配网写入 NVS namespace=hub。
-
-config SMART_HID_MQTT_BROKER_PORT
-    int "MQTT broker port"
-    default 17891
-
-config SMART_HID_MQTT_USERNAME
-    string "MQTT username"
-    default "controlhub"
-
-config SMART_HID_MQTT_PASSWORD
-    string "MQTT password"
-    default "change-me-in-production"
+        DEV ONLY / NOT PRODUCTION DEFAULT。显式开启后：无 NVS active 配置时
+        使用下面 Kconfig 的 Wi-Fi/MQTT 参数连接（仅内存，绝不写 NVS、绝不覆盖
+        BLE 配置）。生产固件必须保持 n（默认进 BLE Provision Mode）。
+        DEV 模式下 MQTT 账号需与 ControlHub config.yaml 显式配置的
+        mqtt.username/password 一致（ControlHub 内部凭据默认每启动随机生成）。
 
 config SMART_HID_WIFI_SSID
-    string "Wi-Fi SSID（F1/F2 固定，F3 后由配网写入）"
+    string "DEV Wi-Fi SSID（仅 SMART_HID_DEV_STATIC_CONFIG=y 时使用）"
     default ""
 
 config SMART_HID_WIFI_PASSWORD
-    string "Wi-Fi Password"
+    string "DEV Wi-Fi password（仅 DEV 静态模式；绝不写日志）"
+    default ""
+
+config SMART_HID_MQTT_BROKER_HOST
+    string "DEV MQTT broker host（仅 SMART_HID_DEV_STATIC_CONFIG=y 时使用）"
+    default "192.168.1.100"
+
+config SMART_HID_MQTT_BROKER_PORT
+    int "DEV MQTT broker port"
+    default 17891
+
+config SMART_HID_MQTT_USERNAME
+    string "DEV MQTT username（配对设备应为空；DEV 模式填 hub 显式配置的账号）"
+    default ""
+
+config SMART_HID_MQTT_PASSWORD
+    string "DEV MQTT password（绝不写日志）"
     default ""
 
 config SMART_HID_USB_HID_MOUSE_REPORT_ID
