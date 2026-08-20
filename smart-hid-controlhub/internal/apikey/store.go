@@ -1,6 +1,6 @@
 // Package apikey 实现 ControlHub API key 的持久化、校验、轮换。
 //
-// 设计源：docs/05_CONTROLHUB_DETAIL_DESIGN_V1.0.md §6（HTTP API 鉴权）+
+// 设计源：docs/archive/05_CONTROLHUB_DETAIL_DESIGN_V1.0.md §6（HTTP API 鉴权）+
 // §10 验收清单 A12 "API Key 可重新生成"。
 //
 // 存储：api_keys 表（CH-P1 migration 0002 创建）。

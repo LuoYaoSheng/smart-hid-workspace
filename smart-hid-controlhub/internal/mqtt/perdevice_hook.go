@@ -1,4 +1,4 @@
-// PerDeviceHook 替代静态 Ledger 的鉴权 hook（CH-P5）。
+// PerDeviceHook 是 MQTT broker 的鉴权 hook（取代早期静态 Ledger）。
 //
 // 支持两类 MQTT 客户端：
 //  1. ControlHub 自身 — 用 cfg.MQTT.Username/Password，全 topic 读写
@@ -6,7 +6,7 @@
 //  2. 设备 — 用 dev_<device_id> 用户名 + 32 字节随机密码（配对时签发），
 //     密码 hash 存 device_credentials 表；per-device ACL 仅允许自己的 topic。
 //
-// 设计源：docs/05 §6（命令引擎 pipeline 之前）+ §4 端口约定 +
+// 设计源：docs/archive/05 §6（命令引擎 pipeline 之前）+ §4 端口约定 +
 // 验收清单 A5（MQTT 需认证）+ A7（每设备 Topic ACL）。
 //
 // 安全：密码 hash 用 SHA-256，比较用 crypto/subtle.ConstantTimeCompare

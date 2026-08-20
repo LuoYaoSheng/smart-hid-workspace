@@ -5,7 +5,7 @@
  *            普通复位不清除。工厂烧录工具可写入正式 ID（F5）。
  * Boot ID：每次启动新生成（B-XXXXXX，hex）。Command 中 target_boot_id 必须匹配。
  *
- * 依据：docs/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §8 / §11
+ * 依据：docs/archive/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §8 / §11
  */
 #pragma once
 

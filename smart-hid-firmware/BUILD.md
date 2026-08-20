@@ -95,7 +95,7 @@ F5 启用：
 - NVS Encryption
 - Firmware Signing
 
-见 `../docs/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md` §14 / §15。
+见 `../docs/archive/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md` §14 / §15。
 
 ## 9. F1→F2→F3 演进
 

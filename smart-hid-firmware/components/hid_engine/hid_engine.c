@@ -1,7 +1,7 @@
 /**
  * hid_engine.c — USB Composite HID 报告发送 + Lease + release_all
  *
- * 实现依据：docs/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §3-5
+ * 实现依据：docs/archive/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §3-5
  *
  * 报告结构：
  *   Keyboard report（8 字节）：

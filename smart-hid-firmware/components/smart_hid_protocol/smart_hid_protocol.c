@@ -2,7 +2,7 @@
  * smart_hid_protocol.c — Smart HID 协议 JSON 序列化/反序列化
  *
  * 事实源：smart-ble/core/protocols/hid-command-schema.ts
- * 依据：docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md
+ * 依据：docs/archive/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md
  *
  * 字段顺序与 TS interface 对齐；新增字段时务必同步本文件 + TS。
  */

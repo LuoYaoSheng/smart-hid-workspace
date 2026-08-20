@@ -1,8 +1,8 @@
 /**
  * mqtt_manager.h — MQTT 连接 + topic 订阅 + publish
  *
- * 依据：docs/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §6
- *       docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md
+ * 依据：docs/archive/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §6
+ *       docs/archive/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md
  *
  * 订阅：smart-hid/v1/devices/{device_id}/command   QoS1
  * 发布：ack（QoS1 retain=false）/ status（QoS1 retain=true）/ event（QoS1 retain=false）

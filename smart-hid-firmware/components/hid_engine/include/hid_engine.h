@@ -6,7 +6,7 @@
  *   ├── Keyboard HID
  *   └── Mouse HID
  *
- * 核心职责（依据 docs/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §3-5）：
+ * 核心职责（依据 docs/archive/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §3-5）：
  *   - keyboard: tap / hotkey / key_down / key_up
  *     · key_down 必须带 lease_ms（lease 超时自动 key_up）
  *   - mouse: move / click / button_down / button_up / wheel

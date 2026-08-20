@@ -1,7 +1,7 @@
 /**
  * command_engine.c — MQTT RX → parse → dedup → boot_id → TTL → queue → worker → hid_engine → ack
  *
- * 依据：docs/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §6-9
+ * 依据：docs/archive/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §6-9
  */
 #include "command_engine.h"
 #include "command_engine_publisher.h"

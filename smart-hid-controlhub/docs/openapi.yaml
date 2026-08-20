@@ -2,7 +2,7 @@
 #
 # 事实源：本文件（ControlHub 私有 HTTP API）。
 # 协议公开定义（MQTT Command/Ack/Status）在 smart-ble/core/protocols/hid-command-schema.ts。
-# 依据：docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md §9-11
+# 依据：docs/archive/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md §9-11
 #
 # 与实现对齐：internal/api/handlers.go（响应结构）+ internal/command/types.go（envelope 字段）。
 # 修改 API 时必须同步本文件，二者保持一致。

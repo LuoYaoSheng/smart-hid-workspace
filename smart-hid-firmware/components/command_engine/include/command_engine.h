@@ -1,7 +1,7 @@
 /**
  * command_engine.h — Command Queue / Dedup / Boot ID / TTL / Worker
  *
- * 依据：docs/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §6-9 / §15
+ * 依据：docs/archive/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md §6-9 / §15
  *
  * 处理路径：
  *   MQTT RX → parse → dedup → boot_id 校验 → TTL 校验 → enqueue

@@ -78,8 +78,8 @@ smart-hid-firmware/
 ## 相关
 
 - 协议公开定义：`../../smart-ble/core/protocols/hid-command-schema.ts`（事实源）
-- 固件详细设计：`../docs/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md`
-- MQTT / HTTP 协议：`../docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md`
-- 验收清单：`../docs/10_ACCEPTANCE_CHECKLIST.md` §B
+- 固件详细设计：`../docs/archive/06_ESP32_FIRMWARE_DETAIL_DESIGN_V1.0.md`
+- MQTT / HTTP 协议：`../docs/archive/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md`
+- 验收清单：`../docs/archive/10_ACCEPTANCE_CHECKLIST.md` §B
 - Go 参考实现：`../smart-hid-controlhub/cmd/mock-device/`
 - F2 验证脚本：`../smart-hid-controlhub/scripts/test-loop-f2.sh`

@@ -1,3 +1,12 @@
+---
+status: SUPERSEDED
+authority: historical-only
+do_not_implement: true
+current_source: docs/current/CURRENT_STATE.md
+---
+
+> ⚠️ **历史资料（SUPERSEDED）**：本文件属 2026-08-11 设计资料包快照，其中 Cloud / Trial / License / 商业化等设计已于 2026-08 从产品移除。本文仅作设计推演的历史记录保留，**不得作为当前实现依据**；当前事实见 `docs/current/CURRENT_STATE.md`。
+
 # 已废弃 / 已修订决定
 
 这份文件用于避免本地开发时误用前面的旧设计。

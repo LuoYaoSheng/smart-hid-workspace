@@ -1,9 +1,9 @@
-// Package pairing 实现 ControlHub 的设备配对流程（CH-P5）。
+// Package pairing 实现 ControlHub 的设备配对流程。
 //
-// 设计源：
-//   - docs/05_CONTROLHUB_DETAIL_DESIGN_V1.0.md §5（Pairing flow）+ §4（端口 17892）
-//   - docs/10 验收清单 A7（每设备 Topic ACL）
-//   - docs/03 BLE_PROVISIONING_PROTOCOL_V1.1.md（ControlHub Pairing QR 载荷）
+// 设计源（历史设计资料，仅溯源用）：
+//   - docs/archive/05_CONTROLHUB_DETAIL_DESIGN_V1.0.md §5（Pairing flow）+ §4（端口 17892）
+//   - docs/archive/10 验收清单（历史） A7（每设备 Topic ACL）
+//   - docs/archive/03 BLE_PROVISIONING_PROTOCOL_V1.1.md（ControlHub Pairing QR 载荷）
 //
 // 流程：
 //  1. 用户在 Web UI 点"添加设备" → POST /api/v1/pairing/sessions（需 API key）
@@ -35,7 +35,7 @@ var DeviceIDPattern = regexp.MustCompile(`^HID-[A-Z0-9]{8}$`)
 // DefaultTTLSec 默认 session 有效期 5 分钟。
 const DefaultTTLSec = 300
 
-// DefaultPairingPort 设备侧 HTTP listener 端口（docs/05 §4）。
+// DefaultPairingPort 设备侧 HTTP listener 端口（docs/archive/05 §4）。
 const DefaultPairingPort = 17892
 
 // Session 对应 pairing_sessions 表一行。
@@ -230,7 +230,7 @@ func (m *Manager) IssueDeviceCredentials(deviceID string) (username, password st
 }
 
 // CleanupExpired 把所有过期未用的 session 标记为 expired。
-// 由调用方周期性触发（CH-P5 暂不接入定时器；预留接口）。
+// 尚未接入周期定时器（当前由 GetSession 的惰性过期判定兜底）；预留接口。
 func (m *Manager) CleanupExpired() (int64, error) {
 	res, err := m.db.Exec(
 		`UPDATE pairing_sessions SET status = 'expired'

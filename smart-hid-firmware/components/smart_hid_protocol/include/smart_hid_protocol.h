@@ -2,7 +2,7 @@
  * smart_hid_protocol.h — Smart HID MQTT Command/Ack/Status/Event 协议
  *
  * 事实源：smart-ble/core/protocols/hid-command-schema.ts
- * 依据：docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md
+ * 依据：docs/archive/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md
  *
  * 任何字段/常量/枚举变更必须先改 TS 事实源，再同步本文件。
  */

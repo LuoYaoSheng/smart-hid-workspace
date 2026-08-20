@@ -2,7 +2,7 @@
  * hid_keymap.h — Key name → HID Usage ID 映射
  *
  * 来源：USB HID Usage Tables 1.21 §10 (Keyboard/Keypad Page 0x07)
- * 覆盖 docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md §6 列举的所有 key 名。
+ * 覆盖 docs/archive/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md §6 列举的所有 key 名。
  */
 #pragma once
 
