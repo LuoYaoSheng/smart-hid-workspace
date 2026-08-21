@@ -13,6 +13,7 @@
 退出码 0 = 全部通过；非 0 = 有失败（CI gate）。
 """
 import json
+import hashlib
 import pathlib
 import sys
 
@@ -24,6 +25,9 @@ SCHEMAS = ROOT / "protocols" / "schemas"
 EXAMPLES = ROOT / "protocols" / "examples"
 OPENAPI = ROOT / "smart-hid-controlhub" / "docs" / "openapi.yaml"
 OPENAPI_PROJECTION = ROOT / "smart-hid-web" / "api" / "openapi.yaml"
+CONTRACT = ROOT / "protocols" / "contracts" / "smart-hid-v1.json"
+BLE_HEADER = ROOT / "smart-hid-firmware" / "components" / "ble_provision" / "include" / "ble_provision.h"
+MQTT_HEADER = ROOT / "smart-hid-firmware" / "components" / "smart_hid_protocol" / "include" / "smart_hid_protocol.h"
 
 failures = []
 
@@ -124,6 +128,46 @@ if OPENAPI_PROJECTION.exists():
         fail("openapi 投影漂移：smart-hid-web/api/openapi.yaml ≠ 事实源（跑 build-releases.sh 同步）")
 else:
     print("  - 跳过投影检查（smart-hid-web/api/openapi.yaml 不存在）")
+
+# ---------- 4) machine contract mirrors deployed V1 facts ----------
+try:
+    contract_bytes = CONTRACT.read_bytes()
+    contract = json.loads(contract_bytes)
+except (OSError, json.JSONDecodeError) as e:
+    fail(f"machine contract 无法读取：{e}")
+else:
+    ble = contract.get("ble_provisioning", {})
+    gatt = ble.get("gatt", {})
+    chars = gatt.get("characteristics", {})
+    expected_uuids = {
+        "BLE_PROV_UUID_SVC": gatt.get("service_uuid"),
+        "BLE_PROV_UUID_INFO": chars.get("info", {}).get("uuid"),
+        "BLE_PROV_UUID_WRITE": chars.get("input", {}).get("uuid"),
+        "BLE_PROV_UUID_STATUS": chars.get("status", {}).get("uuid"),
+    }
+    header = BLE_HEADER.read_text()
+    for symbol, value in expected_uuids.items():
+        if not isinstance(value, str) or f'#define {symbol}' not in header or value not in header:
+            fail(f"machine contract BLE UUID 漂移：{symbol}")
+    mqtt = contract.get("mqtt", {})
+    mqtt_header = MQTT_HEADER.read_text()
+    base_topic = mqtt.get("base_topic", "")
+    if not base_topic or base_topic not in mqtt_header:
+        fail(f"machine contract MQTT base topic 漂移：{base_topic}")
+    for name, topic in mqtt.get("topics", {}).items():
+        suffix = topic.get("template", "").rsplit("/", 1)[-1]
+        macro = f"SMART_HID_TOPIC_{name.upper()}_FMT"
+        if not suffix or macro not in mqtt_header or suffix not in mqtt_header:
+            fail(f"machine contract MQTT topic 漂移：{name}")
+    canonical_text = (ROOT / "protocols" / "ble" / "PROVISIONING_V1.md").read_text()
+    for state in ble.get("states", []):
+        if state not in canonical_text:
+            fail(f"machine contract state 未见 canonical Markdown：{state}")
+    for error in ble.get("errors", []):
+        if error not in canonical_text:
+            fail(f"machine contract error 未见 canonical Markdown：{error}")
+    digest = hashlib.sha256(contract_bytes).hexdigest()
+    ok(f"machine contract V{contract.get('contract_version')} 校验通过（sha256={digest}）")
 
 print()
 if failures:

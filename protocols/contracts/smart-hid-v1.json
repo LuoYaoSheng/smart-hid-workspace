@@ -1,0 +1,45 @@
+{
+  "contract_version": "1",
+  "product": "smart-hid",
+  "source": {
+    "ble_markdown": "protocols/ble/PROVISIONING_V1.md",
+    "firmware_header": "smart-hid-firmware/components/ble_provision/include/ble_provision.h",
+    "mqtt_header": "smart-hid-firmware/components/smart_hid_protocol/include/smart_hid_protocol.h",
+    "openapi": "smart-hid-controlhub/docs/openapi.yaml"
+  },
+  "mqtt": {
+    "protocol_version": "1.0",
+    "base_topic": "smart-hid/v1/devices",
+    "topics": {
+      "command": { "template": "smart-hid/v1/devices/{device_id}/command", "qos": 1, "retain": false },
+      "ack": { "template": "smart-hid/v1/devices/{device_id}/ack", "qos": 1, "retain": false },
+      "status": { "template": "smart-hid/v1/devices/{device_id}/status", "qos": 1, "retain": true },
+      "event": { "template": "smart-hid/v1/devices/{device_id}/event", "qos": 1, "retain": false }
+    },
+    "limits": { "queue_size": 32, "payload_max_bytes": 2048, "dedup_cache_size": 256, "ttl_ms": { "min": 100, "max": 10000 } }
+  },
+  "ble_provisioning": {
+    "advertisement": { "service_uuid": "9f1d1001-e73b-4c8f-9d2a-6f0b5e8a1c04", "name_prefix": "SHID-" },
+    "gatt": {
+      "service_uuid": "9f1d1001-e73b-4c8f-9d2a-6f0b5e8a1c04",
+      "characteristics": {
+        "info": { "uuid": "9f1d1002-e73b-4c8f-9d2a-6f0b5e8a1c04", "permissions": ["read", "notify"] },
+        "input": { "uuid": "9f1d1003-e73b-4c8f-9d2a-6f0b5e8a1c04", "permissions": ["write", "encrypted"] },
+        "status": { "uuid": "9f1d1004-e73b-4c8f-9d2a-6f0b5e8a1c04", "permissions": ["read", "notify"] }
+      }
+    },
+    "frame": { "fields": ["seq:u8", "total:u8", "len:u8", "payload:len"], "total_min": 1, "total_max": 64, "payload_max_bytes": 128, "assembly_max_bytes": 1024 },
+    "candidate": {
+      "version": 1,
+      "required": ["v", "wifi_ssid", "wifi_password", "hub_host", "token"],
+      "optional": { "hub_port": 17892 },
+      "token": { "pattern": "^[0-9a-f]{32}$", "ttl_seconds": 300 },
+      "sensitive_fields": ["wifi_password", "token"]
+    },
+    "device_info": { "required": ["product", "protocol", "device_id", "firmware", "state", "provisioned"], "product": "smart-hid", "protocol": "1.0" },
+    "states": ["boot", "load_config", "unprovisioned", "provisioning", "connecting_wifi", "pairing", "mqtt_connecting", "ready", "recovery", "error"],
+    "steps": ["received", "connecting_wifi", "wifi_connected", "pairing", "pairing_success", "mqtt_connecting", "ready"],
+    "errors": ["invalid_payload", "wifi_failed", "controlhub_unreachable", "pairing_invalid", "pairing_expired", "pairing_used", "mqtt_invalid", "storage_failed"],
+    "qr": { "scheme": "shid://pair", "required": ["token", "host"], "optional": { "port": 17892 } }
+  }
+}

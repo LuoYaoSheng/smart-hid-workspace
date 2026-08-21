@@ -6,7 +6,7 @@
 #   2. dirty tree 默认拒绝发布（DEV_BUILD=true 显式放行开发构建）
 #   3. 固件经 scripts/build-firmware.sh fullclean 重建（绝不复制本机旧 build/）
 #   4. SHA256SUMS 显式文件清单（绝不 `shasum *` 自包含）+ shasum -c 自校验
-#   5. 产出 manifest.json（version/commit/build_time/artifacts{sha256,size,type}）
+#   5. 产出 manifest.json（version/commit/contract_sha256/build_time/artifacts{sha256,size,type}）
 #   6. openapi.yaml 投影后 diff 防漂移
 #
 # 产出：
@@ -47,6 +47,7 @@ else
 fi
 
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+CONTRACT_SHA256="$(shasum -a 256 "$ROOT/protocols/contracts/smart-hid-v1.json" | awk '{print $1}')"
 BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 command -v go >/dev/null || { echo "ERROR: go 不在 PATH" >&2; exit 1; }
@@ -121,9 +122,9 @@ cd "$DL/firmware"
 # 6) manifest.json（provenance：version/commit/time + 每 artifact 校验和）
 # ----------------------------------------------------------
 cd "$ROOT"
-python3 - "$DL" "$VERSION" "$COMMIT" "$BUILD_TIME" "$DIRTY" "$FW_META" <<'PYEOF'
+python3 - "$DL" "$VERSION" "$COMMIT" "$BUILD_TIME" "$DIRTY" "$FW_META" "$CONTRACT_SHA256" <<'PYEOF'
 import hashlib, json, sys, os
-dl, version, commit, build_time, dirty, fw_meta = sys.argv[1:7]
+dl, version, commit, build_time, dirty, fw_meta, contract_sha256 = sys.argv[1:8]
 fw_meta = json.loads(fw_meta)
 
 def entry(rel, typ):
@@ -137,6 +138,7 @@ manifest = {
     "commit": commit,
     "build_time": build_time,
     "dirty": dirty == "true",
+    "contract_sha256": contract_sha256,
     "firmware": fw_meta,
     "artifacts": [
         entry("controlhub/controlhub-darwin-arm64", "controlhub"),
