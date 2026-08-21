@@ -31,8 +31,10 @@ ControlHub（Go，单进程）
         Target PC（零软件，BIOS 级通用）
 ```
 
-辅助（固件源码已实现，未上真机）：BLE Toolkit+ 小程序（独立仓 smart-ble）经
-BLE Provision 为固件配网（NimBLE，协议 `protocols/ble/PROVISIONING_V1.md`）。
+辅助链路：BLE Toolkit+ 小程序（独立仓 smart-ble）从通用设备扫描识别
+Smart HID Profile，自动连接后填写 Wi-Fi / ControlHub 并经 BLE Provision
+下发 canonical V1 candidate（NimBLE，协议 `protocols/ble/PROVISIONING_V1.md`）。
+客户端与固件源码已实现；完整链路仍未做微信工具与真机验收。
 
 ## MQTT 网络模型（M1-G3 拆分）
 
@@ -100,13 +102,15 @@ smart-hid-workspace/
 ```
 
 配套独立仓库 [smart-ble](https://github.com/LuoYaoSheng/smart-ble)：BLE Toolkit+
-微信小程序；MQTT Command Schema 的 TypeScript 事实源在该仓库。
+微信小程序；BLE V1 TypeScript 文件是本仓 canonical 文档的受锁定镜像，MQTT
+Command Schema 的公开 TypeScript 定义在该仓库。
 
 ## 事实源关系
 
 ```text
 HTTP API 契约        smart-hid-controlhub/docs/openapi.yaml
-MQTT 消息契约        protocols/schemas/*.schema.json（TS 权威源在 smart-ble 仓）
+MQTT 消息契约        protocols/schemas/*.schema.json（公开 TS 定义在 smart-ble 仓）
+BLE 配网契约         protocols/ble/PROVISIONING_V1.md（canonical；smart-ble TS 为受锁定镜像）
 固件协议实现         smart-hid-firmware/components/smart_hid_protocol/
 当前状态 / 路线      docs/current/（本目录）
 历史设计推演         docs/archive/（SUPERSEDED）

@@ -49,7 +49,7 @@ authority: canonical
 
 - [x] command / ack / status JSON Schema 与 Go、固件实现一致（28 项 e2e 覆盖）
 - [x] openapi.yaml 11 path 与路由一致（含 /realtime 事件说明）
-- [ ] Schema 自动比对进 CI —— M1-G4
+- [x] Schema / OpenAPI / machine contract 自动比对进 CI —— M1-G4
 
 ## E. Provisioning（配网）
 
@@ -62,7 +62,7 @@ authority: canonical
 - [x] BLE Provision 固件源码（NimBLE GATT + 分帧协议 + 状态机 + canonical 协议
       文档；DEV_STATIC_CONFIG 双配置编译通过）
 - [ ] BLE Provision 真机全链路（小程序 ↔ 固件）—— NOT VERIFIED ON HARDWARE
-- [ ] 小程序客户端按 canonical 协议对齐 —— smart-ble 仓任务
+- [x] 小程序客户端按 canonical 协议对齐（smart-ble：V1 镜像锁、Profile、连接/配置/状态流程）
 
 ## F. Security（G2/G3 已修项打勾；其余排 M2）
 

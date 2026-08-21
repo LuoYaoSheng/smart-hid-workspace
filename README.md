@@ -60,14 +60,14 @@ Smart HID 换了一条路：**让一块 ESP32-S3 以真实 USB 键盘 + 鼠标�
 | `docs/current/` | ✅ **当前事实源**（状态 / 架构 / 路线 / 验收 / 规则） | Markdown |
 | `docs/archive/` | ⛔ 历史设计资料包（SUPERSEDED，禁止指导实现） | Markdown |
 
-> 配套独立仓库 [smart-ble](https://github.com/LuoYaoSheng/smart-ble)：BLE Toolkit+ 微信小程序（设备配网 / 诊断），BLE Provisioning 协议与 MQTT Command Schema 的 TS 事实源所在。
+> 配套独立仓库 [smart-ble](https://github.com/LuoYaoSheng/smart-ble)：BLE Toolkit+ 微信小程序（统一扫描、Smart HID 配网 / 诊断）；BLE Provisioning TS 是本仓 canonical V1 文档的受锁定镜像，MQTT Command Schema 的公开 TS 定义也在该仓。
 
 ## 📌 事实源与开发治理（贡献者 / AI Agent 必读）
 
 本仓库按「唯一事实入口」治理：**新会话只需要先读这份 README**，即可进入正确开发状态。
 
 1. **当前事实源**在 [`docs/current/`](docs/current/)：[CURRENT_STATE](docs/current/CURRENT_STATE.md)（是什么 / 不是什么 / 完成度）、[ARCHITECTURE](docs/current/ARCHITECTURE.md)、[ROADMAP](docs/current/ROADMAP.md)、[ACCEPTANCE](docs/current/ACCEPTANCE.md)、[DEVELOPMENT_RULES](docs/current/DEVELOPMENT_RULES.md)、[HARDENING_BACKLOG](docs/current/HARDENING_BACKLOG.md)
-2. **协议事实源**：HTTP API = `smart-hid-controlhub/docs/openapi.yaml`；MQTT 消息 = `protocols/schemas/`（TS 权威源在 smart-ble 仓）
+2. **协议事实源**：HTTP API = `smart-hid-controlhub/docs/openapi.yaml`；MQTT 消息 = `protocols/schemas/`；BLE 配网 = `protocols/ble/PROVISIONING_V1.md`（smart-ble TS 为受锁定镜像）
 3. **历史资料** [`docs/archive/`](docs/archive/) 是 2026-08-11 设计资料包快照（`status: SUPERSEDED`），含已移除的 Cloud / Trial / License / 商业化设计——**仅作历史记录，不得作为实现依据**
 4. **禁止复活**：不得因历史文档存在而重新实现 Trial / License / Cloud / Commercial / Order / Payment / Entitlement / Usage Gate（见 [DEVELOPMENT_RULES §2](docs/current/DEVELOPMENT_RULES.md)）
 5. **当前路线**按 Milestone/Gate 推进：M1（G1 治理 / G2 核心正确性 / G3 网络与配网 / G4 CI 与交付链）已完成；下一步是 M2 硬件验收（见 [ROADMAP](docs/current/ROADMAP.md)）
@@ -148,7 +148,7 @@ cd smart-hid-firmware/test/host && ./run.sh
 | 固件 | ✅ F1 控制 + F2 可靠性 + F3 BLE 配网源码完成（NimBLE + NVS 运行时配置 + 配网状态机），36 项 host 单测；**2026-08-20 真机 bring-up 通过**（启动 / Wi-Fi / MQTT / USB HID 枚举 / 键鼠命令 executed，Windows 单机，修复 5 个真机专属 bug）。待验证：BLE 配网实测、BIOS / 三 OS / soak |
 | ControlHub | ✅ 产品化完成：托盘常驻 / 本地控制台 / SQLite / 动态配对（请求级地址解析）/ API Key 鉴权 |
 | Web | ✅ 落地页 / 文档站 / 下载中心（纯静态零构建） |
-| 待办 | BLE 配网真机联调、小程序端配网协议对齐、BIOS / 登录界面（boot protocol 未实现）、三 OS / soak、生产安全（Secure Boot / Flash Encryption / 固件签名） |
+| 待办 | BLE 配网微信工具与真机联调、BIOS / 登录界面（boot protocol 未实现）、三 OS / soak、生产安全（Secure Boot / Flash Encryption / 固件签名） |
 
 ## 安全设计
 

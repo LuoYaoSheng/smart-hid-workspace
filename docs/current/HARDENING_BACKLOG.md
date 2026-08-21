@@ -44,7 +44,7 @@ request_id 语义（现行）：**Idempotency Key**——首次执行；并发�
 | 1 | mqtt.host 一字段三用 | ✅ 拆为 `bind_host`（默认 0.0.0.0）/ `advertise_host`（resolver 解析）/ 内部连接地址（推导）；legacy `mqtt.host` 自动迁移 + deprecated 警告；内部凭据留空 = 每启动随机（`change-me-in-production` 从代码库消失） |
 | 2 | LAN IP 选择单薄 | ✅ `internal/netaddr` Resolver：显式配置 → 请求 LocalAddr → peer UDP 出口 → 唯一可用 LAN IPv4（过滤 docker/veth/环回/链路本地）→ 多候选明确失败并列出候选；环回 peer（本机 mock）唯一例外；pairing 先解析后消费 token（失败 503 + token 保持 pending） |
 | 3 | 固件无运行时网络配置 | ✅ `runtime_config` 组件（NVS rt_active/rt_pending、schema_version 守卫、generation、pending-set_creds-then-promote、factory clear）；Kconfig 降级为 `SMART_HID_DEV_STATIC_CONFIG`（默认 OFF）显式 DEV fallback |
-| 4 | BLE Provision 全链路未实现 | ✅ 固件侧完成：NimBLE GATT 服务（分帧 + 加密写 + status notify）、`hub_pairing` HTTP 客户端、provisioning 状态机（含崩溃边界 boot promote）；canonical 协议 `protocols/ble/PROVISIONING_V1.md`。小程序侧（smart-ble 仓）待按 canonical 对齐；**真机未验** |
+| 4 | BLE Provision 全链路未实现 | ✅ 固件侧完成：NimBLE GATT 服务（分帧 + 加密写 + status notify）、`hub_pairing` HTTP 客户端、provisioning 状态机（含崩溃边界 boot promote）；canonical 协议 `protocols/ble/PROVISIONING_V1.md`。小程序侧（smart-ble 仓）已完成 V1 镜像锁、Profile 接入与三阶段配网流程；**微信工具与真机全链路未验** |
 | 5 | 设备凭据仅单行旋转 | 记录：维持单行旋转 + security_events 留痕设计不变（G3 未改语义；重配对覆盖旧凭据是有意行为） |
 | 6 | WS CheckOrigin 全放行 | 记录：LAN 多端访问的有意取舍，维持现状（ticket 化认证的收益不抵复杂度，如需再启 gate） |
 
@@ -54,7 +54,7 @@ request_id 语义（现行）：**Idempotency Key**——首次执行；并发�
 |---|---|
 | BLE Just Works 配对无 MITM 抗性（无 IO 能力设备的天花板；设备身份根待 Production Security） | M2-G3 Production Security |
 | `runtime_config_clear()` 已具备但无安全用户触发方式（物理按键 / 出厂流程） | M2-G1 硬件验收登记 |
-| 小程序（smart-ble）客户端需按 PROVISIONING_V1.md 对齐（分帧/UUID/状态） | smart-ble 仓任务 |
+| 小程序（smart-ble）客户端按 PROVISIONING_V1.md 对齐后的微信工具与真机联调 | M2-G1 硬件验收登记 |
 | 分区表从 3×1M 扩到 3×1536K（NimBLE + HTTP 组件使固件超 1M）；设备未烧录过，无迁移成本 | 已落地（无需后续） |
 | mock-device 经环回 peer 拿到 127.0.0.1 advertise（合法本机例外），真机场景不受影响 | 记录 |
 

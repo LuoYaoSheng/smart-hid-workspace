@@ -60,13 +60,10 @@ curl
 ## Phase 3：BLE Provision
 
 小程序：
-- HID Tab
-- Search Smart HID
-- BLE connect
-- get_info
-- ControlHub QR
-- Wi-Fi
-- status
+- 首页通用扫描识别 Smart HID Profile
+- 自动 BLE connect + Device Info 验证
+- 单页填写 Wi-Fi / ControlHub，二维码带入一次性 token
+- 下发 candidate 并查看 status
 
 Firmware：
 - Provision Mode
