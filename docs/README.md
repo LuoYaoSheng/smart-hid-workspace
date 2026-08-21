@@ -7,6 +7,9 @@
   [DEVELOPMENT_RULES](current/DEVELOPMENT_RULES.md)、
   [HARDENING_BACKLOG](current/HARDENING_BACKLOG.md)。
   新会话 / 新 Agent 从这里进入。
+- **[docs/plans/](plans/)** — 📝 **实施计划与记录**：
+  [Smart BLE × Smart HID 通用工具/Profile 集成记录](plans/2026-08-21-smart-ble-smart-hid-integration.md)。
+  当前完成状态仍以 `docs/current/` 为准。
 - **[docs/archive/](archive/)** — ⛔ **历史设计资料包**（`status: SUPERSEDED`）：
   2026-08-11 快照，含已从产品移除的 Cloud / Trial / License / 商业化设计。
   仅供回溯设计推演，**禁止作为当前实现依据**。

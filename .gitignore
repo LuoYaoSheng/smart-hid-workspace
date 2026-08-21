@@ -26,7 +26,9 @@ smart-hid-firmware/build-dev/
 smart-hid-firmware/sdkconfig.old
 smart-hid-firmware/sdkconfig
 smart-hid-firmware/sdkconfig.dev
+smart-hid-firmware/sdkconfig.*.old
 smart-hid-firmware/managed_components/
+/build-dev/
 
 # Node (smart-hid-web)
 smart-hid-web/node_modules/
@@ -47,4 +49,3 @@ smart-hid-web/.output
 !smart-hid-web/downloads/
 !smart-hid-web/downloads/**/
 !smart-hid-web/downloads/**/*.exe
-
