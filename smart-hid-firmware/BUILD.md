@@ -1,7 +1,7 @@
 # Smart HID Firmware — 编译烧录指南
 
-> ✅ **本机已验证编译通过**（2026-08-11）：ESP-IDF v5.4.4 / macOS arm64 / Python 3.12。
-> 产出 `smart-hid-firmware.bin`（921KB）。烧录需真实 ESP32-S3 硬件。
+> ✅ **本机已验证编译通过**（v1.1.0 发布构建，2026-08）：ESP-IDF v5.4.4 / macOS arm64 / Python 3.12。
+> 产出 `smart-hid-firmware.bin`（1,074,768 字节，factory 分区 1536K）。烧录需真实 ESP32-S3 硬件。
 
 ## 1. 环境要求（已验证）
 
@@ -49,7 +49,9 @@ idf.py menuconfig
 idf.py build
 ```
 
-产物：`build/smart-hid-firmware.bin`、`build/partition_table/partition-table.bin`、`build/bootloader/bootloader.bin`。
+产物：`build/smart-hid-firmware.bin`、`build/partition_table/partition-table.bin`、`build/bootloader/bootloader.bin`、`build/ota_data_initial.bin`。
+
+> CI 同时验证默认配置与 `sdkconfig.dev.defaults`（DEV 静态配置）双配置编译；发布构建统一走 `../scripts/build-firmware.sh`（fullclean + 产物清单 `firmware-build.json`）。
 
 ## 5. 烧录
 
