@@ -24,6 +24,7 @@ smart-hid-controlhub/vendor/
 smart-hid-firmware/build/
 smart-hid-firmware/build-dev/
 smart-hid-firmware/sdkconfig.old
+smart-hid-firmware/sdkconfig
 smart-hid-firmware/sdkconfig.dev
 smart-hid-firmware/managed_components/
 
