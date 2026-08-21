@@ -1,7 +1,7 @@
 # Smart HID Firmware — 编译烧录指南
 
 > ✅ **本机已验证编译通过**（v1.1.0 发布构建，2026-08）：ESP-IDF v5.4.4 / macOS arm64 / Python 3.12。
-> 产出 `smart-hid-firmware.bin`（1,094,992 字节，factory 分区 1536K）。烧录需真实 ESP32-S3 硬件。
+> 产出 `smart-hid-firmware.bin`（约 1.09M，精确字节数以 releases manifest.json 为准；factory 分区 1536K）。烧录需真实 ESP32-S3 硬件。
 
 ## 1. 环境要求（已验证）
 
