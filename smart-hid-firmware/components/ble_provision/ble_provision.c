@@ -32,6 +32,7 @@ static ble_provision_candidate_cb s_on_candidate = NULL;
 static ble_frame_assembler_t s_asm;
 static uint16_t s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 static bool s_advertising = false;
+static bool s_adv_wanted = false;   /* 广播意图：host 同步前 set_advertising(true) 先挂起，on_sync 后兑现 */
 
 /* 最新 info / status JSON（read 值 + notify 载荷） */
 static char s_info_json[192];
@@ -251,7 +252,9 @@ static int gap_event(struct ble_gap_event *event, void *arg) {
 
 static void on_sync(void) {
     ble_hs_util_ensure_addr(0);
-    if (s_advertising) start_advertising();
+    /* 启动早期 set_advertising(true) 会因 host 未同步失败（ENOTSYNCED=22），
+     * 意图挂在 s_adv_wanted，同步完成后在此兑现（真机 2026-08-21 修复） */
+    if (s_adv_wanted && !s_advertising) start_advertising();
 }
 
 static void on_reset(int reason) {
@@ -301,12 +304,17 @@ int ble_provision_init(const char *device_name, ble_provision_candidate_cb on_ca
 }
 
 void ble_provision_set_advertising(bool on) {
-    if (on && !s_advertising) {
-        start_advertising();
-    } else if (!on && s_advertising) {
-        ble_gap_adv_stop();
-        s_advertising = false;
-        ESP_LOGI(TAG, "provisioning advertising stopped");
+    if (on) {
+        s_adv_wanted = true;
+        /* host 已同步才尝试；否则等 on_sync（ble_hs_synced 查询同步态） */
+        if (!s_advertising && ble_hs_synced()) start_advertising();
+    } else {
+        s_adv_wanted = false;
+        if (s_advertising) {
+            ble_gap_adv_stop();
+            s_advertising = false;
+            ESP_LOGI(TAG, "provisioning advertising stopped");
+        }
     }
 }
 

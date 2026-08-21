@@ -54,7 +54,7 @@ MQTT callback 不直接发 HID Report。
   5. 稳定性双修（"时好时坏"根因）：① 默认 Wi-Fi 省电（WIFI_PS_MIN_MODEM）致收包延迟 300ms+、MQTT 周期性断连
      （弱信号 RSSI≈-77 下每 ~10s 掉线重连、命令随机 accepted_not_acked）→ `esp_wifi_set_ps(WIFI_PS_NONE)` 后连发 8 条 8/8 executed；
      ② 多段鼠标报告段间隔 sleep 恰等于端点 bInterval(10ms) 存在同相位竞态（前段丢失，X 部分移动/Y 为 0）→ 段间隔 15ms 错相后两轴完整移动
-- 仍待真机验证：BLE Provisioning 实测、BIOS / 登录界面（HID 描述符无 boot protocol，已知缺口）、macOS / Linux、断连 soak
+- 仍待真机验证：BLE 配网全流程（GATT 广播真机修复后已可发现：启动早期 `set_advertising` 早于 NimBLE host 同步致 `ENOTSYNCED=22` 且无重试，改为意图标志 + `on_sync` 兑现；小程序写入候选 → 配对 → READY 全链路待联调）、BIOS / 登录界面（HID 描述符无 boot protocol，已知缺口）、macOS / Linux、断连 soak
 
 ## 配网模型（M1-G3 起）
 

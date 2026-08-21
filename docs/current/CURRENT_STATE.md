@@ -132,5 +132,6 @@ DO NOT IMPLEMENT：
   设备自动重连（~10s 内恢复），期间命令 accepted_not_acked，重试即可
 - ControlHub（Windows exe）联调中途发生过一次进程退出，原因未查（重启后正常），
   已登记待查
-- 真机**未**验证：BLE 实连配网、BIOS / 登录界面（描述符无 boot protocol，已知缺口）、
+- 真机**未**验证：BLE 配网全流程（广播已真机修复可发现，小程序联调中）、
+  BIOS / 登录界面（描述符无 boot protocol，已知缺口）、
   macOS / Linux、断连 soak、长时间稳定性
