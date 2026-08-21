@@ -259,6 +259,10 @@ static void on_sync(void) {
 
 static void on_reset(int reason) {
     ESP_LOGE(TAG, "nimble reset: %d", reason);
+    /* host reset 后控制器广播已死但 s_advertising 残留 true，会挡住
+     * on_sync 的意图兑现（s_adv_wanted && !s_advertising 恒假）。
+     * 清残留，让下次 on_sync 按 s_adv_wanted 恢复广播。 */
+    s_advertising = false;
 }
 
 static void host_task(void *param) {
