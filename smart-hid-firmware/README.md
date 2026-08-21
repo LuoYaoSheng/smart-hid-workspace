@@ -22,7 +22,7 @@ MQTT callback 不直接发 HID Report。
 - led_manager：板载状态 LED（WS2812 / 单色 GPIO，Kconfig 选择；轮询 Wi-Fi/MQTT/USB 映射闪烁语义，EXECUTED 命令脉冲；2026-08-20 真机验证通过）
 
 ✅ **`idf.py build` 通过**（默认配置 + `sdkconfig.dev.defaults` DEV 配置）：
-产出 `smart-hid-firmware.bin`（1,074,768 字节，factory 分区 1536K，分区表 3×1536K + NVS 0x8000）+ bootloader.bin + partition-table.bin + ota_data_initial.bin。
+产出 `smart-hid-firmware.bin`（1,094,992 字节，factory 分区 1536K，分区表 3×1536K + NVS 0x8000）+ bootloader.bin + partition-table.bin + ota_data_initial.bin。
 - 工具链：ESP-IDF v5.4.4 / xtensa-esp-elf-gcc 14.2 / Python 3.12 / macOS arm64
 - esp_tinyusb 2.x + NimBLE（managed components，`main/idf_component.yml` 声明）
 - 版本自根 `VERSION` 文件 → CMake `PROJECT_VER` → `esp_app_desc` 注入（`device_identity_get_firmware()` 运行时可读）
@@ -70,7 +70,7 @@ MQTT callback 不直接发 HID Report。
 smart-hid-firmware/
 ├── CMakeLists.txt              # 顶层 ESP-IDF 工程（读根 VERSION 注入 PROJECT_VER）
 ├── partitions.csv              # 3×1536K app 分区 + NVS 0x8000（预留双 OTA）
-├── sdkconfig.defaults          # 默认配置（target=esp32s3, TINYUSB_HID_COUNT=2, NimBLE）
+├── sdkconfig.defaults          # 默认配置（target=esp32s3, TINYUSB_HID_COUNT=1 单接口复合, NimBLE, WS2812 LED）
 ├── sdkconfig.dev.defaults      # DEV 静态配置（CI 双配置编译验证用）
 ├── main/
 │   ├── CMakeLists.txt
