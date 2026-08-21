@@ -17,7 +17,7 @@ CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 # Composite HID（Keyboard + Mouse）
 # esp_tinyusb managed component（main/idf_component.yml 拉取）。
 # 启用 2 个 HID interface（keyboard + mouse），CFG_TUD_HID 由它驱动。
-CONFIG_TINYUSB_HID_COUNT=2
+CONFIG_TINYUSB_HID_COUNT=1
 
 # === FreeRTOS ===
 CONFIG_FREERTOS_HZ=1000

@@ -4,17 +4,18 @@
  * 启动顺序：
  *   1. NVS（nvs_flash_init）
  *   2. device_identity（device_id 持久化 + boot_id 生成）
- *   3. network init（netif + event loop）
- *   4. USB HID（TinyUSB）→ hid_engine_init
- *   5. command_engine_init（队列 / worker / lease tick / dedup）
- *   6. 装配 publishers（command_engine ← mqtt_manager 的 publish_*）
- *   7. runtime_config_init + boot_reconcile（crash 恢复：complete pending → promote）
- *   8. provisioning_boot_decide：
+ *   3. led_manager（状态 LED 轮询任务，越早起灯越早可见）
+ *   4. network init（netif + event loop）
+ *   5. USB HID（TinyUSB）→ hid_engine_init
+ *   6. command_engine_init（队列 / worker / lease tick / dedup）
+ *   7. 装配 publishers（command_engine ← mqtt_manager 的 publish_*；EXECUTED 触发 LED 脉冲）
+ *   8. runtime_config_init + boot_reconcile（crash 恢复：complete pending → promote）
+ *   9. provisioning_boot_decide：
  *        NVS active valid ──→ 正常路径（Wi-Fi → MQTT → READY）
  *        DEV_STATIC 开且无 NVS ─→ Kconfig 开发配置（仅内存，绝不写 NVS）
  *        无配置 ──────────→ UNPROVISIONED → BLE Provisioning
  *        版本未知 ────────→ RECOVERY（BLE 开，active 只读）
- *   9. prov_task：状态机 + BLE candidate 队列 + 运行期 RECOVERY 监控
+ *  10. prov_task：状态机 + BLE candidate 队列 + 运行期 RECOVERY 监控
  *
  * 配置优先级（DEVELOPMENT_RULES / PROVISIONING_V1）：
  *   1. valid active runtime config（NVS）
@@ -48,6 +49,7 @@
 #include "provisioning.h"
 #include "hub_pairing.h"
 #include "ble_provision.h"
+#include "led_manager.h"
 
 static const char *TAG = "main";
 
@@ -225,6 +227,16 @@ static void prov_task(void *arg) {
 }
 
 /* ----------------------------------------------------------------
+ * publisher 包装：EXECUTED ack 顺带给 LED 一个脉冲（命令到达肉眼可见）
+ * ---------------------------------------------------------------- */
+static void publish_ack_with_led_pulse(const smart_hid_ack_t *ack) {
+    mqtt_manager_publish_ack(ack);
+    if (ack->status == SMART_HID_ACK_EXECUTED) {
+        led_manager_pulse();
+    }
+}
+
+/* ----------------------------------------------------------------
  * app_main
  * ---------------------------------------------------------------- */
 void app_main(void) {
@@ -245,20 +257,23 @@ void app_main(void) {
              device_identity_get_boot_id(),
              device_identity_get_firmware());
 
-    /* 3. netif / event loop */
+    /* 3. led_manager（状态 LED；轮询式，不依赖后续初始化） */
+    ESP_ERROR_CHECK(led_manager_init() == 0 ? ESP_OK : ESP_FAIL);
+
+    /* 4. netif / event loop */
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    /* 4. USB + hid_engine */
+    /* 5. USB + hid_engine（hid_engine_init 内部调 tinyusb_driver_install 完成 USB 栈注册）*/
     hid_engine_init();
 
-    /* 5. command_engine（queue + worker + lease tick + dedup） */
+    /* 6. command_engine（queue + worker + lease tick + dedup） */
     ESP_ERROR_CHECK(command_engine_init() == 0 ? ESP_OK : ESP_FAIL);
 
-    /* 6. 装配 publishers */
-    command_engine_set_publishers(mqtt_manager_publish_ack, mqtt_manager_publish_event);
+    /* 7. 装配 publishers（EXECUTED ack 触发 LED 脉冲） */
+    command_engine_set_publishers(publish_ack_with_led_pulse, mqtt_manager_publish_event);
 
-    /* 7. runtime config + crash 恢复（complete pending → promote） */
+    /* 8. runtime config + crash 恢复（complete pending → promote） */
     ESP_ERROR_CHECK(runtime_config_init() == RC_OK ? ESP_OK : ESP_FAIL);
     bool promoted = false;
     int rc = runtime_config_boot_reconcile(&promoted);
@@ -268,15 +283,15 @@ void app_main(void) {
         ESP_LOGE(TAG, "boot reconcile: %s", runtime_config_strerror(rc));
     }
 
-    /* 8. Wi-Fi 驱动（不连接——参数由 prov_task 决定） */
+    /* 9. Wi-Fi 驱动（不连接——参数由 prov_task 决定） */
     ESP_ERROR_CHECK(wifi_manager_init() == 0 ? ESP_OK : ESP_FAIL);
 
-    /* 9. provisioning（适配器 + BLE 队列 + 状态机 task） */
+    /* 10. provisioning（适配器 + BLE 队列 + 状态机 task） */
     ESP_ERROR_CHECK(provisioning_init(&g_prov_adapter) == 0 ? ESP_OK : ESP_FAIL);
     s_cand_queue = xQueueCreate(2, sizeof(runtime_candidate_t));
     xTaskCreate(prov_task, "prov_task", 6144, NULL, 5, NULL);
 
-    /* 10. status 心跳 */
+    /* 11. status 心跳 */
     status_manager_init();
 
     ESP_LOGI(TAG, "=== Smart HID Firmware boot complete (state machine running) ===");

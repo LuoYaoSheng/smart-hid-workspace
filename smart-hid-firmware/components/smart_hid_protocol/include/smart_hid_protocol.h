@@ -96,9 +96,10 @@ typedef enum {
 
 /* Keyboard payload 子字段（解析后保存在 command 中） */
 typedef struct {
-    /* tap / hotkey 时使用：key 单键；keys 多键组合 */
-    char        key[8];                 /* 单键名，如 "ENTER" / "A" / "F1"，"" 表示未设 */
-    char        keys[8][8];             /* 多键组合，最多 8 键 */
+    /* tap / hotkey 时使用：key 单键；keys 多键组合
+     * 键名长度 16：容纳 CAPSLOCK / BACKSPACE 等 8+ 字符键名（2026-08-20 真机修复截断 bug） */
+    char        key[16];
+    char        keys[8][16];
     uint8_t     keys_count;
     uint32_t    hold_ms;                /* 默认 40 */
     uint32_t    lease_ms;               /* key_down 必须带 */

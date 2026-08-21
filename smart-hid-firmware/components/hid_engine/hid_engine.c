@@ -48,8 +48,7 @@ static const char *TAG = "hid_engine";
  *   - String Descriptors
  * ---------------------------------------------------------------- */
 
-#define EPNUM_KEYBOARD   0x81  /* EP1 IN */
-#define EPNUM_MOUSE      0x82  /* EP2 IN */
+#define EPNUM_HID        0x81  /* 单接口单端点：HID IN */
 
 #define REPORT_ID_KEYBOARD  CONFIG_SMART_HID_USB_HID_KEYBOARD_REPORT_ID
 #define REPORT_ID_MOUSE     CONFIG_SMART_HID_USB_HID_MOUSE_REPORT_ID
@@ -58,16 +57,18 @@ static const char *TAG = "hid_engine";
 #define CFG_TUD_HID_EP_BUFSIZE 64
 
 /* Configuration Descriptor 总长度：
- *   1 config (9) + 2 interface(9 each) = 9 + 9 + 9 = 27
- *   使用 TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN * 2 */
-#define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN * 2)
+ *   1 config (9) + 1 interface(9+9+7=25) = 34
+ *   使用 TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN */
+#define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN)
 
-/* HID Report Descriptor（Composite，含 report ID）
+/* HID Report Descriptor：单接口复合（键盘 + 鼠标，report ID 区分）
  *
- * 使用 TinyUSB 官方模板宏 TUD_HID_REPORT_DESC_KEYBOARD / TUD_HID_REPORT_DESC_MOUSE，
- * 通过可变参数注入 Report ID（HID_REPORT_ID 宏）。
- * 两个 report 共享一个 interface（TinyUSB 单 interface composite），
- * 由 report ID 区分 keyboard / mouse。
+ * 方案沿革（2026-08-20 真机迭代教训）：
+ *  1. 双接口共用复合描述符 + 全部报告走 instance 0 → Windows 键盘可用、鼠标集合收不到输入
+ *  2. 双接口各自专属描述符 + 按接口发报告 → Windows 枚举正常但 TinyUSB instance 1
+ *     永不 ready（tud_hid_n_ready(1)=false，报告发不出）
+ *  3. 【当前】单接口复合（report ID）+ 全走 instance 0 —— 键盘通路已真机验证，
+ *     复合 report ID 是 TinyUSB/Pico/Arduino 生态最广泛验证的组合键盘鼠标形态
  */
 static const uint8_t kHidReportDescriptor[] = {
     /* Keyboard Report (ID = REPORT_ID_KEYBOARD) */
@@ -116,19 +117,13 @@ static const char *s_string_descriptors[5] = {
  * ---------------------------------------------------------------- */
 static const uint8_t s_configuration_descriptor[] = {
     /* Config number, interface count, string index, total length, attribute, power in mA */
-    TUD_CONFIG_DESCRIPTOR(1, /* interfaces */ 2, /* str idx */ 0,
+    TUD_CONFIG_DESCRIPTOR(1, /* interfaces */ 1, /* str idx */ 0,
                           CONFIG_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
 
-    /* Interface 0: Keyboard */
+    /* Interface 0: Composite HID（keyboard ID=2 / mouse ID=1，report ID 区分） */
     TUD_HID_DESCRIPTOR(/* itf */ 0, /* str */ 0, HID_ITF_PROTOCOL_NONE,
                        /* desc len */ sizeof(kHidReportDescriptor),
-                       /* EP IN */ EPNUM_KEYBOARD, /* EP size */ CFG_TUD_HID_EP_BUFSIZE,
-                       /* poll interval */ 10),
-
-    /* Interface 1: Mouse */
-    TUD_HID_DESCRIPTOR(/* itf */ 1, /* str */ 0, HID_ITF_PROTOCOL_NONE,
-                       /* desc len */ sizeof(kHidReportDescriptor),
-                       /* EP IN */ EPNUM_MOUSE, /* EP size */ CFG_TUD_HID_EP_BUFSIZE,
+                       /* EP IN */ EPNUM_HID, /* EP size */ CFG_TUD_HID_EP_BUFSIZE,
                        /* poll interval */ 10),
 };
 
@@ -139,7 +134,7 @@ static const tinyusb_config_t s_tusb_drv_cfg = {
     .phy.self_powered         = false,
     .task.size                = 4096,
     .task.priority            = 5,
-    .task.xCoreID             = -1,           /* 不绑核 */
+    .task.xCoreID             = 0,            /* 必须显式核号：esp_tinyusb 直传 xTaskCreatePinnedToCore，-1 会触发核号断言（真机 2026-08-20 验证） */
     .descriptor.device        = &s_device_descriptor,
     .descriptor.string        = (const char **)s_string_descriptors,
     .descriptor.string_count  = sizeof(s_string_descriptors) / sizeof(s_string_descriptors[0]),
@@ -148,7 +143,7 @@ static const tinyusb_config_t s_tusb_drv_cfg = {
 
 
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance) {
-    (void)instance;
+    (void)instance;    /* 单接口：只有一个描述符 */
     return kHidReportDescriptor;
 }
 
@@ -200,21 +195,33 @@ static void ms_sleep(uint32_t ms) {
  * 发送 Keyboard Report
  * ---------------------------------------------------------------- */
 static void send_keyboard_report(uint8_t modifier, const uint8_t keys[6]) {
-    if (!tud_mounted() || !tud_hid_ready()) return;
+    if (!tud_mounted() || !tud_hid_n_ready(0)) return;
     uint8_t report[8] = {0};
     report[0] = modifier;
     if (keys) memcpy(&report[2], keys, 6);
-    tud_hid_report(REPORT_ID_KEYBOARD, report, sizeof(report));
+    if (!tud_hid_n_report(0, REPORT_ID_KEYBOARD, report, sizeof(report))) {
+        ESP_LOGW(TAG, "keyboard report send failed");
+    }
 }
 
 static void send_mouse_report(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel) {
-    if (!tud_mounted() || !tud_hid_ready()) return;
-    uint8_t report[4];
+    if (!tud_mounted() || !tud_hid_n_ready(0)) {
+        ESP_LOGW(TAG, "mouse send skipped: mounted=%d ready=%d",
+                 (int)tud_mounted(), (int)tud_hid_n_ready(0));
+        return;
+    }
+    /* 报告长度必须与 TUD_HID_REPORT_DESC_MOUSE 模板一致：该模板声明
+     * [buttons 1B][X 1B][Y 1B][wheel 1B][AC_PAN 水平轮 1B] 共 5 字节。
+     * 少发 1 字节会被 Windows 视为短报告静默丢弃（2026-08-20 真机教训）。 */
+    uint8_t report[5] = {0};
     report[0] = buttons;
     report[1] = (uint8_t)dx;
     report[2] = (uint8_t)dy;
     report[3] = (uint8_t)wheel;
-    tud_hid_report(REPORT_ID_MOUSE, report, sizeof(report));
+    /* report[4] = AC_PAN（水平滚轮），保持 0 */
+    if (!tud_hid_n_report(0, REPORT_ID_MOUSE, report, sizeof(report))) {
+        ESP_LOGW(TAG, "mouse report send failed");
+    }
 }
 
 /* ----------------------------------------------------------------
@@ -284,7 +291,7 @@ int hid_engine_init(void) {
 }
 
 bool hid_engine_is_ready(void) {
-    return tud_mounted() && tud_hid_ready();
+    return tud_mounted() && tud_hid_n_ready(0);
 }
 
 void hid_engine_release_all(void) {
@@ -458,6 +465,9 @@ static int execute_mouse(const smart_hid_command_t *cmd, uint32_t *exec_ms_out) 
         case SMART_HID_ACTION_MOVE: {
             int32_t remain_x = cmd->mouse.dx;
             int32_t remain_y = cmd->mouse.dy;
+            /* 报告间隔必须大于端点 bInterval(10ms)：恰好相等时存在边界竞态
+             * （host 轮询与下一次提交同相位时前段报告可能丢失，真机 2026-08-20
+             * 观测：4 段仅后 2 段生效）。取 15ms 错开相位。 */
             while (remain_x != 0 || remain_y != 0) {
                 int8_t step_x = (int8_t)((remain_x > 127) ? 127 :
                                          (remain_x < -127) ? -127 : remain_x);
@@ -466,7 +476,7 @@ static int execute_mouse(const smart_hid_command_t *cmd, uint32_t *exec_ms_out) 
                 send_mouse_report(s_pressed_buttons.button_mask, step_x, step_y, 0);
                 remain_x -= step_x;
                 remain_y -= step_y;
-                if (remain_x != 0 || remain_y != 0) ms_sleep(5);  /* 避免合并 */
+                if (remain_x != 0 || remain_y != 0) ms_sleep(15);
             }
             break;
         }

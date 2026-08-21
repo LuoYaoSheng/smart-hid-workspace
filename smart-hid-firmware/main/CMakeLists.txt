@@ -16,4 +16,5 @@ idf_component_register(
         provisioning
         hub_pairing
         ble_provision
+        led_manager
 )

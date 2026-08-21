@@ -13,12 +13,13 @@ MQTT callback 不直接发 HID Report。
 ## 当前状态
 
 ✅ **F1+F2+F3 C 源码完成 + ESP-IDF v5.4.4 双配置编译通过**：
-- USB Composite HID（Keyboard + Mouse）：esp_tinyusb managed component + `tinyusb_driver_install` + 官方 `TUD_HID_REPORT_DESC_*` 模板 + 2 个 HID interface
+- USB Composite HID（Keyboard + Mouse）：esp_tinyusb managed component + `tinyusb_driver_install` + 官方 `TUD_HID_REPORT_DESC_*` 模板 + 单接口复合（report ID 区分键鼠；双接口方案真机验证失败已回退，见下方真机 bug ②）
 - 协议层 JSON 解析/序列化（镜像 smart-ble TS 事实源）
 - command_engine：queue(32) + dedup(256) + boot_id 校验 + TTL + worker task + lease tick
 - mqtt_manager：连接 / 订阅 / LWT / publish ack+status+event + 运行时 `configure()`（凭据来自配网，不再编译期写死）
-- wifi_manager（`init` / `connect_sta` 拆分，配网流程可先起 BLE 再连 Wi-Fi）/ status_manager / device_identity（NVS + `esp_app_desc` 版本注入）
+- wifi_manager（`init` / `connect_sta` 拆分，配网流程可先起 BLE 再连 Wi-Fi；真机验证后默认 `WIFI_PS_NONE` 关省电）/ status_manager / device_identity（NVS + `esp_app_desc` 版本注入）
 - F3 配网栈：`runtime_config`（NVS rt_active/rt_pending 双配置 + schema_version 守卫）+ `provisioning` 状态机（纯逻辑层，可宿主单测）+ `hub_pairing`（HTTP :17892 配对）+ `ble_provision`（NimBLE GATT 服务 + 分帧协议）
+- led_manager：板载状态 LED（WS2812 / 单色 GPIO，Kconfig 选择；轮询 Wi-Fi/MQTT/USB 映射闪烁语义，EXECUTED 命令脉冲；2026-08-20 真机验证通过）
 
 ✅ **`idf.py build` 通过**（默认配置 + `sdkconfig.dev.defaults` DEV 配置）：
 产出 `smart-hid-firmware.bin`（1,074,768 字节，factory 分区 1536K，分区表 3×1536K + NVS 0x8000）+ bootloader.bin + partition-table.bin + ota_data_initial.bin。
@@ -39,8 +40,21 @@ MQTT callback 不直接发 HID Report。
 - F2 层：`hid_keymap`（键名→Usage 映射，安全关键）、`dedup_cache`（环形去重）
 - F3 层：`runtime_config`（active/pending 原子切换、schema_version 守卫、commit 前失败不污染 active）、`provisioning`（无配置进配网、token 消费时序、MQTT 失败入 RECOVERY 不重做 Wi-Fi、密钥不出现在日志）、`ble_proto`（分帧重组 / 乱序拒绝 / 超长拒绝 / candidate 解析）
 
-⚠️ **尚未在真实 ESP32-S3 硬件上烧录验证**（USB 枚举 / BLE 实测 / Wi-Fi 实连需硬件）。
-   语义对齐由 Go 参考实现保证；配网逻辑由宿主单测保证；编译正确性由 `idf.py build` 通过保证。
+✅ **2026-08-20 真机 bring-up 通过**（ESP32-S3-WROOM-1，实测 16MB flash + 8MB PSRAM，Windows 宿主）：
+- 烧写（UART/CH343）→ 启动 → Wi-Fi → MQTT → USB OTG 枚举为 HID Keyboard + Mouse 全链路打通
+- keyboard tap / mouse move 经 ControlHub HTTP API 下发均 `executed`，CapsLock 翻转与光标位移有客观测量证据
+- 板载 LED 状态机（led_manager）五态 + 命令白闪脉冲真机表现正确
+- 真机暴露并已修复五个 mock/编译期无法发现的问题：
+  1. `tinyusb_config_t.task.xCoreID = -1` 触发 FreeRTOS 核号断言崩溃（esp_tinyusb 直传 xTaskCreatePinnedToCore，必须显式 0/1）
+  2. 双接口共用"键盘+鼠标复合(report ID)"描述符且全走 instance 0 —— Windows 键盘可用但鼠标集合收不到输入；
+     改为单接口复合（TinyUSB 0.21 双接口下 instance 1 永不 ready，原因未深究，方案已回退为单接口）
+  3. **espressif TinyUSB 0.21 的 `TUD_HID_REPORT_DESC_MOUSE` 模板含水平滚轮（AC_PAN），输入报告为 5 字节而非经典 4 字节**——
+     发 4 字节会被 Windows 作为短报告静默丢弃（设备端 tud_hid_n_report 却返回成功）；补齐第 5 字节后光标实测移动
+  4. 键名结构体 `key[8]` 截断 8+ 字符键名（CAPSLOCK/BACKSPACE 解析为 CAPSLOC/BACKSPA 被拒 4002），扩至 16 字节
+  5. 稳定性双修（"时好时坏"根因）：① 默认 Wi-Fi 省电（WIFI_PS_MIN_MODEM）致收包延迟 300ms+、MQTT 周期性断连
+     （弱信号 RSSI≈-77 下每 ~10s 掉线重连、命令随机 accepted_not_acked）→ `esp_wifi_set_ps(WIFI_PS_NONE)` 后连发 8 条 8/8 executed；
+     ② 多段鼠标报告段间隔 sleep 恰等于端点 bInterval(10ms) 存在同相位竞态（前段丢失，X 部分移动/Y 为 0）→ 段间隔 15ms 错相后两轴完整移动
+- 仍待真机验证：BLE Provisioning 实测、BIOS / 登录界面（HID 描述符无 boot protocol，已知缺口）、macOS / Linux、断连 soak
 
 ## 配网模型（M1-G3 起）
 
@@ -60,9 +74,9 @@ smart-hid-firmware/
 ├── sdkconfig.dev.defaults      # DEV 静态配置（CI 双配置编译验证用）
 ├── main/
 │   ├── CMakeLists.txt
-│   ├── Kconfig.projbuild       # DEV_STATIC 开关 + DEV 静态字段（默认全关）
-│   ├── idf_component.yml       # esp_tinyusb / NimBLE managed components
-│   └── main.c                  # app_main：装配 + prov_task + 断线 5 分钟 RECOVERY
+│   ├── Kconfig.projbuild       # DEV_STATIC 开关 + DEV 静态字段 + LED 配置
+│   ├── idf_component.yml       # esp_tinyusb / NimBLE / led_strip managed components
+│   └── main.c                  # app_main：装配 + prov_task + 断线 5 分钟 RECOVERY + LED 接线
 ├── components/
 │   ├── smart_hid_protocol/     # 协议契约（镜像 TS 事实源）
 │   ├── device_identity/        # device_id(NVS) + boot_id + 固件版本(esp_app_desc)
@@ -72,6 +86,7 @@ smart-hid-firmware/
 │   │   └── hid_keymap.c
 │   ├── mqtt_manager/           # esp-mqtt 封装 + LWT + 运行时 configure
 │   ├── wifi_manager/           # STA + 断开 release_all（init/connect 拆分）
+│   ├── led_manager/            # 板载状态 LED（WS2812 / 单色 GPIO）
 │   ├── status_manager/         # 心跳 status
 │   ├── runtime_config/         # NVS rt_active/rt_pending 双配置 + schema_version 守卫
 │   ├── provisioning/           # 配网状态机（纯逻辑，adapter 注入，可宿主单测）

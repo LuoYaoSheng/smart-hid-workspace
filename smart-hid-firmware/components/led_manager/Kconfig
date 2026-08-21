@@ -1,0 +1,43 @@
+# led_manager Kconfig — 板载状态 LED
+menu "Smart HID LED"
+
+choice SMART_HID_LED_TYPE
+    prompt "板载状态 LED 类型"
+    default SMART_HID_LED_TYPE_WS2812
+    help
+        WS2812：ESP32-S3 开发板常见板载 RGB 灯（DevKitC-1 默认 GPIO48，部分批次 GPIO38），
+        颜色 + 节奏双语义。
+        SIMPLE：单色 GPIO LED，仅节奏语义（不同状态用不同闪烁模式区分）。
+
+config SMART_HID_LED_TYPE_NONE
+    bool "无 LED（禁用组件）"
+config SMART_HID_LED_TYPE_SIMPLE
+    bool "单色 GPIO LED"
+config SMART_HID_LED_TYPE_WS2812
+    bool "WS2812 RGB LED"
+endchoice
+
+config SMART_HID_LED_GPIO
+    int "LED GPIO 编号"
+    default 48
+    help
+        WS2812：ESP32-S3-DevKitC-1 为 GPIO48（部分批次 GPIO38），按载板实际调整。
+        单色 LED：按载板原理图。
+
+config SMART_HID_LED_SIMPLE_ACTIVE_LOW
+    bool "单色 LED 低电平点亮"
+    default n
+    depends on SMART_HID_LED_TYPE_SIMPLE
+
+config SMART_HID_LED_WS2812_BRIGHTNESS
+    int "WS2812 亮度（1-255）"
+    default 32
+    range 1 255
+    depends on SMART_HID_LED_TYPE_WS2812
+
+config SMART_HID_LED_PULSE_MS
+    int "命令执行成功脉冲时长（ms）"
+    default 150
+    range 50 1000
+
+endmenu

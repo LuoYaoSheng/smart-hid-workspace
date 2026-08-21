@@ -39,6 +39,9 @@ idf.py menuconfig
 | `SMART_HID_WIFI_SSID` / `SMART_HID_WIFI_PASSWORD` | (空) | 仅 DEV 静态模式 |
 | `SMART_HID_MQTT_BROKER_HOST` / `PORT` | `192.168.1.100` / `17891` | 仅 DEV 静态模式 |
 | `SMART_HID_MQTT_USERNAME` / `PASSWORD` | (空) | 仅 DEV 静态模式；需与 ControlHub config.yaml 显式配置的 mqtt 账号一致（ControlHub 内部凭据默认每启动随机生成） |
+| `SMART_HID_LED_TYPE` | `ws2812` | 板载状态 LED：`ws2812` / `simple` / `none`（见 §7.1 语义表） |
+| `SMART_HID_LED_GPIO` | `48` | DevKitC-1 板载 RGB 为 GPIO48（部分批次 38）；单色 LED 按载板原理图 |
+| `SMART_HID_LED_WS2812_BRIGHTNESS` | `32` | WS2812 亮度 1-255 |
 
 > M1-G3 起 Wi-Fi/MQTT 以 **NVS 运行时配置为正式事实源**（BLE Provisioning 写入）；
 > Kconfig 只是显式 DEV fallback，绝不覆盖 NVS。新设备默认进入 BLE Provision Mode。
@@ -85,6 +88,21 @@ idf.py -p /dev/cu.usbmodem* flash monitor
 烧录后接 Windows / macOS：
 - 设备管理器 / 系统信息应识别为"Keyboard + Mouse"组合设备，名为 "Smart HID"。
 - §B 全部 keyboard / mouse action 用 ControlHub 逐项发命令测试。
+
+### 7.1 板载状态 LED 语义（led_manager）
+
+50ms 轮询 Wi-Fi / MQTT / USB 三个连接状态，不侵入其他组件；`ws2812` 类型颜色 + 节奏双语义，`simple` 类型仅节奏，`none` 禁用。命令执行成功（EXECUTED ack）时额外脉冲。
+
+| 状态 | 判定 | WS2812 | 单色 LED |
+|------|------|--------|----------|
+| Wi-Fi 连接中 | Wi-Fi 未连（含上电初期） | 黄色快闪 | 快闪 |
+| 链路丢失 | 曾就绪后 Wi-Fi 断开 | 红色快闪 | 快闪 |
+| MQTT 连接中 | Wi-Fi 通、MQTT 未通 | 青色慢闪 | 慢闪 |
+| USB 未挂载 | 网络全通、USB 未枚举到宿主机 | 紫色双闪 | 双闪 |
+| 就绪 | 全链路通 | 绿色常亮 | 常亮 |
+| 命令脉冲 | EXECUTED ack 后 150ms | 白色短闪 | 反相短闪 |
+
+快闪 2Hz / 慢闪 0.5Hz / 双闪 = 亮 150ms×2 + 停 550ms 循环。状态切换在串口日志有 `led state ->` 记录。
 
 ## 8. 量产安全（F5 才做）
 

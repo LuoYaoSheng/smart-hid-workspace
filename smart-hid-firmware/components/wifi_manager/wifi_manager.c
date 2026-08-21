@@ -51,6 +51,14 @@ int wifi_manager_init(void) {
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
+
+    /* 关闭 Wi-Fi 省电：默认 WIFI_PS_MIN_MODEM 让射频在信标间隔休眠，
+     * 收包延迟可达 300ms+，弱信号下导致 MQTT keep-alive 超时→周期性断连重连
+     * （真机 2026-08-20：RSSI≈-77 时每 ~10s 掉线一次的根因，修后 8/8 连发全通）。
+     * 本设备 USB 总线供电，延迟与稳定性优先于功耗。
+     * 按 IDF 文档须在 esp_wifi_start() 之后调用。 */
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+
     ESP_LOGI(TAG, "wifi STA started (runtime config mode)");
     return 0;
 }

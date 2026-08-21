@@ -145,10 +145,10 @@ cd smart-hid-firmware/test/host && ./run.sh
 
 | 组件 | 状态 |
 |---|---|
-| 固件 | ✅ F1 控制 + F2 可靠性 + F3 BLE 配网源码完成（NimBLE + NVS 运行时配置 + 配网状态机），ESP-IDF v5.4.4 双配置编译通过，36 项 host 单测。⚠️ 尚未在真实 ESP32-S3 硬件上烧录验证 |
+| 固件 | ✅ F1 控制 + F2 可靠性 + F3 BLE 配网源码完成（NimBLE + NVS 运行时配置 + 配网状态机），36 项 host 单测；**2026-08-20 真机 bring-up 通过**（启动 / Wi-Fi / MQTT / USB HID 枚举 / 键鼠命令 executed，Windows 单机，修复 5 个真机专属 bug）。待验证：BLE 配网实测、BIOS / 三 OS / soak |
 | ControlHub | ✅ 产品化完成：托盘常驻 / 本地控制台 / SQLite / 动态配对（请求级地址解析）/ API Key 鉴权 |
 | Web | ✅ 落地页 / 文档站 / 下载中心（纯静态零构建） |
-| 待办 | 真机烧录验证、小程序端配网协议对齐、生产安全（Secure Boot / Flash Encryption / 固件签名） |
+| 待办 | BLE 配网真机联调、小程序端配网协议对齐、BIOS / 登录界面（boot protocol 未实现）、三 OS / soak、生产安全（Secure Boot / Flash Encryption / 固件签名） |
 
 ## 安全设计
 

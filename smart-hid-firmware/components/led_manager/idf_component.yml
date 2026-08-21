@@ -1,0 +1,6 @@
+## led_manager 依赖
+##
+## led_strip：WS2812 RGB 驱动（RMT 后端）。
+## 仅 SMART_HID_LED_TYPE_WS2812 时使用；选择 SIMPLE/NONE 时编译为空实现。
+dependencies:
+  espressif/led_strip: "^2.0.0"

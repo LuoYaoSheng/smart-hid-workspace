@@ -83,3 +83,14 @@ Windows ／ macOS ／ Linux ／ BIOS ／ 登录界面 ／ soak。
 
 OTA / Recovery；Production Security（Secure Boot / Flash Encryption /
 固件签名）；Diagnostics / Supportability。
+
+## 电源管理设计（2026-08-20 真机联调后登记，随硬件向 Gate 排期）
+
+> 背景：WIFI_PS_NONE 已定为默认（真机验证 modem sleep 破坏实时性，见固件 README
+> bug ⑤）。本设备 USB 总线供电、无电池，深度省电本身收益极小；但以下两个
+> "场景化休眠/唤醒"缺口是真实的产品能力，值得随 M2 一并设计。
+
+| # | 缺口 | 证据 | 说明 |
+|---|---|---|---|
+| 1 | USB suspend/resume 驱动的跟随休眠未实现 | 固件未启用 `TINYUSB_SUSPEND_CALLBACK` / `TINYUSB_RESUME_CALLBACK`（Kconfig 默认 n，esp_tinyusb 提供） | 目标电脑睡眠 → USB 总线挂起 → 设备可转入 modem sleep 等低功耗态；宿主唤醒 → USB resume 即天然唤醒源（零额外硬件）。这是唯一不破坏"网络随时可达"语义的场景化休眠：宿主睡了 HID 无处生效，省电不损失功能 |
+| 2 | HID Remote Wakeup 声明了但未实现 | hid_engine.c 配置描述符带 `TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP`，但固件从未调用 `tud_remote_wakeup()` | 描述符向宿主宣称"设备可唤醒主机"，实际不支持——网络唤醒睡眠中电脑（按任意键开机级体验）是自然产品能力。需实现 resume 流程，或先摘掉属性位避免虚假声明 |

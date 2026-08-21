@@ -64,7 +64,7 @@ DO NOT IMPLEMENT：
 | 组件 | 状态 | 说明 |
 |---|---|---|
 | ControlHub（Go） | IMPLEMENTED | HTTP API + 内嵌 MQTT（bind/advertise 拆分）+ 配对（请求级地址解析）+ API Key + SQLite + 托盘 + Web 三页面；`go test` 全绿 + mock e2e |
-| 固件（C，ESP-IDF v5.4.4） | IMPLEMENTED ＋ NOT VERIFIED ON HARDWARE | USB HID / 命令引擎 / 可靠性语义 / **BLE Provision + NVS 运行时配置 + 配网状态机**源码完成、编译通过、host 状态机单测；**从未在真实 ESP32-S3 上烧录验证** |
+| 固件（C，ESP-IDF v5.4.4） | IMPLEMENTED ＋ 真机基本链路已验证 | USB HID / 命令引擎 / 可靠性语义 / **BLE Provision + NVS 运行时配置 + 配网状态机**源码完成、编译通过、host 单测；**2026-08-20 真机 bring-up 通过**（ESP32-S3-WROOM-1，实测 16MB flash + 8MB PSRAM，Windows 宿主）：启动 / Wi-Fi / MQTT / USB HID 枚举 / 键鼠命令 executed（期间修复 5 个真机专属 bug，见下）。BLE 配网真机实测、BIOS / 三 OS / soak 未验证 |
 | mock-device（cmd/mock-device） | IMPLEMENTED | Go 参考实现 = 虚拟 ESP32，测试替身；连非默认端口需 `--mqtt-port` |
 | 官网（smart-hid-web） | IMPLEMENTED | 纯静态落地页 / 文档站 / 下载中心，GitHub Pages 托管 |
 | protocols/ JSON Schema | IMPLEMENTED | command / ack / status 三 schema + 示例；**ble/PROVISIONING_V1.md（canonical）** |
@@ -72,7 +72,7 @@ DO NOT IMPLEMENT：
 | BLE 配网（小程序侧） | PARTIAL（外部独立仓 smart-ble） | 不在本仓库；需按 protocols/ble/PROVISIONING_V1.md 对齐客户端 |
 | OTA | PLANNED | 分区表已扩至双 1536K OTA（M1-G3） |
 | Secure Boot / Flash Encryption / 固件签名 | PLANNED | M2-G3 |
-| 真机烧写与硬件验收 | NOT EXECUTED | 独立任务（M2-G1），明确不在 M1 内做 |
+| 真机烧写与硬件验收 | IN PROGRESS | 2026-08-20 首次烧写 + 基本链路验收通过（Windows 单机）；完整验收（BIOS / 登录界面 / 三 OS / 断连 soak）未执行 |
 
 ## ControlHub 能力清单（按代码核对）
 
@@ -95,6 +95,7 @@ DO NOT IMPLEMENT：
 ## 固件能力清单（按代码核对）
 
 - USB Composite HID：键盘 + 鼠标（TinyUSB）
+- 板载状态 LED：led_manager（WS2812 / 单色 / 无，Kconfig 可配）轮询 Wi-Fi/MQTT/USB 映射闪烁语义 + EXECUTED 命令脉冲（2026-08-20 新增，待 `idf.py build` 与真机验证）
 - 命令引擎：串行队列（32）／ request_id 去重（256）／ TTL ／ target_boot_id ／ lease 超时释放 ／ release_all
 - Fail-safe：MQTT / Wi-Fi 断开 → 设备端自动释放全部按键（LWT 语义）
 - **NVS 运行时配置（M1-G3）**：runtime_config 组件（active/pending 双 namespace、schema_version 守卫、generation、factory clear 底层能力）；Kconfig 网络参数仅 `SMART_HID_DEV_STATIC_CONFIG=y` 时作 DEV fallback（默认 OFF，绝不覆盖 NVS）
@@ -111,5 +112,25 @@ DO NOT IMPLEMENT：
   build-releases 干净构建（dirty 拒绝/显式 SHA256/manifest/投影防漂移）、协议与 OpenAPI 门
   （validate-protocols.py）、shellcheck warning 级全过、CI/release/docs 三 workflow（tag 驱动发布）
 - 配置面 e2e、WebSocket e2e、演示台 Playwright 真浏览器实测均通过（2026-08-20）
-- 以上**全部基于 mock / 本机环境**：没有任何真机验证（ESP32-S3 烧写、USB 枚举、
-  BLE 实连配网、BIOS / 登录界面、三操作系统、soak 均未执行）
+- **真机 bring-up（2026-08-20，ESP32-S3-WROOM-1 + Windows）已通过**：
+  烧写（UART/CH343）→ 启动 → Wi-Fi（STA）→ MQTT（hub 账号 + PerDeviceHook）→
+  USB OTG 接入后宿主机枚举为 HID Keyboard + Mouse → HTTP API 下发
+  keyboard tap 与 mouse move 均返回 `executed`，**CapsLock 状态翻转与光标移动均有
+  客观测量证据**（PowerShell CapsLock 查询 / Cursor::Position 前后对比）；
+  板载 LED 状态机（led_manager）五态与命令脉冲真机表现正确；
+  ControlHub 对 usb_hid_ready=false 的设备正确拒绝命令。
+  期间修复五个仅真机可暴露的问题：
+  ① TinyUSB task xCoreID=-1 断言崩溃；
+  ② 双接口复合描述符 Windows 鼠标集合收不到输入（改单接口复合）；
+  ③ **espressif TinyUSB 0.21 鼠标模板含 AC_PAN 水平轮 → 输入报告须 5 字节**，
+    发 4 字节被 Windows 静默丢弃而设备端返回成功（最隐蔽，短报告无任何报错）；
+  ④ 键名结构体 key[8] 截断 8+ 字符键名（CAPSLOCK → CAPSLOC 被拒）；
+  ⑤ 稳定性双修：Wi-Fi 默认省电（WIFI_PS_MIN_MODEM）致 MQTT 周期断连（弱信号下
+    每 ~10s）→ WIFI_PS_NONE 后连发 8 条 8/8 executed；多段鼠标报告段间隔与
+    bInterval 同相位竞态致前段丢失 → 15ms 错相后两轴完整移动。
+- Wi-Fi 省电已关闭（延迟/稳定性优先）；弱信号（RSSI≈-77）下仍可能偶发断连，
+  设备自动重连（~10s 内恢复），期间命令 accepted_not_acked，重试即可
+- ControlHub（Windows exe）联调中途发生过一次进程退出，原因未查（重启后正常），
+  已登记待查
+- 真机**未**验证：BLE 实连配网、BIOS / 登录界面（描述符无 boot protocol，已知缺口）、
+  macOS / Linux、断连 soak、长时间稳定性
