@@ -60,7 +60,7 @@ done
 
 # --- 6a. VERSION 文件（唯一版本事实源） ---
 if [ -f "$ROOT/VERSION" ]; then
-  VER="$(tr -d ' \n' < "$ROOT/VERSION" | sed 's/^v//')"
+  VER="$(tr -d ' \r\n' < "$ROOT/VERSION" | sed 's/^v//')"   # \r：Windows CRLF 检出兼容
   case "$VER" in
     [0-9]*.[0-9]*.[0-9]*) pass "VERSION 文件存在且形态合法（${VER}）" ;;
     *) fail "VERSION 内容「${VER}」不是 x.y.z" ;;
@@ -84,7 +84,13 @@ scaffold_n=$(grep -rn 'v0\.1\.0-scaffold' "$ROOT" \
 MANIFEST="$ROOT/smart-hid-web/downloads/manifest.json"
 if [ -f "$MANIFEST" ]; then
   if command -v python3 >/dev/null; then
-    mv="$(python3 -c 'import json;print(json.load(open("'"$MANIFEST"'"))["version"])' 2>/dev/null || echo ERR)"
+    # Windows Git Bash 下 python3 是原生 Windows Python，打不开 MSYS 风格路径
+    # （/e/...），需转换为盘符路径；用 -m（正斜杠 E:/...）避免反斜杠在
+    # Python 字符串里被当作转义（\x \f 等）。Linux/macOS 无 cygpath 原样传递。
+    MANIFEST_PY="$MANIFEST"
+    command -v cygpath >/dev/null && MANIFEST_PY="$(cygpath -m "$MANIFEST")"
+    mv="$(python3 -c 'import json;print(json.load(open("'"$MANIFEST_PY"'"))["version"])' 2>/dev/null || echo ERR)"
+    mv="${mv%%$'\r'}"   # Windows python print 尾随 CR 会让字符串比较恒不等
     if [ "$mv" = "$VER" ]; then
       pass "manifest.json version 与 VERSION 一致（${mv}）"
     else
