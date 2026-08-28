@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	"fyne.io/systray"
 )
@@ -30,6 +31,7 @@ type Controller interface {
 	HTTPPort() int                 // 用于"打开控制台" URL
 	Stop()                         // "退出"菜单触发
 	RotateAPIKey() (string, error) // "重置 API Key"菜单触发
+	InitialAPIKey() (string, bool) // "复制 API Key"菜单取明文（bool=文件存在）
 	LANModeEnabled() bool          // LAN 模式 checkbox 当前状态
 	SetLANMode(bool) error         // LAN 模式 toggle（持久化，下次启动生效）
 }
@@ -53,6 +55,9 @@ func onReady(c Controller, log *slog.Logger) {
 
 	mOpen := systray.AddMenuItem("打开控制台", "Open web console in browser")
 
+	mCopyKey := systray.AddMenuItem("复制 API Key",
+		"Copy the initial API key to clipboard (from initial-api-key.txt)")
+
 	systray.AddSeparator()
 
 	mRotate := systray.AddMenuItem("重置 API Key", "Rotate API key (will invalidate current key)")
@@ -73,6 +78,19 @@ func onReady(c Controller, log *slog.Logger) {
 				if err := openBrowser(url); err != nil {
 					log.Warn("open browser failed", "err", err, "url", url)
 				}
+			case <-mCopyKey.ClickedCh:
+				raw, ok := c.InitialAPIKey()
+				if !ok {
+					systray.SetTooltip("Key 文件不存在（可能已删除）。请用「重置 API Key」生成新的。")
+					continue
+				}
+				if err := copyToClipboard(raw); err != nil {
+					log.Warn("copy api key failed", "err", err)
+					systray.SetTooltip("复制失败：" + err.Error())
+					continue
+				}
+				log.Info("api key copied to clipboard (user-initiated)")
+				systray.SetTooltip("API Key 已复制到剪贴板。")
 			case <-mRotate.ClickedCh:
 				raw, err := c.RotateAPIKey()
 				if err != nil {
@@ -80,9 +98,9 @@ func onReady(c Controller, log *slog.Logger) {
 					systray.SetTooltip("Rotate failed: " + err.Error())
 					continue
 				}
-				// 不在托盘显示明文，避免肩窥泄漏；用户需到控制台或 initial-api-key.txt 取新 key
+				// 轮换后 app 层已回写 initial-api-key.txt，"复制 API Key"取到的是新 Key
 				log.Info("api key rotated from tray", "key_prefix", raw[:12]+"...")
-				systray.SetTooltip("API key rotated. Open console with the new key.")
+				systray.SetTooltip("API key 已轮换。菜单「复制 API Key」可取新 Key。")
 			case <-mLAN.ClickedCh:
 				newState := !c.LANModeEnabled()
 				if err := c.SetLANMode(newState); err != nil {
@@ -122,6 +140,34 @@ func openBrowser(url string) error {
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 	case "linux":
 		return exec.Command("xdg-open", url).Start()
+	}
+	return fmt.Errorf("unsupported GOOS: %s", runtime.GOOS)
+}
+
+// copyToClipboard 跨平台复制文本，零新增依赖：
+// Windows 用系统自带 clip.exe，macOS 用 pbcopy，Linux 用 xclip/xsel。
+func copyToClipboard(text string) error {
+	switch runtime.GOOS {
+	case "windows":
+		cmd := exec.Command("cmd", "/c", "clip")
+		cmd.Stdin = strings.NewReader(text)
+		return cmd.Run()
+	case "darwin":
+		cmd := exec.Command("pbcopy")
+		cmd.Stdin = strings.NewReader(text)
+		return cmd.Run()
+	case "linux":
+		for _, c := range [][]string{
+			{"xclip", "-selection", "clipboard"},
+			{"xsel", "--clipboard", "--input"},
+		} {
+			cmd := exec.Command(c[0], c[1:]...)
+			cmd.Stdin = strings.NewReader(text)
+			if err := cmd.Run(); err == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("no clipboard tool (install xclip or xsel)")
 	}
 	return fmt.Errorf("unsupported GOOS: %s", runtime.GOOS)
 }

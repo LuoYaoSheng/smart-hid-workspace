@@ -57,6 +57,8 @@ type App struct {
 	stopOnce  sync.Once
 	startOnce sync.Once
 	started   bool
+
+	initialKeyPath string // initial-api-key.txt：明文唯一交付点（托盘复制/轮换回写）
 }
 
 // Build 加载配置并装配所有依赖（不启动服务）。
@@ -179,6 +181,7 @@ func Build(cfgPath string) (*App, error) {
 		log:        log,
 		store:      store,
 		keys:       keys,
+		initialKeyPath: initialKeyPath,
 		settings:   setStore,
 		dm:         dm,
 		broker:     broker,
@@ -344,8 +347,33 @@ func ternaryStr(cond bool, a, b string) string {
 func (a *App) HTTPPort() int { return a.cfg.HTTP.Port }
 
 // RotateAPIKey 暴露给 tray 菜单调用。
+// 轮换后同步重写 initial-api-key.txt：该文件是明文的唯一交付点
+// （托盘"复制 API Key"读它），否则轮换后文件里是作废旧 Key。
 func (a *App) RotateAPIKey() (string, error) {
-	return a.keys.Rotate("tray")
+	raw, err := a.keys.Rotate("tray")
+	if err != nil {
+		return "", err
+	}
+	if a.initialKeyPath != "" {
+		if werr := os.WriteFile(a.initialKeyPath, []byte(raw+"\n"), 0o600); werr != nil {
+			a.log.Error("rewrite initial key file after rotate", "err", werr, "path", a.initialKeyPath)
+		}
+	}
+	return raw, nil
+}
+
+// InitialAPIKey 返回 initial-api-key.txt 中的明文 Key（托盘"复制 API Key"用）。
+// 第二个返回值表示文件是否存在（被用户删除后引导走重置路径）。
+// 明文不进日志，仅在用户显式点击复制时经剪贴板交付。
+func (a *App) InitialAPIKey() (string, bool) {
+	if a.initialKeyPath == "" {
+		return "", false
+	}
+	b, err := os.ReadFile(a.initialKeyPath)
+	if err != nil {
+		return "", false
+	}
+	return string(b), true
 }
 
 // LANModeEnabled 返回当前 LAN 模式开关状态（从 settings 读，反映持久化值）。
