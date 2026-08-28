@@ -88,7 +88,7 @@ DO NOT IMPLEMENT：
 - **pairing endpoint 先解析后消费 token（M1-G3）**：advertise 解析失败 → 503，token 保持 pending；QR host 与设备路径同一 resolver
 - **内部 MQTT 凭据随机化（M1-G3）**：不再有固定默认密码——留空 = 每启动随机（仅内存，不持久化不进日志）；显式成对配置仍支持（如 e2e）
 - **ACK 三方绑定（M1-G2）**：topic 设备 == ack.device_id == 在途请求期望设备；非法 ACK 记 warning 丢弃
-- API Key：SHA-256 入库、明文不落库、可轮换；HTTP 用 Bearer，WebSocket 用 query key；**首启明文只落 0600 文件，不进日志（M1-G2）**
+- API Key：SHA-256 入库、明文不落库、可轮换；HTTP 鉴权：本机回环带 `X-ControlHub-Local: 1` 免 Key（CSRF 防线），其余 Bearer；WebSocket 用 query key；首启明文只落 0600 文件不进日志（M1-G2），托盘可一键复制/重置后自动回写（2026-08-21）
 - Web 三页面：控制台 `/`、模拟键鼠演示台 `/demo.html`（可视化键盘 / 触控板 / 实体键盘直通 / 文本连打 / 多设备广播）、实时事件通道 `/api/v1/realtime`
 - 配置面：`http.lan_mode` / `http.enable_api`、`mqtt.*`、`pairing.enabled` / `pairing.port`、`web.console` / `web.demo` / `web.realtime`；缺省 = 全开内置默认
 - SQLite 持久化：migrations 0001 / 0002 / 0004（commands.fingerprint）
