@@ -99,6 +99,6 @@ OTA / Recovery；Production Security（Secure Boot / Flash Encryption /
 
 | # | 提案 | 背景 | 说明 |
 |---|---|---|---|
-| 1 | 本机回环免鉴权 + Key 只管 LAN API | 单人测试时"控制台还要找 Key"是纯摩擦：能碰到 127.0.0.1 的本机进程本就可读 key 文件，回环鉴权无安全价值 | HTTP 中间件按源地址区分：loopback 放行（写操作要求自定义请求头防浏览器 CSRF——跨域发不出自定义头），非回环维持 Bearer。Key 零维护已由托盘「复制 API Key」+ 轮换回写落地（ac51ac5），此项完成后控制台彻底零摩擦 |
+| 1 | ✅ 本机回环免鉴权（2026-08-21 落地） | 单人测试时"控制台还要找 Key"是纯摩擦：能碰到 127.0.0.1 的本机进程本就可读 key 文件，回环鉴权无安全价值 | authMiddleware：回环请求带 `X-ControlHub-Local: 1`（CSRF 边界，浏览器恶意网页跨域发不出自定义头）即免 Key；无头回环退回 Bearer（curl/脚本向后兼容）；非回环维持 Bearer。前端三页（console/demo/api-test）已带头；控制台 Key 输入框仅在 401 时显示。实测五路径：回环+头✓ / 回环+Bearer✓ / 回环裸 401✓ / LAN无Key 401✓ / LAN+Key 200✓ |
 | 2 | 配网 V2：设备直连 + 主人批准 | 现行 QR→手机→BLE 转交 token 流程（PROVISIONING_V1）让手机承担"凭证搬运工"，单人测试时主人/配网者角色一人分饰、体验混乱 | 改为：BLE 只递 Wi-Fi+hub 地址 → 设备直连 ControlHub 自报 device_id+首次上电自生成密钥哈希 → 控制台弹"发现新设备，是否信任"→ 主人一键批准后签发 MQTT 凭据。信任决策回到主人手里，QR/token 环节消失。需改配对协议（V2）+ 设备状态机 + 控制台审批 UI，与小程序侧对齐后再动 |
 | 3 | internal/config 两个测试在 Windows 检出下失败 | `TestLoad_ValidOverride` / `TestLoad_CreatesAndAbsDataDir`：测试夹具 yaml 经 autocrlf 检出带 CRLF，解析报错；无改动基线同样失败，Linux CI 不受影响 | 测试夹具写入时规范化换行，或 .gitattributes 对该 fixture 强制 LF。与 check-governance.sh 的 CRLF 兼容（已修）同类 |

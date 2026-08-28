@@ -43,7 +43,7 @@
   // ---------- API ----------
 
   function api(method, path, body) {
-    var opts = { method: method, headers: { Authorization: 'Bearer ' + state.apiKey } };
+    var opts = { method: method, headers: { 'X-ControlHub-Local': '1', Authorization: 'Bearer ' + state.apiKey } };
     if (body !== undefined) {
       opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(body);

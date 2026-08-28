@@ -87,7 +87,7 @@
 
   // ---------- API 调用 ----------
   async function api(method, path, body) {
-    const opts = { method, headers: { Authorization: 'Bearer ' + state.apiKey } };
+    const opts = { method, headers: { 'X-ControlHub-Local': '1', Authorization: 'Bearer ' + state.apiKey } };
     if (body !== undefined) {
       opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(body);
@@ -133,18 +133,17 @@
 
   // ---------- 设备列表 ----------
   async function pollDevices() {
-    if (!state.apiKey) {
-      el.deviceCount.textContent = '';
-      return;
-    }
     const r = await api('GET', '/devices');
-    if (!r.ok) {
-      // 401 → Key 无效
-      if (r.status === 401) {
-        el.deviceCount.innerHTML = '<span class="tag bad">API Key 无效</span>';
-      } else {
-        el.deviceCount.textContent = '加载失败 (HTTP ' + r.status + ')';
-      }
+    // 本机免 Key 模式：请求成功即自动隐藏 Key 输入框；401（LAN 打开或旧版）
+    // 才显示，提示按需输入
+    if (r.ok) {
+      el.authForm.style.display = 'none';
+    } else if (r.status === 401) {
+      el.authForm.style.display = '';
+      el.deviceCount.innerHTML = '<span class="tag bad">需要 API Key</span>';
+      return;
+    } else {
+      el.deviceCount.textContent = '加载失败 (HTTP ' + r.status + ')';
       return;
     }
     const devs = r.json.devices || [];

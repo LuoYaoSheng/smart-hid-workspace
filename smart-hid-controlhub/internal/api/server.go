@@ -146,19 +146,39 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpSrv.Shutdown(ctx)
 }
 
-// authMiddleware 校验 Authorization: Bearer <key>，通过 apikey.Store 查表。
+// localHeader 是本机免 Key 通道的 CSRF 边界：浏览器恶意网页跨域
+// 无法携带自定义头（无 CORS 预检批准），本机控制台页面（同源）天然携带。
+// 它不是机密，边界是"请求是否来自浏览器内跨域脚本"。
+const localHeader = "X-ControlHub-Local"
+
+// isLoopback 判断请求是否来自 127.0.0.1 / ::1。
+func isLoopback(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// authMiddleware：本机回环请求免 Key（携带 localHeader，控制台零摩擦；
+// 该头是 CSRF 边界——浏览器恶意网页跨域发不出自定义头），无头时退回
+// Bearer 校验（curl/脚本带 Key 的用法向后兼容）；非回环（LAN 模式下的
+// 其他设备）一律 Bearer。
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		const prefix = "Bearer "
-		if !strings.HasPrefix(auth, prefix) {
-			writeJSON(w, http.StatusUnauthorized, errBody{"unauthorized", "missing bearer token"})
-			return
-		}
-		rawKey := strings.TrimPrefix(auth, prefix)
-		if !s.keys.Verify(rawKey) {
-			writeJSON(w, http.StatusUnauthorized, errBody{"unauthorized", "invalid api key"})
-			return
+		if !(isLoopback(r) && r.Header.Get(localHeader) == "1") {
+			auth := r.Header.Get("Authorization")
+			const prefix = "Bearer "
+			if !strings.HasPrefix(auth, prefix) {
+				writeJSON(w, http.StatusUnauthorized, errBody{"unauthorized", "missing bearer token"})
+				return
+			}
+			rawKey := strings.TrimPrefix(auth, prefix)
+			if !s.keys.Verify(rawKey) {
+				writeJSON(w, http.StatusUnauthorized, errBody{"unauthorized", "invalid api key"})
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

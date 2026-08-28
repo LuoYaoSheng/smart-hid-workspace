@@ -88,7 +88,7 @@
     if (!path) { alert('请填 path'); return; }
     if (!path.startsWith('/')) path = '/' + path;
 
-    const opts = { method, headers: {} };
+    const opts = { method, headers: { 'X-ControlHub-Local': '1' } };
     if (state.apiKey) opts.headers['Authorization'] = 'Bearer ' + state.apiKey;
     if ((method === 'POST' || method === 'PUT' || method === 'DELETE') && el.body.value.trim()) {
       opts.headers['Content-Type'] = 'application/json';
