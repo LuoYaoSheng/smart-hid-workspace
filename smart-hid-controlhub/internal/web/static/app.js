@@ -159,7 +159,10 @@
         <td>${boolTag(d.online, '在线', '离线')}</td>
         <td>${boolTag(d.usb_hid_ready, '就绪', '未就绪')}</td>
         <td>${esc(d.firmware) || '<span class="muted">—</span>'}</td>
-        <td><button class="small" data-device="${esc(d.device_id)}">发送命令</button></td>
+        <td>
+          <button class="small" data-device="${esc(d.device_id)}">发送命令</button>
+          <button class="small warning" data-del="${esc(d.device_id)}">删除</button>
+        </td>
       </tr>`).join('');
 
     // 绑定每行"发送命令"按钮
@@ -168,6 +171,24 @@
         const id = btn.getAttribute('data-device');
         const dev = devs.find((x) => x.device_id === id);
         openComposer(dev);
+      });
+    });
+
+    // 绑定每行"删除"按钮：注销设备并撤销其 MQTT 凭据（不可恢复）
+    el.devicesTable.querySelectorAll('button[data-del]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-del');
+        if (!confirm(`删除设备 ${id}？\n\n将删除该设备记录并撤销其 MQTT 凭据（设备将无法再连接本 ControlHub），命令历史一并清除。此操作不可恢复。`)) {
+          return;
+        }
+        btn.disabled = true;
+        const r = await api('DELETE', '/devices/' + encodeURIComponent(id));
+        btn.disabled = false;
+        if (!r.ok && r.status !== 404) {
+          alert('删除失败（HTTP ' + r.status + '）：' + (r.json ? r.json.error : ''));
+          return;
+        }
+        pollDevices();
       });
     });
   }

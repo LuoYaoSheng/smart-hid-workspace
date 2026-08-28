@@ -51,23 +51,36 @@ func (s *Server) handleDeviceOrCommand(w http.ResponseWriter, r *http.Request) {
 	deviceID := parts[0]
 
 	if len(parts) == 1 {
-		// GET /devices/{id}
-		if r.Method != http.MethodGet {
-			writeJSON(w, http.StatusMethodNotAllowed, errBody{"method_not_allowed", "GET only"})
-			return
+		switch r.Method {
+		case http.MethodGet:
+			// GET /devices/{id}
+			d, ok := s.devices.Get(deviceID)
+			if !ok {
+				writeJSON(w, http.StatusNotFound, errBody{"not_found", "device not found"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"device_id":     d.DeviceID,
+				"boot_id":       d.BootID,
+				"online":        d.Online,
+				"usb_hid_ready": d.USBHIDReady,
+				"firmware":      d.Firmware,
+			})
+		case http.MethodDelete:
+			// DELETE /devices/{id}：注销设备并撤销其 MQTT 凭据
+			deleted, err := s.devices.Delete(deviceID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, errBody{"internal", err.Error()})
+				return
+			}
+			if !deleted {
+				writeJSON(w, http.StatusNotFound, errBody{"not_found", "device not found"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"deleted": deviceID})
+		default:
+			writeJSON(w, http.StatusMethodNotAllowed, errBody{"method_not_allowed", "GET or DELETE only"})
 		}
-		d, ok := s.devices.Get(deviceID)
-		if !ok {
-			writeJSON(w, http.StatusNotFound, errBody{"not_found", "device not found"})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"device_id":     d.DeviceID,
-			"boot_id":       d.BootID,
-			"online":        d.Online,
-			"usb_hid_ready": d.USBHIDReady,
-			"firmware":      d.Firmware,
-		})
 		return
 	}
 

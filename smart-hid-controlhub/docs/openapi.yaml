@@ -112,6 +112,31 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: not_found, message: "device not found" }
         '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      summary: 注销设备（撤销其 MQTT 凭据）
+      description: |
+        删除设备记录并撤销配对时签发的 MQTT 凭据——设备此后无法再连接本
+        ControlHub（已建立的连接保持到下次重连被拒）。该设备命令历史与
+        配对会话记录一并删除，不可恢复。
+      tags: [device]
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+      responses:
+        '200':
+          description: 已删除。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: string, description: 被删除的 device_id }
+        '404':
+          description: 设备未知。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: not_found, message: "device not found" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
   # -------------------------------------------------------------------------
   /devices/{device_id}/commands:

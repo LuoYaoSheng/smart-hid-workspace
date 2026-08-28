@@ -213,3 +213,45 @@ func TestManager_PersistenceAcrossRestart(t *testing.T) {
 		}
 	}
 }
+
+func TestDelete(t *testing.T) {
+	store := newTestStore(t)
+	m, err := New(store, silentLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.UpsertStatus(status("HID-AAAA0001", "B-000001", true, true, "1.1.0"))
+	if _, ok := m.Get("HID-AAAA0001"); !ok {
+		t.Fatal("device should exist before delete")
+	}
+
+	// 删除：应清内存视图并成功提交
+	deleted, err := m.Delete("HID-AAAA0001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !deleted {
+		t.Fatal("Delete = false, want true")
+	}
+	if _, ok := m.Get("HID-AAAA0001"); ok {
+		t.Fatal("device should be gone from memory")
+	}
+	for _, d := range m.List() {
+		if d.DeviceID == "HID-AAAA0001" {
+			t.Fatal("device should be gone from List")
+		}
+	}
+
+	// DB 层：devices 行已删
+	var n int
+	_ = store.DB.QueryRow(`SELECT COUNT(*) FROM devices WHERE device_id='HID-AAAA0001'`).Scan(&n)
+	if n != 0 {
+		t.Fatal("devices row should be deleted")
+	}
+
+	// 再删：不存在 → false, nil
+	deleted2, err := m.Delete("HID-AAAA0001")
+	if err != nil || deleted2 {
+		t.Fatalf("second Delete = (%v, %v), want (false, nil)", deleted2, err)
+	}
+}

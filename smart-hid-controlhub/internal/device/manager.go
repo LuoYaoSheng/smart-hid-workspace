@@ -138,6 +138,41 @@ func (m *Manager) IsReady(deviceID string) (online, usbReady bool, ok bool) {
 	return d.Online, d.USBHIDReady, true
 }
 
+// Delete 注销设备：删除内存视图 + devices 行，并撤销 MQTT 凭据
+// （device_credentials）——删除后 PerDeviceHook 查不到凭据，该设备再连
+// MQTT 会被拒，即"本 hub 不再信任此设备"。已建立的 MQTT 连接保持到其
+// 下次重连被拒为止。该设备的命令历史与配对会话记录一并清理
+// （SQLite FK 强制且无级联定义；审计由 security_events 表另行承担）。
+// 返回是否确实存在并已删除。
+func (m *Manager) Delete(deviceID string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.devs[deviceID]; !ok {
+		return false, nil
+	}
+	tx, err := m.db.DB.Begin()
+	if err != nil {
+		return false, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+	for _, q := range []string{
+		`DELETE FROM commands WHERE device_id = ?`,
+		`DELETE FROM device_credentials WHERE device_id = ?`,
+		`DELETE FROM pairing_sessions WHERE device_id = ?`,
+		`DELETE FROM devices WHERE device_id = ?`,
+	} {
+		if _, err := tx.Exec(q, deviceID); err != nil {
+			return false, fmt.Errorf("%s: %w", q, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("commit: %w", err)
+	}
+	delete(m.devs, deviceID)
+	m.log.Info("device deleted (credentials revoked)", "device_id", deviceID)
+	return true, nil
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1
