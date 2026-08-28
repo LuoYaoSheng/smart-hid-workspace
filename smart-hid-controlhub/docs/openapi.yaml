@@ -421,6 +421,48 @@ paths:
               schema: { $ref: '#/components/schemas/PairingSession' }
         '404':
           description: 不存在
+    delete:
+      summary: 取消待配对会话（QR 立即作废）
+      description: 仅 pending 会话可取消；已消费/已过期返回 404。设备并发消费与取消互斥（CAS），不存在双态。
+      tags: [Pairing]
+      security: [{ BearerApiKey: [] }]
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 已取消。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cancelled: { type: boolean }
+        '404':
+          description: 不存在或不在 pending 态。
+
+  /pairing/sessions/{token}/qr.png:
+    get:
+      summary: 配对二维码 PNG（256px）
+      description: 渲染 shid://pair deep-link。仅 pending 会话可取；host 按请求解析（与创建一致）。
+      tags: [Pairing]
+      security: [{ BearerApiKey: [] }]
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: PNG 图像。
+          content:
+            image/png: {}
+        '404':
+          description: 不存在或不在 pending 态。
+        '503':
+          description: 无法解析设备可达地址。
 
   # =========================================================================
 # =========================================================================

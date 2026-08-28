@@ -88,6 +88,25 @@ func New(db *sql.DB, mqttPort, ttlSec int, log *slog.Logger) *Manager {
 	}
 }
 
+// CancelSession 主人侧取消待配对会话（QR 立即作废）。
+// 仅 pending 可取消（CAS：WHERE status='pending'，与设备消费路径互斥——
+// 并发下要么取消成功要么设备已消费，不存在双态）。已消费/已过期/未知
+// token 一律返回 false（幂等，不报错）。
+func (m *Manager) CancelSession(token string) (bool, error) {
+	res, err := m.db.Exec(
+		`UPDATE pairing_sessions SET status = 'cancelled' WHERE token = ? AND status = 'pending'`,
+		token,
+	)
+	if err != nil {
+		return false, fmt.Errorf("cancel pairing_session: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("cancel pairing_session rows: %w", err)
+	}
+	return n == 1, nil
+}
+
 // CreateSession 生成新 token + 入库。返回 token 与过期 Unix 秒。
 func (m *Manager) CreateSession() (token string, expiresAt int64, err error) {
 	token, err = generateToken()

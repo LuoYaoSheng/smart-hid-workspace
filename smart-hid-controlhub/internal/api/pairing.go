@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/skip2/go-qrcode"
 )
 
 // createSessionResp POST /api/v1/pairing/sessions 响应。
@@ -58,18 +60,37 @@ func (s *Server) resolveAdvertise(r *http.Request) (string, error) {
 	return s.advertiseRes.Resolve(localAddr, peer)
 }
 
-// handlePairingSessionsByToken GET /api/v1/pairing/sessions/{token} —— 查询 session 状态。
-// 用于 Web UI 轮询配对结果。
+// handlePairingSessionsByToken 分发 /api/v1/pairing/sessions/{token}[/qr.png]：
+//   - GET  {token}           查询 session 状态（Web UI 轮询配对结果）
+//   - GET  {token}/qr.png    配对二维码 PNG（控制台渲染用）
+//   - DELETE {token}         主人取消会话（QR 立即作废）
 func (s *Server) handlePairingSessionsByToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, errBody{"method_not_allowed", "GET only"})
-		return
-	}
-	token := strings.TrimPrefix(r.URL.Path, "/api/v1/pairing/sessions/")
-	if token == "" {
+	rest := strings.TrimPrefix(r.URL.Path, "/api/v1/pairing/sessions/")
+	if rest == "" {
 		writeJSON(w, http.StatusBadRequest, errBody{"bad_request", "missing token"})
 		return
 	}
+	if strings.HasSuffix(rest, "/qr.png") {
+		if r.Method != http.MethodGet {
+			writeJSON(w, http.StatusMethodNotAllowed, errBody{"method_not_allowed", "GET only"})
+			return
+		}
+		s.handlePairingQR(w, r, strings.TrimSuffix(rest, "/qr.png"))
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		s.handlePairingSessionGet(w, r, rest)
+	case http.MethodDelete:
+		s.handlePairingSessionCancel(w, r, rest)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, errBody{"method_not_allowed", "GET or DELETE only"})
+	}
+}
+
+// handlePairingSessionGet 查询会话状态。
+func (s *Server) handlePairingSessionGet(w http.ResponseWriter, _ *http.Request, token string) {
 	sess, err := s.pairingMgr.GetSession(token)
 	if err != nil {
 		s.log.Error("get pairing session", "err", err)
@@ -81,6 +102,57 @@ func (s *Server) handlePairingSessionsByToken(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, http.StatusOK, sess)
+}
+
+// handlePairingSessionCancel 主人取消待配对会话。
+func (s *Server) handlePairingSessionCancel(w http.ResponseWriter, _ *http.Request, token string) {
+	cancelled, err := s.pairingMgr.CancelSession(token)
+	if err != nil {
+		s.log.Error("cancel pairing session", "err", err)
+		writeJSON(w, http.StatusInternalServerError, errBody{"internal", "cancel failed"})
+		return
+	}
+	if !cancelled {
+		// 未知 token 或已消费/已过期——幂等返回，不区分细节
+		writeJSON(w, http.StatusNotFound, errBody{"not_found", "session not pending"})
+		return
+	}
+	s.log.Info("pairing session cancelled by owner", "token_prefix", token[:8]+"...")
+	writeJSON(w, http.StatusOK, map[string]any{"cancelled": true})
+}
+
+// handlePairingQR 渲染配对二维码 PNG。仅 pending 会话可取（已消费/已过期
+// 的 QR 无意义）。host 按请求解析规则与创建时一致（M1-G3）。
+func (s *Server) handlePairingQR(w http.ResponseWriter, r *http.Request, token string) {
+	sess, err := s.pairingMgr.GetSession(token)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody{"internal", "query failed"})
+		return
+	}
+	if sess == nil || sess.Status != "pending" {
+		writeJSON(w, http.StatusNotFound, errBody{"not_found", "session not pending"})
+		return
+	}
+	qrHost, err := s.resolveAdvertise(r)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, errBody{"mqtt_advertise_unresolved",
+			"cannot resolve a device-reachable host: " + err.Error()})
+		return
+	}
+	payload := s.pairingMgr.QRPayload(token, qrHost, s.pairingPort)
+	png, err := qrcode.New(payload, qrcode.Medium)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody{"internal", "qr encode failed"})
+		return
+	}
+	pngBytes, err := png.PNG(256)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody{"internal", "qr png failed"})
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(pngBytes)
 }
 
 // 引用 encoding/json 避免 unused（payload 解析时可能扩展）

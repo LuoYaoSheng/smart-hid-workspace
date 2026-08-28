@@ -424,7 +424,7 @@
         pairPollTimer = null;
         el.pairHint.textContent = '配对成功！设备应已上线。';
         pollDevices(); // 刷新设备列表
-      } else if (status === 'expired' || status === 'revoked') {
+      } else if (status === 'cancelled' || status === 'expired' || status === 'revoked') {
         clearInterval(pairPollTimer);
         pairPollTimer = null;
         el.pairHint.textContent = '会话已 ' + status + '，请重新创建。';
@@ -436,15 +436,32 @@
   }
 
   function statusLabel(s) {
-    return { pending: '等待设备配对…', success: '✓ 已配对', expired: '已过期', revoked: '已撤销' }[s] || s;
+    return { pending: '等待设备配对…', success: '✓ 已配对', cancelled: '已取消', expired: '已过期', revoked: '已撤销' }[s] || s;
   }
 
   function renderPairingResult(token, qr, expiresAt) {
     el.pairResult.hidden = false;
     el.pairResult.innerHTML = ''; // clear
+
+    // 二维码图（手机小程序「扫描 ControlHub 配对码」用）
+    const qrWrap = document.createElement('div');
+    qrWrap.style.cssText = 'display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin:10px 0;';
+    const qrImg = document.createElement('img');
+    qrImg.alt = '配对二维码';
+    // img 标签带不了自定义头，用 fetch(blob) 携带本机头获取
+    fetch('/api/v1/pairing/sessions/' + encodeURIComponent(token) + '/qr.png', {
+      headers: { 'X-ControlHub-Local': '1', Authorization: 'Bearer ' + state.apiKey }
+    }).then((res) => res.ok ? res.blob() : null).then((b) => {
+      if (b) qrImg.src = URL.createObjectURL(b);
+    }).catch(() => {});
+    qrImg.width = 180; qrImg.height = 180;
+    qrImg.style.cssText = 'background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:10px;padding:6px;';
+    const rightCol = document.createElement('div');
+    rightCol.style.cssText = 'min-width:0;flex:1;';
     const status = document.createElement('div');
     status.className = 'pair-status';
     status.textContent = '等待设备配对…';
+    rightCol.appendChild(status);
     const tokenLabel = document.createElement('div');
     tokenLabel.className = 'pair-line';
     tokenLabel.innerHTML = '<span class="muted">Token:</span> ';
@@ -452,17 +469,31 @@
     code.textContent = token;
     code.className = 'pair-token';
     tokenLabel.appendChild(code);
-    const qrLabel = document.createElement('div');
-    qrLabel.className = 'pair-line';
-    qrLabel.innerHTML = '<span class="muted">QR / Deep-link:</span> ';
-    const qrCode = document.createElement('code');
-    qrCode.textContent = qr;
-    qrCode.className = 'pair-token';
-    qrLabel.appendChild(qrCode);
-    el.pairResult.appendChild(status);
-    el.pairResult.appendChild(tokenLabel);
-    el.pairResult.appendChild(qrLabel);
-    el.pairHint.textContent = '在 5 分钟内让设备扫描 BLE 配网；本面板会自动轮询。';
+    rightCol.appendChild(tokenLabel);
+    // 取消按钮：主人随时作废 QR（pending 态才有效）
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'small warning';
+    cancelBtn.textContent = '取消配对';
+    cancelBtn.style.marginTop = '8px';
+    cancelBtn.addEventListener('click', async () => {
+      if (!confirm('取消该配对会话？二维码立即作废。')) return;
+      cancelBtn.disabled = true;
+      const r = await api('DELETE', '/pairing/sessions/' + encodeURIComponent(token));
+      cancelBtn.disabled = false;
+      if (!r.ok) {
+        alert('取消失败（HTTP ' + r.status + '）');
+        return;
+      }
+      if (pairPollTimer) { clearInterval(pairPollTimer); pairPollTimer = null; }
+      el.pairResult.hidden = true;
+      el.pairTimer.textContent = '';
+      el.pairHint.textContent = '会话已取消。可重新创建配对。';
+    });
+    rightCol.appendChild(cancelBtn);
+    qrWrap.appendChild(qrImg);
+    qrWrap.appendChild(rightCol);
+    el.pairResult.appendChild(qrWrap);
+    el.pairHint.textContent = '手机小程序扫描左侧二维码完成配对；本面板自动轮询状态。';
     updatePairTimer(expiresAt);
   }
 
