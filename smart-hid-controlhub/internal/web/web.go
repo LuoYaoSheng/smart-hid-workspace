@@ -17,13 +17,20 @@ import (
 var staticFiles embed.FS
 
 // Handler 返回服务 Web 静态资源的 http.Handler。
+// 静态资源带 no-cache（协商缓存）：页面与后端同版本发布（go:embed），
+// 浏览器缓存旧 app.js 会造成"新后端 + 旧前端"的错位表现（2026-08-21 实测踩坑）；
+// 资源本身极小，协商缓存零成本。
 func Handler() http.Handler {
 	sub, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		// 仅在 embed 指令与目录不一致时发生，属编译期错误。
 		panic("web: embedded static subdir missing: " + err.Error())
 	}
-	return http.FileServer(http.FS(sub))
+	fileServer := http.FileServer(http.FS(sub))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		fileServer.ServeHTTP(w, r)
+	})
 }
 
 // consolePaths / demoPaths 是可独立关闭的静态资源（config.web.*）。

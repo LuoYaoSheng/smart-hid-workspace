@@ -350,7 +350,6 @@
 
   // ---------- 设置面板（CH-P2/P4） ----------
   async function fetchLAN() {
-    if (!state.apiKey) return;
     const r = await api('GET', '/settings/lan-mode');
     if (!r.ok) return;
     el.lanToggle.checked = !!r.json.enabled;
@@ -370,7 +369,6 @@
   }
 
   async function rotateAPIKey() {
-    if (!state.apiKey) { alert('请先输入当前 API Key'); return; }
     if (!confirm('确定重置 API Key？当前 key 会立即失效，所有使用旧 key 的客户端需更新。')) return;
     el.rotateResult.textContent = '旋转中…';
     const r = await api('POST', '/api-keys/rotate', {});
@@ -401,7 +399,6 @@
   let pairPollTimer = null;
 
   async function createPairingSession() {
-    if (!state.apiKey) { alert('请先输入 API Key'); return; }
     el.pairCreate.disabled = true;
     el.pairHint.textContent = '创建中…';
     const r = await api('POST', '/pairing/sessions');
