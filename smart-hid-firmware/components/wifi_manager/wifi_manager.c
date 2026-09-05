@@ -4,11 +4,13 @@
 #include "wifi_manager.h"
 
 #include <string.h>
+#include "esp_err.h"
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "hid_engine.h"
 
@@ -76,10 +78,24 @@ int wifi_manager_connect_sta(const char *ssid, const char *password, uint32_t ti
         strlcpy((char *)wc.sta.password, password, sizeof(wc.sta.password));
     }
 
-    esp_wifi_disconnect(); /* 旧连接（若有） */
+    esp_wifi_disconnect(); /* 旧连接（若有）——异步，旧尝试可能仍在飞行 */
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wc));
     ESP_LOGW(TAG, "connecting to ssid=%s ...", ssid); /* 密码绝不打日志 */
-    ESP_ERROR_CHECK(esp_wifi_connect());
+    /* esp_wifi_disconnect() 不打断已 in-flight 的连接尝试：此时
+     * esp_wifi_connect() 返回 ESP_ERR_WIFI_CONN（E14-T3 真机：上次失败的
+     * 自动重连未落地即来新候选 → 0x3007 → ESP_ERROR_CHECK abort 整机重启，
+     * BLE 断链，App 只见 connection_lost）。重配路径绝不允许 abort：
+     * 有界等待旧尝试自行落地后再发起；超限则按连接失败上报 wifi_failed。 */
+    esp_err_t err = esp_wifi_connect();
+    for (int i = 0; err == ESP_ERR_WIFI_CONN && i < 30; i++) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        err = esp_wifi_connect();
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_wifi_connect failed: %s（旧尝试未落地，按 wifi_failed 上报）",
+                 esp_err_to_name(err));
+        return -1;
+    }
 
     EventBits_t bits = xEventGroupWaitBits(s_evt, WIFI_CONNECTED_BIT,
                                            pdFALSE, pdTRUE,
