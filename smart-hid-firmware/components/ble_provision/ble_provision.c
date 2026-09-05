@@ -137,8 +137,8 @@ static const struct ble_gatt_chr_def g_chrs[] = {
     {
         .uuid = &g_chr_write.u,
         .access_cb = chr_write_access,
-        /* 加密链路必须先建立（Just Works 配对），否则协议栈拒绝写入 */
-        .flags = BLE_GATT_CHR_F_WRITE_ENC,
+        /* 明文 write：V1 简化（2026-09-05）取消 SMP 配对，连接即可写入 */
+        .flags = BLE_GATT_CHR_F_WRITE,
         .val_handle = &s_val_handles[1],
     },
     {
@@ -211,8 +211,7 @@ static int gap_event(struct ble_gap_event *event, void *arg) {
                 s_conn_handle = event->connect.conn_handle;
                 s_advertising = false;
                 ESP_LOGI(TAG, "BLE connected handle=%u", s_conn_handle);
-                /* 发起配对加密（参数由 ble_hs_cfg.sm_* 决定：bond+SC+Just Works） */
-                ble_gap_security_initiate(s_conn_handle);
+                /* 不发起 SMP 配对（V1 简化）：明文直连，手机端零系统弹窗 */
             } else {
                 s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
                 start_advertising();
@@ -287,12 +286,9 @@ int ble_provision_init(const char *device_name, ble_provision_candidate_cb on_ca
 
     ble_hs_cfg.sync_cb = on_sync;
     ble_hs_cfg.reset_cb = on_reset;
-    /* Just Works + bonding + LE Secure Connections（无 IO 能力，非 MITM 抗性，
-     * 如实记录于协议文档 §7） */
+    /* SMP 参数保留（仅当中心端从系统蓝牙设置强制配对时才可能触达）；
+     * 本固件流程不再发起 security_initiate（V1 简化，明文直连） */
     ble_hs_cfg.sm_io_cap = BLE_HS_IO_NO_INPUT_OUTPUT;
-    ble_hs_cfg.sm_bonding = 1;
-    ble_hs_cfg.sm_sc = 1;
-    ble_hs_cfg.sm_mitm = 0;
 
     int rc = ble_gatts_count_cfg(g_svcs);
     if (rc != 0) return rc;

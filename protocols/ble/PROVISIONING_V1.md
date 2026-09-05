@@ -11,7 +11,7 @@
 ```text
 BLE Toolkit+（小程序，独立仓 smart-ble）
   → 扫描 Provisioning Service UUID
-  → 连接（Just Works 配对加密）
+  → 连接（明文直连，无系统配对）
   → 读 Device Info
   → 扫 ControlHub 动态 Pairing QR（shid://pair?token=…&host=…&port=…）
   → 分帧写入 Provision Input（Wi-Fi + hub + token）
@@ -31,7 +31,7 @@ shid://pair?token=<32hex>&host=<hub-lan-ip>&port=<17892>
 |---|---|---|
 | Provisioning Service | `9f1d1001-e73b-4c8f-9d2a-6f0b5e8a1c04` | — |
 | Device Info 特征 | `9f1d1002-e73b-4c8f-9d2a-6f0b5e8a1c04` | read + notify |
-| Provision Input 特征 | `9f1d1003-e73b-4c8f-9d2a-6f0b5e8a1c04` | **write（要求加密链路）** |
+| Provision Input 特征 | `9f1d1003-e73b-4c8f-9d2a-6f0b5e8a1c04` | **write（明文，不要求加密链路）** |
 | Provision Status 特征 | `9f1d1004-e73b-4c8f-9d2a-6f0b5e8a1c04` | read + notify |
 
 广播：ADV 包含 128-bit Service UUID（可据此过滤扫描）；Scan Response 携带
@@ -126,10 +126,14 @@ mqtt_connecting / ready
 
 ## 7. 配网安全模型（如实声明）
 
-- Provision Input 特征要求**加密链路**：bonding + LE Secure Connections，
-  Just Works（设备无显示/键盘，IO capability = NoInputNoOutput）
-- **Just Works ≠ MITM 抗性**：配对瞬间在场的攻击者理论上可介入。这是 V1 的
-  已知取舍，不虚构 production secure
+> **2026-09-05 变更（V1 简化）**：取消 SMP 配对。固件不再在连接后发起
+> `ble_gap_security_initiate`，Provision Input 由 `WRITE_ENC` 改为普通 `write`，
+> 实现「连接即配网、零系统弹窗」。此前的 bonding + Just Works 模型作废。
+
+- 配网链路为**明文 GATT**：candidate（含 Wi-Fi 密码、pairing token）在 BLE 空口
+  可被嗅探。这是为换取零弹窗配网体验的已知取舍，不虚构 security by obscurity
+- 明文模式下无 MITM 抗性可言；攻击者需在配网窗口物理在场（5 分钟 token 有效期
+  + READY 即停广播收窄窗口）
 - 真正的设备身份根（出厂 Setup Code / QR 制造身份 / Secure Boot / Flash
   Encryption / NVS Encryption）属于后续 Production Security（M2-G3）
 - 配网完成后建议关闭 BLE 广播（设备 READY 即停广播）
