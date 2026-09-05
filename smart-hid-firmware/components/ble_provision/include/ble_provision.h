@@ -2,8 +2,8 @@
  * ble_provision.h — BLE Provisioning GATT 服务（NimBLE，M1-G3）
  *
  * UUID / 分帧 / JSON 契约见 protocols/ble/PROVISIONING_V1.md（canonical）。
- * 安全：bonding + LE Secure Connections（Just Works——无 IO 能力故无 MITM 抗性，
- * 如实记录，见协议文档 Security 节）；provision 写特征要求加密链路。
+ * 安全：V1 简化为明文直连，不发起 SMP/bonding；敏感字段可能被近场嗅探，
+ * 风险与升级边界见协议文档 Security 节。
  */
 #ifndef BLE_PROVISION_H
 #define BLE_PROVISION_H

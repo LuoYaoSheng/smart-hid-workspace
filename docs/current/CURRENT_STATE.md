@@ -102,7 +102,7 @@ DO NOT IMPLEMENT：
 - Fail-safe：MQTT / Wi-Fi 断开 → 设备端自动释放全部按键（LWT 语义）
 - **NVS 运行时配置（M1-G3）**：runtime_config 组件（active/pending 双 namespace、schema_version 守卫、generation、factory clear 底层能力）；Kconfig 网络参数仅 `SMART_HID_DEV_STATIC_CONFIG=y` 时作 DEV fallback（默认 OFF，绝不覆盖 NVS）
 - **配网状态机（M1-G3）**：BOOT→LOAD_CONFIG→UNPROVISIONED/PROVISIONING/CONNECTING_WIFI/PAIRING/CONNECTING_MQTT/READY/RECOVERY/ERROR；candidate 先 stage pending、成功才 promote（配网失败不变砖）；崩溃边界（token 已消费后掉电）由 complete-pending boot promote 收敛
-- **BLE Provision（M1-G3）**：NimBLE GATT（Provisioning Service 三特征 + 分帧写入 + 状态 notify；Just Works 加密如实声明非 MITM 抗性）；协议 canonical = `protocols/ble/PROVISIONING_V1.md`
+- **BLE Provision（M1-G3）**：NimBLE GATT（Provisioning Service 三特征 + INPUT 明文分帧写入 + 状态 notify；V1 简化不发起 SMP/系统配对，近场嗅探风险如实声明）；协议 canonical = `protocols/ble/PROVISIONING_V1.md`
 - 宿主单测：dedup_cache、hid_keymap、**runtime_config / provisioning / ble_proto**（`smart-hid-firmware/test/host/`，36 suite）
 
 ## 验证状态（诚实边界）

@@ -4,9 +4,8 @@
  * 结构（spec §32）：GATT 回调只做 transport → parser → on_candidate；
  * 全部配网逻辑在 provisioning 组件（纯逻辑，host 可测）。
  *
- * 安全：bonding + LE Secure Connections + Just Works（无 IO 能力，非 MITM
- * 抗性——如实声明，见 protocols/ble/PROVISIONING_V1.md §7）；Provision Input
- * 特征带 ENC 标志，未加密链路写入被协议栈拒绝。
+ * 安全：V1 简化为明文直连，不发起 SMP/bonding；敏感字段可能被近场嗅探，
+ * 风险与升级边界见 protocols/ble/PROVISIONING_V1.md §7。
  */
 #include "ble_provision.h"
 
