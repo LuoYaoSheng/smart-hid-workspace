@@ -59,13 +59,27 @@ echo "   sha 工具：$SHA"
 
 # ----------------------------------------------------------
 # 2) ControlHub：双平台构建（ldflags 注入版本元数据）
+#
+# ASSETS_PREBUILT=1（CI 矩阵模式）：darwin/windows 二进制已由
+# macOS/Ubuntu 构建作业预构建并落位到 $DL/controlhub/，本机跳过 go build。
+# 原因：fyne.io/systray 的 darwin 实现是 Objective-C（.m），必须 cgo +
+# Xcode，无法在 Linux/Windows 交叉编译——单机全量构建只在 macOS 成立，
+# CI 里由 macos runner 原生构建（v1.2.0 修，此前 release.yml 在 Linux
+# 容器跑此步骤必炸，因从未打过 tag 而潜伏）。
 # ----------------------------------------------------------
 PKG="smart-hid-controlhub/internal/buildinfo"
 LDF="-s -w -X ${PKG}.Version=$VERSION -X ${PKG}.Commit=$COMMIT -X ${PKG}.Date=$BUILD_TIME -X ${PKG}.Dirty=$DIRTY"
-echo "==> 构建 ControlHub 二进制（$VERSION @ ${COMMIT}）"
 mkdir -p "$DL/controlhub"
-GOOS=darwin  GOARCH=arm64 go build -ldflags "$LDF" -o "$DL/controlhub/controlhub-darwin-arm64"       ./smart-hid-controlhub/cmd/controlhub
-GOOS=windows GOARCH=amd64 go build -ldflags "$LDF" -o "$DL/controlhub/controlhub-windows-amd64.exe" ./smart-hid-controlhub/cmd/controlhub
+if [ "${ASSETS_PREBUILT:-0}" = "1" ]; then
+  for pre in "$DL/controlhub/controlhub-darwin-arm64" "$DL/controlhub/controlhub-windows-amd64.exe"; do
+    [ -s "$pre" ] || { echo "ERROR: ASSETS_PREBUILT=1 但缺少预构建产物：$pre" >&2; exit 1; }
+  done
+  echo "==> ASSETS_PREBUILT：使用预构建 ControlHub 二进制（$VERSION @ ${COMMIT}）"
+else
+  echo "==> 构建 ControlHub 二进制（$VERSION @ ${COMMIT}）"
+  GOOS=darwin  GOARCH=arm64 go build -ldflags "$LDF" -o "$DL/controlhub/controlhub-darwin-arm64"       ./smart-hid-controlhub/cmd/controlhub
+  GOOS=windows GOARCH=amd64 go build -ldflags "$LDF" -o "$DL/controlhub/controlhub-windows-amd64.exe" ./smart-hid-controlhub/cmd/controlhub
+fi
 
 # 版本注入自证（防止 ldflags 拼写错误静默失效）：优先运行可在本机执行
 # 的产物（Windows 构建机跑 .exe，macOS 跑 darwin 二进制）。Linux CI 容器

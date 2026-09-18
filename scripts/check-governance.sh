@@ -93,8 +93,12 @@ if [ -f "$MANIFEST" ]; then
     mv="${mv%%$'\r'}"   # Windows python print 尾随 CR 会让字符串比较恒不等
     if [ "$mv" = "$VER" ]; then
       pass "manifest.json version 与 VERSION 一致（${mv}）"
+    elif git -C "$ROOT" rev-parse -q --verify "refs/tags/v${VER}" >/dev/null 2>&1; then
+      fail "manifest.json version=$mv ≠ VERSION=${VER}，且 v${VER} tag 已存在（发布已裁切，资产必须同步：重跑 build-releases.sh 或从 Release 同步 downloads/）"
     else
-      fail "manifest.json version=$mv ≠ VERSION=${VER}（重跑 build-releases.sh）"
+      # release pending 窗口：VERSION 已 bump、tag 未打——资产滞后属预期流程
+      #（v1.2.0 起 tag 由 CI 矩阵构建发布并回同步 downloads）。打 tag 前不同步不构成违规。
+      note "-" "release pending：manifest=$mv 滞后于 VERSION=${VER}（v${VER} tag 未打，属预期；打 tag 后必须同步）"
     fi
   else
     note "-" "跳过 manifest 校验（无 python3）"

@@ -109,13 +109,26 @@ OTA / Recovery；Production Security（Secure Boot / Flash Encryption /
 ## v1.2.0 收口版本（2026-09-18）
 
 一次性交付（不再小步零发）：观测性（日志双路落盘 + panic 防护 + 退出码 0/1/2）、
-config 测试 Windows 修复（真因更正为反斜杠 YAML 转义）、发布链可移植性三修
-（CRLF / 宿主自证 / sed -i）、openapi 版本与回环免鉴权对齐、官网三处脱节
-（版本角标 / 两处 SHA256SUMS 404）、文档事实对齐（led_manager 已验证、
-配网 E14 闭环、发布链从未跑过 tag 的事实）。**v1.2.0 是 release.yml
-tag 驱动发布的首次真实执行。**
+config 测试 Windows 修复（真因更正为反斜杠 YAML 转义）、e2e test-loop-f2
+Windows Git Bash 化（jq python3 兜底 / 端口预清 / taskkill 映像名 / 实例
+存活预检，本机 28/28 首次全过）、发布链可移植性（CRLF / 宿主自证 / sed -i /
+**结构性修正**）、openapi 版本与回环免鉴权对齐、官网三处脱节（版本角标 /
+两处 SHA256SUMS 404）、文档事实对齐（led_manager 已验证、配网 E14 闭环、
+发布链从未跑过 tag 的事实）。**v1.2.0 是 release.yml tag 驱动发布的首次真实执行。**
+
+发布链结构性修正（本机跑 build-releases 时暴露的潜伏缺陷）：
+ControlHub 的 darwin 构建含 Objective-C（fyne.io/systray .m），必须 cgo +
+Xcode，**Linux/Windows 均无法交叉编译**——旧 release.yml 在 Linux 容器单作业
+里跑 `GOOS=darwin go build` 必炸；因从未打过 tag（发布链停摆）而一直未爆。
+M1-G4 的发布链实际是在 macOS 单机上编写并验证的（同源的 BSD sed 写法佐证）。
+处置：release.yml 改三段矩阵（macos 原生编 darwin / ubuntu 交叉编 windows /
+IDF 容器以 ASSETS_PREBUILT=1 装配固件+manifest+发布）+ sync-downloads 作业
+发布后自动把 Release 资产回同步到 main 的 downloads/；治理 6c 增加
+release pending 窗口语义（tag 未打时允许 manifest 滞后，tag 存在则强制一致），
+保证 main 在版本 bump→发布全程不出现红窗。
 
 | 遗留 | 处置 |
 |---|---|
 | ControlHub Windows exe 曾一次进程退出（2026-08-20 联调期），当时无日志落盘无线索 | 观测已补齐；待复现归因，不主动追查 |
-| 官网 downloads 资产与 GitHub Release 的同步依赖 tag 发布流水线 | v1.2.0 起由 release.yml 自动产出，不再手工拷贝 |
+| 官网 downloads 资产与 GitHub Release 的同步依赖 tag 发布流水线 | v1.2.0 起由 release.yml sync-downloads 自动回同步，不再手工拷贝 |
+| 本机 IDF 检出为 v5.4+子模块改动（真机验证用工具链），与 CI 的 v5.4.4 容器存在版本差异 | 记录在案；GitHub Release 资产以 CI 容器构建为准，官网 downloads/ 同步自 Release，二者一致 |

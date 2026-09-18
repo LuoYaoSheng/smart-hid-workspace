@@ -1,5 +1,15 @@
-# Release — tag 驱动（v*）：clean checkout → 全量构建 → manifest/checksum → GitHub Release
+# Release — tag 驱动（v*）：矩阵构建 → manifest/checksum → GitHub Release → 回同步 downloads/
 # main 只验证（ci.yml）；tag 才发布（M1-G4 §12）。
+#
+# v1.2.0 结构性修正：ControlHub 的 darwin 构建含 Objective-C（fyne.io/systray），
+# 必须 cgo + Xcode，无法在 Linux/Windows 交叉编译——旧版单容器作业在 Linux 里
+# 跑 GOOS=darwin go build 必炸（因从未打过 tag 而潜伏未爆）。现为三段矩阵：
+#   build-darwin  → macos runner 原生构建 darwin-arm64（严格注入自证）
+#   build-windows → ubuntu 交叉构建 windows-amd64.exe
+#   release       → IDF 容器：固件 fullclean + ASSETS_PREBUILT 模式合并双平台
+#                   产物 + manifest/SHA256 + 治理门 + GitHub Release
+#   sync-downloads→ 发布后把 Release 资产回同步到 main 的 smart-hid-web/downloads/
+#                   （官网下载中心与发布不脱节；治理 6c 在 tag 存在时强制一致）
 name: Release
 
 on:
@@ -10,22 +20,96 @@ permissions:
   contents: write
 
 jobs:
+  verify-tag:
+    name: 校验 tag 与 VERSION 一致
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER="$(tr -d ' \r\n' < VERSION | sed 's/^v//')"
+          if [ "$TAG" != "$VER" ]; then
+            echo "ERROR: tag v$TAG 与 VERSION 文件 $VER 不一致"; exit 1
+          fi
+          echo "tag=$TAG 与 VERSION 一致"
+
+  build-darwin:
+    name: ControlHub darwin-arm64（macOS 原生，systray 需 cgo/Xcode）
+    needs: verify-tag
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: smart-hid-controlhub/go.mod
+      - name: 构建 + 注入自证
+        env:
+          GOPROXY: https://proxy.golang.org,direct
+        run: |
+          VERSION="$(tr -d ' \r\n' < VERSION | sed 's/^v//')"
+          COMMIT="$(git rev-parse --short HEAD)"
+          BDATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          PKG="smart-hid-controlhub/internal/buildinfo"
+          mkdir -p smart-hid-web/downloads/controlhub
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build \
+            -ldflags "-s -w -X ${PKG}.Version=$VERSION -X ${PKG}.Commit=$COMMIT -X ${PKG}.Date=$BDATE -X ${PKG}.Dirty=false" \
+            -o smart-hid-web/downloads/controlhub/controlhub-darwin-arm64 \
+            ./smart-hid-controlhub/cmd/controlhub
+          INJ="$(smart-hid-web/downloads/controlhub/controlhub-darwin-arm64 -version)"
+          echo "$INJ" | grep -q "version=$VERSION" || { echo "ERROR: darwin 版本注入失败：$INJ" >&2; exit 1; }
+          echo "$INJ" | grep -q "commit=$COMMIT"   || { echo "ERROR: darwin commit 注入失败：$INJ" >&2; exit 1; }
+          echo "darwin 自证：$INJ"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: controlhub-darwin-arm64
+          path: smart-hid-web/downloads/controlhub/controlhub-darwin-arm64
+          if-no-files-found: error
+
+  build-windows:
+    name: ControlHub windows-amd64（交叉，systray win32 走 syscall 无需 cgo）
+    needs: verify-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: smart-hid-controlhub/go.mod
+      - name: 构建
+        env:
+          GOPROXY: https://proxy.golang.org,direct
+        run: |
+          VERSION="$(tr -d ' \r\n' < VERSION | sed 's/^v//')"
+          COMMIT="$(git rev-parse --short HEAD)"
+          BDATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          PKG="smart-hid-controlhub/internal/buildinfo"
+          mkdir -p smart-hid-web/downloads/controlhub
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+            -ldflags "-s -w -X ${PKG}.Version=$VERSION -X ${PKG}.Commit=$COMMIT -X ${PKG}.Date=$BDATE -X ${PKG}.Dirty=false" \
+            -o smart-hid-web/downloads/controlhub/controlhub-windows-amd64.exe \
+            ./smart-hid-controlhub/cmd/controlhub
+          # ubuntu 无法执行 .exe：软校验（严格注入校验由 darwin 作业同 ldflags 保证）
+          go version -m smart-hid-web/downloads/controlhub/controlhub-windows-amd64.exe >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: controlhub-windows-amd64-exe
+          path: smart-hid-web/downloads/controlhub/controlhub-windows-amd64.exe
+          if-no-files-found: error
+
   release:
-    name: Build & publish release artifacts
+    name: 固件 + manifest + 治理 + 发布
+    needs: [build-darwin, build-windows]
     runs-on: ubuntu-latest
     container:
       image: espressif/idf:v5.4.4
     steps:
       - uses: actions/checkout@v4
 
-      - name: 校验 tag 与 VERSION 一致
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          VER="$(tr -d ' \n' < VERSION | sed 's/^v//')"
-          if [ "$TAG" != "$VER" ]; then
-            echo "ERROR: tag v$TAG 与 VERSION 文件 $VER 不一致"; exit 1
-          fi
-          echo "tag=$TAG 与 VERSION 一致"
+      - name: 落位预构建 ControlHub 产物
+        uses: actions/download-artifact@v4
+        with:
+          path: smart-hid-web/downloads/controlhub
+          pattern: controlhub-*
+          merge-multiple: true
 
       - uses: actions/setup-go@v5
         with:
@@ -37,10 +121,10 @@ jobs:
           . $IDF_PATH/export.sh >/dev/null
           echo "$IDF_PATH" >> "$GITHUB_ENV"  # 后续 step 仍需 IDF_PATH（export 不跨 step）
 
-      - name: 全量构建（ControlHub 双平台 + 固件 fullclean + manifest + SHA256）
+      - name: 全量装配（固件 fullclean + manifest + SHA256，双平台二进制预构建）
         run: |
           . $IDF_PATH/export.sh >/dev/null 2>&1 || true
-          bash smart-hid-web/downloads/build-releases.sh
+          ASSETS_PREBUILT=1 bash smart-hid-web/downloads/build-releases.sh
 
       - name: 治理守卫（含 manifest/VERSION 一致性检查）
         run: bash scripts/check-governance.sh
@@ -54,3 +138,47 @@ jobs:
             smart-hid-web/downloads/README_RELEASE.md
             smart-hid-web/downloads/controlhub/*
             smart-hid-web/downloads/firmware/*
+
+  sync-downloads:
+    name: 回同步官网下载中心（main 分支 downloads/）
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: 从本次 Release 下载资产落位
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+          repo = os.environ['GITHUB_REPOSITORY']
+          tag = os.environ['GITHUB_REF_NAME']
+          rel = json.load(urllib.request.urlopen(
+              f'https://api.github.com/repos/{repo}/releases/tags/{tag}'))
+          base = 'smart-hid-web/downloads'
+          for a in rel['assets']:
+              dest = os.path.join(base, a['name'])
+              # Release 资产名扁平，按 manifest 既有目录结构归位
+              if a['name'].startswith('controlhub-'):
+                  dest = os.path.join(base, 'controlhub', a['name'])
+              elif a['name'] not in ('manifest.json', 'README_RELEASE.md'):
+                  dest = os.path.join(base, 'firmware', a['name'])
+              urllib.request.urlretrieve(a['browser_download_url'], dest)
+              print('synced', dest)
+          PYEOF
+      - name: 提交并推送（无变更则跳过）
+        run: |
+          git config user.name "release-bot"
+          git config user.email "actions@github.com"
+          git add smart-hid-web/downloads
+          if git diff --cached --quiet; then
+            echo "downloads/ 已是最新，无需同步"
+            exit 0
+          fi
+          git commit -m "chore(downloads): 同步 ${GITHUB_REF_NAME} Release 资产（CI 回同步）"
+          git push origin main
