@@ -49,3 +49,5 @@ smart-hid-web/.output
 !smart-hid-web/downloads/
 !smart-hid-web/downloads/**/
 !smart-hid-web/downloads/**/*.exe
+# 本机运行配置（真机联调各机自备；模板见 config.example.yaml，防手滑提交本机 IP/密钥）
+smart-hid-controlhub/config.yaml
