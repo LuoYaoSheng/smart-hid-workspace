@@ -1,10 +1,10 @@
-# Smart HID Release v1.1.0
+# Smart HID Release v1.2.0
 
 | 项 | 值 |
 |---|---|
-| version | 1.1.0 |
-| commit | 118c6eb |
-| build time (UTC) | 2026-08-20T09:23:43Z |
+| version | 1.2.0 |
+| commit | unknown |
+| build time (UTC) | 2026-09-18T02:52:29Z |
 | dirty build | false |
 
 ## 内容
