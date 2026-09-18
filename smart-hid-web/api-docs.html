@@ -61,7 +61,8 @@
 </div>
 
 <div class="authbar">
-  🔑 所有端点（除 <code>GET /health</code>）需要 <code>Authorization: Bearer chk_&lt;your_api_key&gt;</code>。
+  🔑 所有端点（除 <code>GET /health</code>）需要 <code>Authorization: Bearer chk_&lt;your_api_key&gt;</code>；
+  本机回环请求带 <code>X-ControlHub-Local: 1</code> 头可免 Key（内置控制台页面即走此路）。
   本地启动 ControlHub 后，在下方点 <strong>Authorize</strong> 填入 API Key 即可在线 <strong>Try it out</strong>。
   默认服务器：<code>http://127.0.0.1:17890/api/v1</code>。
 </div>
