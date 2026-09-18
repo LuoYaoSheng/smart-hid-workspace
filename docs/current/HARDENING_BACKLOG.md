@@ -116,6 +116,13 @@ Windows Git Bash 化（jq python3 兜底 / 端口预清 / taskkill 映像名 / �
 两处 SHA256SUMS 404）、文档事实对齐（led_manager 已验证、配网 E14 闭环、
 发布链从未跑过 tag 的事实）。**v1.2.0 是 release.yml tag 驱动发布的首次真实执行。**
 
+发布后补充（同日）：**Pages 部署路线修正**——仓库 Pages Source 实为
+「Deploy from a branch: gh-pages」（线上一直服务该分支 08-20 旧内容），
+deploy-pages 路线两次 0 步骤秒败；改为 `scripts/sync-gh-pages.sh` 推送
+gh-pages 分支（docs.yml 触发，release 回同步作业顺带执行），官网随发布
+即时更新、无需人工切 Source。顺带清掉 index.html 两处 v0.1.0-scaffold
+残留（治理 scaffold 扫描此前不含 html/js，已补齐覆盖）。
+
 发布链结构性修正（本机跑 build-releases 时暴露的潜伏缺陷）：
 ControlHub 的 darwin 构建含 Objective-C（fyne.io/systray .m），必须 cgo +
 Xcode，**Linux/Windows 均无法交叉编译**——旧 release.yml 在 Linux 容器单作业

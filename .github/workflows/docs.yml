@@ -1,6 +1,9 @@
 # Docs — smart-hid-web 变更部署到 GitHub Pages（M1-G4）
-# 取代此前本机未跟踪的 deploy-landing.yml（用户确认后可删除本地那份避免双部署）。
-# 只部署 smart-hid-web/（官网 + 文档站 + 下载中心镜像），不触碰其他目录。
+# 2026-09-18 路线修正：仓库 Pages Source 实为「Deploy from a branch: gh-pages」
+# （线上一直在服务 gh-pages 旧内容；deploy-pages 路线两次 0 步骤秒败、无任何
+# step 启动），改为分支推送：同步 smart-hid-web/ → gh-pages 并 push，Pages
+# 分支模式自动重建。本地热修官网同一条命令：
+#   bash scripts/sync-gh-pages.sh . github   # 远端名按环境替换
 name: Docs (Pages)
 
 on:
@@ -8,11 +11,11 @@ on:
     branches: [main]
     paths:
       - "smart-hid-web/**"
+      - "scripts/sync-gh-pages.sh"
+      - ".github/workflows/docs.yml"
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
@@ -20,15 +23,9 @@ concurrency:
 
 jobs:
   deploy:
+    name: 同步 gh-pages（官网）
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: smart-hid-web
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: smart-hid-web → gh-pages 分支推送
+        run: bash scripts/sync-gh-pages.sh "$PWD"

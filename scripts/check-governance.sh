@@ -72,7 +72,8 @@ fi
 
 # --- 6b. 禁止脚手架版本号残留（archive 历史资料除外） ---
 scaffold_n=$(grep -rn 'v0\.1\.0-scaffold' "$ROOT" \
-  --include='*.sh' --include='*.md' --include='*.go' --include='*.py' --include='*.yml' --include='*.yaml' 2>/dev/null \
+  --include='*.sh' --include='*.md' --include='*.go' --include='*.py' --include='*.yml' --include='*.yaml' \
+  --include='*.html' --include='*.js' 2>/dev/null \
   | grep -v '/docs/archive/' | grep -v '/build/' \
   | grep -v 'check-governance.sh' \
   | grep -v 'docs/current/HARDENING_BACKLOG.md' \

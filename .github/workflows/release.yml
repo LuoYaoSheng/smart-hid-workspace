@@ -10,6 +10,7 @@
 #                   产物 + manifest/SHA256 + 治理门 + GitHub Release
 #   sync-downloads→ 发布后把 Release 资产回同步到 main 的 smart-hid-web/downloads/
 #                   （官网下载中心与发布不脱节；治理 6c 在 tag 存在时强制一致）
+#                   并同步 gh-pages 分支（Pages 分支模式，官网随发布即时更新）
 name: Release
 
 on:
@@ -187,3 +188,7 @@ jobs:
           fi
           git commit -m "chore(downloads): 同步 ${GITHUB_REF_NAME} Release 资产（CI 回同步）"
           git push origin main
+      # GITHUB_TOKEN 推送不触发嵌套 workflow（docs.yml 不会因本次 main 推送启动），
+      # 故此处直接同步 gh-pages：官网下载中心随 Release 即时更新
+      - name: 同步 gh-pages 官网（含本次资产）
+        run: bash scripts/sync-gh-pages.sh "$PWD"
