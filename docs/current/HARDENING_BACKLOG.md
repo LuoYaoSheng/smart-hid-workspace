@@ -96,6 +96,17 @@ OTA / Recovery；Production Security（Secure Boot / Flash Encryption /
 | 1 | USB suspend/resume 驱动的跟随休眠未实现 | 固件未启用 `TINYUSB_SUSPEND_CALLBACK` / `TINYUSB_RESUME_CALLBACK`（Kconfig 默认 n，esp_tinyusb 提供） | 目标电脑睡眠 → USB 总线挂起 → 设备可转入 modem sleep 等低功耗态；宿主唤醒 → USB resume 即天然唤醒源（零额外硬件）。这是唯一不破坏"网络随时可达"语义的场景化休眠：宿主睡了 HID 无处生效，省电不损失功能 |
 | 2 | HID Remote Wakeup 声明了但未实现 | hid_engine.c 配置描述符带 `TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP`，但固件从未调用 `tud_remote_wakeup()` | 描述符向宿主宣称"设备可唤醒主机"，实际不支持——网络唤醒睡眠中电脑（按任意键开机级体验）是自然产品能力。需实现 resume 流程，或先摘掉属性位避免虚假声明 |
 
+> **2026-09-18 状态**：二件套已实现并合入 main（f396537：event_cb 收
+> suspend/resume → wifi PS 切换；wake_host() 经 tud_remote_wakeup() 唤醒宿主，
+> 500ms 上限）；构建一次通过、v1.2.0+电源管理已烧录真机并正常进配网模式。
+> **宿主睡眠/唤醒实测未做**——上面两条在真机 sleep/wake 验证通过前不勾 ✅。
+
+## 真机验收发现（2026-09-18，硬件批次）
+
+| # | 发现 | 证据 | 说明 |
+|---|---|---|---|
+| 1 | **status_manager 谎报在线**：未配网、无 WiFi、无 MQTT 的设备每 10s 打 `status published online=1` | smart-ble `verification/windows-plan-v1/20260918-WIN-007/device-reboot-boot.log`：boot 即 `state=unprovisioned → provisioning mode`，第 11s 起稳定 `online=1` 心跳日志 | 双层缺陷：`status_manager.c:28` 心跳硬编码 `publish_now(true)`（`mqtt_manager_is_connected()` 现成未用）；`mqtt_manager.c:211` 未连接时静默 no-op 不返回失败，42 行日志无条件打 "published"。诊断误导实锤——本次验收即被引去排查了不存在的"幽灵 broker"。修法方向：online 取真值 + publish 失败可见 + 未配网期是否抑制心跳待定 |
+
 ## 体验与工程提案（2026-08-21 登记，待评审排期）
 
 | # | 提案 | 背景 | 说明 |
