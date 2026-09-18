@@ -9,7 +9,7 @@ authority: canonical
 > 与代码冲突时，以 main 分支代码为准，并立即更新本文。
 > 历史设计资料在 `docs/archive/`，不得作为当前实现依据。
 
-最后核对：2026-08-20，M1-G4 完成后（基线见 git log M1-G4*）。
+最后核对：2026-09-18，v1.2.0 收口版本（观测性 + 发布链首发 + 官网/openapi 对齐）。
 
 ## 产品定位
 
@@ -36,10 +36,12 @@ BLE Toolkit+ 微信小程序（独立仓库 smart-ble）
 ```
 
 诚实状态：固件侧 BLE Provision / NVS 运行时配置 / 配网状态机源码已完成并
-通过 ESP-IDF v5.4.4 编译与 host 状态机单测（36 项）；BLE 广播已在真实
-ESP32-S3 上修复并确认可发现，但完整 candidate 下发与配对链仍未做真机验收。
-小程序侧（smart-ble 仓）已实现 canonical V1 镜像锁、通用 Profile 接入和
-“连接 → 填写配置 → 查看状态”客户端流程，仍待微信开发者工具与真机联调。
+通过 ESP-IDF v5.4.4 编译与 host 状态机单测（36 项）。**配网真机链已于
+2026-09-05 在 Flutter-Android 真机（三星 + 华为）全链闭环**（扫描 → 连接 →
+下发候选 → ControlHub 配对 → MQTT READY，证据与 runbook 在 smart-ble 仓
+verification/windows-mobile-v1/ 20260904-win-b1 的 E13/E14 轮）；uniapp 线
+（U-AND）读特征连接失败未修，桌面双线（Electron/Tauri）Smart HID 全链验证
+（WIN-007）未跑，macOS 线手动链走到配网向导 step2 可续走。
 
 ## 当前不是什么（REMOVED — 禁止恢复）
 
@@ -70,8 +72,8 @@ DO NOT IMPLEMENT：
 | mock-device（cmd/mock-device） | IMPLEMENTED | Go 参考实现 = 虚拟 ESP32，测试替身；连非默认端口需 `--mqtt-port` |
 | 官网（smart-hid-web） | IMPLEMENTED | 纯静态落地页 / 文档站 / 下载中心，GitHub Pages 托管 |
 | protocols/ JSON Schema | IMPLEMENTED | command / ack / status 三 schema + 示例；**ble/PROVISIONING_V1.md（canonical）** |
-| BLE 配网（固件侧） | IMPLEMENTED IN SOURCE ＋ BUILD VERIFIED ＋ NOT VERIFIED ON HARDWARE | NimBLE GATT 服务 + 分帧协议 + 状态机（M1-G3）；真机未验 |
-| BLE 配网（小程序侧） | IMPLEMENTED IN SOURCE ＋ NOT VERIFIED ON HARDWARE（外部独立仓 smart-ble） | canonical V1 镜像锁、Profile 接入、连接/配置/状态三阶段流程与纯逻辑单测已实现；微信工具与真机未验 |
+| BLE 配网（固件侧） | IMPLEMENTED ＋ 真机全链已验证（F-AND，2026-09-05 E14） | NimBLE GATT 服务 + 分帧协议 + 状态机（M1-G3）；V1 简化不发起 SMP（INPUT 明文 write，连接即配网，近场嗅探风险如实声明）；桌面/uniapp 客户端线未验 |
+| BLE 配网（客户端侧） | F-AND 真机闭环；U-AND/E-WIN/T-WIN/F-MAC 未验（外部独立仓 smart-ble，refactor/uniapp-v1 线） | 五端多平台化进行中；U-AND 读特征连接失败（WIN-UAND-003b）未修；微信小程序目标已裁撤 |
 | OTA | PLANNED | 分区表已扩至双 1536K OTA（M1-G3） |
 | Secure Boot / Flash Encryption / 固件签名 | PLANNED | M2-G3 |
 | 真机烧写与硬件验收 | IN PROGRESS | 2026-08-20 首次烧写 + 基本链路验收通过（Windows 单机）；完整验收（BIOS / 登录界面 / 三 OS / 断连 soak）未执行 |
@@ -93,11 +95,12 @@ DO NOT IMPLEMENT：
 - 配置面：`http.lan_mode` / `http.enable_api`、`mqtt.*`、`pairing.enabled` / `pairing.port`、`web.console` / `web.demo` / `web.realtime`；缺省 = 全开内置默认
 - SQLite 持久化：migrations 0001 / 0002 / 0004（commands.fingerprint）
 - 系统托盘常驻（`-tray`）与 headless 双生命周期
+- **观测性（1.2.0）**：日志双路——stdout + `data/logs/controlhub-YYYYMMDD.log` 按日落盘（保留 7 天）；main goroutine panic 捕获落日志后以退出码 2 结束（1 = 普通错误，0 = 正常）；后台 goroutine / MQTT 回调 panic 防护（logging.Recover），不再裸奔
 
 ## 固件能力清单（按代码核对）
 
 - USB Composite HID：键盘 + 鼠标（TinyUSB）
-- 板载状态 LED：led_manager（WS2812 / 单色 / 无，Kconfig 可配）轮询 Wi-Fi/MQTT/USB 映射闪烁语义 + EXECUTED 命令脉冲（2026-08-20 新增，待 `idf.py build` 与真机验证）
+- 板载状态 LED：led_manager（WS2812 / 单色 / 无，Kconfig 可配）轮询 Wi-Fi/MQTT/USB 映射闪烁语义 + EXECUTED 命令脉冲（2026-08-20 真机验证：五态与命令脉冲表现正确）
 - 命令引擎：串行队列（32）／ request_id 去重（256）／ TTL ／ target_boot_id ／ lease 超时释放 ／ release_all
 - Fail-safe：MQTT / Wi-Fi 断开 → 设备端自动释放全部按键（LWT 语义）
 - **NVS 运行时配置（M1-G3）**：runtime_config 组件（active/pending 双 namespace、schema_version 守卫、generation、factory clear 底层能力）；Kconfig 网络参数仅 `SMART_HID_DEV_STATIC_CONFIG=y` 时作 DEV fallback（默认 OFF，绝不覆盖 NVS）
@@ -132,8 +135,12 @@ DO NOT IMPLEMENT：
     bInterval 同相位竞态致前段丢失 → 15ms 错相后两轴完整移动。
 - Wi-Fi 省电已关闭（延迟/稳定性优先）；弱信号（RSSI≈-77）下仍可能偶发断连，
   设备自动重连（~10s 内恢复），期间命令 accepted_not_acked，重试即可
-- ControlHub（Windows exe）联调中途发生过一次进程退出，原因未查（重启后正常），
-  已登记待查
-- 真机**未**验证：BLE 配网全流程（广播已真机修复可发现；小程序客户端源码已对齐，待微信工具与真机联调）、
+- ControlHub（Windows exe）联调中途发生过一次进程退出，原因未查（重启后正常）。
+  1.2.0 已补齐观测手段（日志落盘 + panic 防护 + 退出码约定 0/1/2），
+  待复现即可归因；此前 stdout 无落盘、goroutine 裸奔，无证据可查
+- 真机**未**验证：桌面双线（Electron/Tauri）Smart HID 配网全链（WIN-007）、
+  uniapp 线（U-AND 连接失败未修）、macOS 配网向导 step3 及以后、
   BIOS / 登录界面（描述符无 boot protocol，已知缺口）、
-  macOS / Linux、断连 soak、长时间稳定性
+  macOS / Linux 键鼠通路、断连 soak、长时间稳定性
+- 真机配网闭环证据（F-AND，2026-09-05 E14）挂在 smart-ble 仓旧基线
+  （3638f66），当前 HEAD 无同等证据——M2-G1 续做时需重刷重跑

@@ -54,7 +54,8 @@ request_id 语义（现行）：**Idempotency Key**——首次执行；并发�
 |---|---|
 | BLE Provision V1 明文直连可被近场被动嗅探；没有设备身份根与传输机密性 | M2-G3 Production Security（协议 V2 或生产安全方案） |
 | `runtime_config_clear()` 已具备但无安全用户触发方式（物理按键 / 出厂流程） | M2-G1 硬件验收登记 |
-| 小程序（smart-ble）客户端按 PROVISIONING_V1.md 对齐后的微信工具与真机联调 | M2-G1 硬件验收登记 |
+| ~~小程序客户端真机联调~~ → 2026-09-05 已由 F-AND（Flutter 安卓真机）E14 轮全链闭环；U-AND / 桌面双线 / F-MAC 深链仍未验 | smart-ble 仓 windows-mobile 主矩阵（WIN-007 等） |
+| 配网真机闭环证据挂 smart-ble 旧基线 3638f66，当前 HEAD 无同等证据 | M2-G1 硬件验收（重刷重跑） |
 | 分区表从 3×1M 扩到 3×1536K（NimBLE + HTTP 组件使固件超 1M）；设备未烧录过，无迁移成本 | 已落地（无需后续） |
 | mock-device 经环回 peer 拿到 127.0.0.1 advertise（合法本机例外），真机场景不受影响 | 记录 |
 
@@ -101,4 +102,20 @@ OTA / Recovery；Production Security（Secure Boot / Flash Encryption /
 |---|---|---|---|
 | 1 | ✅ 本机回环免鉴权（2026-08-21 落地） | 单人测试时"控制台还要找 Key"是纯摩擦：能碰到 127.0.0.1 的本机进程本就可读 key 文件，回环鉴权无安全价值 | authMiddleware：回环请求带 `X-ControlHub-Local: 1`（CSRF 边界，浏览器恶意网页跨域发不出自定义头）即免 Key；无头回环退回 Bearer（curl/脚本向后兼容）；非回环维持 Bearer。前端三页（console/demo/api-test）已带头；控制台 Key 输入框仅在 401 时显示。实测五路径：回环+头✓ / 回环+Bearer✓ / 回环裸 401✓ / LAN无Key 401✓ / LAN+Key 200✓ |
 | 2 | 配网 V2：设备直连 + 主人批准 | 现行 QR→手机→BLE 转交 token 流程（PROVISIONING_V1）让手机承担"凭证搬运工"，单人测试时主人/配网者角色一人分饰、体验混乱 | 改为：BLE 只递 Wi-Fi+hub 地址 → 设备直连 ControlHub 自报 device_id+首次上电自生成密钥哈希 → 控制台弹"发现新设备，是否信任"→ 主人一键批准后签发 MQTT 凭据。信任决策回到主人手里，QR/token 环节消失。需改配对协议（V2）+ 设备状态机 + 控制台审批 UI，与小程序侧对齐后再动 |
-| 3 | internal/config 两个测试在 Windows 检出下失败 | `TestLoad_ValidOverride` / `TestLoad_CreatesAndAbsDataDir`：测试夹具 yaml 经 autocrlf 检出带 CRLF，解析报错；无改动基线同样失败，Linux CI 不受影响 | 测试夹具写入时规范化换行，或 .gitattributes 对该 fixture 强制 LF。与 check-governance.sh 的 CRLF 兼容（已修）同类 |
+| 3 | ✅ internal/config 两个 Windows 失败测试（2026-09-18 修复） | `TestLoad_ValidOverride` / `TestLoad_CreatesAndAbsDataDir` 在 Windows 检出下必失败；原登记猜因为 CRLF，实际根因是 **`filepath.Join` 的反斜杠路径进 YAML 双引号串被当转义前缀**（`\U` 要求 8 位十六进制续接 → 解析报 "did not find expected hexdecimal number"） | 夹具路径经 `filepath.ToSlash` 转正斜杠进 YAML（Go 路径 API 在 Windows 接受正斜杠）；真因已回写测试注释防再误记 |
+| 4 | ✅ 发布链可移植性三修（2026-09-18，随 v1.2.0） | build-releases.sh 由 macOS 单端编写，Windows/Linux 必炸三处：① VERSION 检出 CRLF 未剥 `\r` 污染 ldflags；② 版本自证步骤直接执行 darwin 二进制；③ `sed -i ''` 是 BSD 语法 | ①②脚本内 `tr -d ' \r\n'`（build-firmware.sh 同修）；②自证改为优先执行本机可跑产物、Linux CI 降级 `go version -m` 软校验；③改临时文件替换 |
+| 5 | config.api_key 是死配置 | `Config.APIKey` 加载后无任何消费者（实际用 apikey.Store 首启生成 + initial-api-key.txt 交付）；openapi 旧文案曾据此失实描述 | 低优先：删除该字段或接回显式配置语义，随下次 config 面改动一并处理 |
+
+## v1.2.0 收口版本（2026-09-18）
+
+一次性交付（不再小步零发）：观测性（日志双路落盘 + panic 防护 + 退出码 0/1/2）、
+config 测试 Windows 修复（真因更正为反斜杠 YAML 转义）、发布链可移植性三修
+（CRLF / 宿主自证 / sed -i）、openapi 版本与回环免鉴权对齐、官网三处脱节
+（版本角标 / 两处 SHA256SUMS 404）、文档事实对齐（led_manager 已验证、
+配网 E14 闭环、发布链从未跑过 tag 的事实）。**v1.2.0 是 release.yml
+tag 驱动发布的首次真实执行。**
+
+| 遗留 | 处置 |
+|---|---|
+| ControlHub Windows exe 曾一次进程退出（2026-08-20 联调期），当时无日志落盘无线索 | 观测已补齐；待复现归因，不主动追查 |
+| 官网 downloads 资产与 GitHub Release 的同步依赖 tag 发布流水线 | v1.2.0 起由 release.yml 自动产出，不再手工拷贝 |
