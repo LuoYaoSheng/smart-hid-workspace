@@ -18,6 +18,8 @@ import (
 	"strings"
 
 	"fyne.io/systray"
+
+	"smart-hid-controlhub/internal/logging"
 )
 
 //go:embed assets/icon.png
@@ -71,6 +73,7 @@ func onReady(c Controller, log *slog.Logger) {
 	mQuit := systray.AddMenuItem("退出", "Quit ControlHub")
 
 	go func() {
+		defer logging.Recover(log, "tray:menu-loop")
 		for {
 			select {
 			case <-mOpen.ClickedCh:

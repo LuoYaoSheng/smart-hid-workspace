@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"smart-hid-controlhub/internal/logging"
 )
 
 const (
@@ -87,6 +89,7 @@ func (s *Store) Verify(rawKey string) bool {
 	}
 	// 异步更新 last_used_at，不阻塞请求路径
 	go func() {
+		defer logging.Recover(s.log, "apikey:last-used")
 		_, _ = s.db.Exec(
 			`UPDATE api_keys SET last_used_at = ? WHERE key_id = ?`,
 			time.Now().Unix(), keyID,

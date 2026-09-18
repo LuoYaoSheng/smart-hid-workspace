@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"smart-hid-controlhub/internal/logging"
 )
 
 var wsUpgrader = websocket.Upgrader{
@@ -114,6 +116,7 @@ func (s *Server) handleRealtime(w http.ResponseWriter, r *http.Request) {
 
 	// 读循环：丢弃客户端一切上行（协议只下行），同时驱动 close/pong 检测
 	go func() {
+		defer logging.Recover(s.log, "realtime:read-pump")
 		conn.SetReadLimit(512)
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {

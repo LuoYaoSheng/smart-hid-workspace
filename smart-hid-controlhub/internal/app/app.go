@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -59,7 +60,18 @@ type App struct {
 	started   bool
 
 	initialKeyPath string // initial-api-key.txt：明文唯一交付点（托盘复制/轮换回写）
+	logSink        *logging.FileSink
 }
+
+// PanicError 表示 main goroutine 的 panic 已被捕获并落日志。
+// 进程应以退出码 2 结束（区别于普通启动错误 1），便于 Windows 事件
+// 查看器 / 服务管理器事后归因（1.2.0 观测性约定）。
+type PanicError struct {
+	Value any
+	Stack []byte
+}
+
+func (e *PanicError) Error() string { return fmt.Sprintf("panic: %v", e.Value) }
 
 // Build 加载配置并装配所有依赖（不启动服务）。
 func Build(cfgPath string) (*App, error) {
@@ -67,10 +79,22 @@ func Build(cfgPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	log := logging.NewLogger(cfg.LogLevel).With("component", "controlhub")
+	// 日志双路：stdout + 按日落盘（data/logs/）。落盘失败降级 stdout-only，
+	// 绝不因日志问题拒绝启动。
+	var sink *logging.FileSink
+	if s, serr := logging.NewFileSink(filepath.Join(cfg.DataDir, "logs")); serr != nil {
+		log := logging.NewLogger(cfg.LogLevel).With("component", "logging")
+		log.Error("log file sink unavailable; stdout-only", "err", serr)
+	} else {
+		sink = s
+	}
+	log := logging.NewLogger(cfg.LogLevel, sink).With("component", "controlhub")
 	log.Info("controlhub starting",
 		"version", buildinfo.Version, "commit", buildinfo.Commit,
 		"build_date", buildinfo.Date, "dirty", buildinfo.Dirty)
+	if sink != nil {
+		log.Info("log file sink active", "path", sink.Path(), "keep_days", 7)
+	}
 
 	// SQLite
 	dbPath := filepath.Join(cfg.DataDir, "controlhub.db")
@@ -177,10 +201,11 @@ func Build(cfgPath string) (*App, error) {
 		WithRealtimeHub(realtimeHub)
 
 	return &App{
-		cfg:        cfg,
-		log:        log,
-		store:      store,
-		keys:       keys,
+		cfg:            cfg,
+		log:            log,
+		logSink:        sink,
+		store:          store,
+		keys:           keys,
 		initialKeyPath: initialKeyPath,
 		settings:   setStore,
 		dm:         dm,
@@ -214,14 +239,20 @@ func (a *App) Start() error {
 		}
 		a.log.Info("controlhub mqtt client connected")
 
-		// 订阅 ack / status
+		// 订阅 ack / status。paho 在自有 goroutine 里调 handler，
+		// panic 防护在 handler 入口做（logging.Recover），不裸奔。
 		ackSub := "smart-hid/v1/devices/+/ack"
-		if t := a.hubClient.Subscribe(ackSub, 1, a.engine.HandleAck); t.Wait() && t.Error() != nil {
+		ackHandler := func(client pahomqtt.Client, msg pahomqtt.Message) {
+			defer logging.Recover(a.log, "mqtt:ack")
+			a.engine.HandleAck(client, msg)
+		}
+		if t := a.hubClient.Subscribe(ackSub, 1, ackHandler); t.Wait() && t.Error() != nil {
 			startErr = fmt.Errorf("subscribe ack: %w", t.Error())
 			return
 		}
 		statusSub := "smart-hid/v1/devices/+/status"
 		statusHandler := func(_ pahomqtt.Client, msg pahomqtt.Message) {
+			defer logging.Recover(a.log, "mqtt:status")
 			var st protocol.SmartHidStatus
 			if err := json.Unmarshal(msg.Payload(), &st); err != nil {
 				a.log.Warn("status unmarshal failed", "err", err, "payload", string(msg.Payload()))
@@ -239,9 +270,16 @@ func (a *App) Start() error {
 		}
 		a.log.Info("subscribed", "ack_topic", ackSub, "status_topic", statusSub)
 
-		// HTTP server（goroutine）
+		// HTTP server（goroutine）。panic 防护：捕获后落日志并 Stop——
+		// 服务器 goroutine 已死，进程存活只会是僵尸，宁可整体优雅退出。
 		a.ctx, a.cancel = context.WithCancel(context.Background())
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					a.log.Error("http server panic", "panic", r, "stack", string(debug.Stack()))
+					a.Stop()
+				}
+			}()
 			if err := a.apiSrv.Start(a.cfg.HTTP.Host, a.cfg.HTTP.Port); err != nil {
 				a.log.Error("http server error", "err", err)
 				a.Stop()
@@ -251,6 +289,12 @@ func (a *App) Start() error {
 		// Pairing 设备侧 listener（goroutine；config.pairing.enabled=false 时为 nil 跳过）
 		if a.pairingSrv != nil {
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						a.log.Error("pairing server panic", "panic", r, "stack", string(debug.Stack()))
+						a.Stop()
+					}
+				}()
 				if err := a.pairingSrv.Start(); err != nil {
 					a.log.Error("pairing server error", "err", err)
 					a.Stop()
@@ -300,6 +344,9 @@ func (a *App) Close() {
 	a.shutdown()
 	if a.store != nil {
 		_ = a.store.Close()
+	}
+	if a.logSink != nil {
+		_ = a.logSink.Close()
 	}
 }
 
@@ -404,12 +451,20 @@ func (a *App) SetLANMode(enabled bool) error {
 
 // Run headless 模式：Build + Start + Wait + Close。
 // 阻塞直到 SIGINT/SIGTERM。
-func Run(cfgPath string) error {
+// main goroutine panic 被捕获：落日志（含堆栈）后以 *PanicError 返回，
+// 调用方据此用退出码 2 区分崩溃与普通错误；deferred Close 仍会执行。
+func Run(cfgPath string) (err error) {
 	a, err := Build(cfgPath)
 	if err != nil {
 		return err
 	}
 	defer a.Close()
+	defer func() {
+		if r := recover(); r != nil {
+			a.log.Error("panic recovered (main goroutine)", "panic", r, "stack", string(debug.Stack()))
+			err = &PanicError{Value: r, Stack: debug.Stack()}
+		}
+	}()
 	if err := a.Start(); err != nil {
 		return err
 	}
@@ -421,12 +476,19 @@ func Run(cfgPath string) error {
 // 阻塞直到用户在托盘菜单选"退出"或收到 SIGINT/SIGTERM。
 //
 // 必须在主 goroutine 调用（systray 库限制：macOS NSApplication 必须主线程）。
-func RunWithTray(cfgPath string) error {
+// panic 语义与 Run 相同（*PanicError / 退出码 2）。
+func RunWithTray(cfgPath string) (err error) {
 	a, err := Build(cfgPath)
 	if err != nil {
 		return err
 	}
 	defer a.Close()
+	defer func() {
+		if r := recover(); r != nil {
+			a.log.Error("panic recovered (main goroutine, tray)", "panic", r, "stack", string(debug.Stack()))
+			err = &PanicError{Value: r, Stack: debug.Stack()}
+		}
+	}()
 	if err := a.Start(); err != nil {
 		return err
 	}
