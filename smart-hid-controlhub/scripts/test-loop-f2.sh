@@ -10,23 +10,111 @@
 #   [✓] MQTT 断开 release_all（连接断开 → lease 清空）
 #   [✓] Phase 1 基础回归（tap ENTER executed）
 #
-# 依赖：本机 Go、curl、jq。无需 ESP-IDF。
+# 依赖：本机 Go、curl；jq（缺失时下方自动用 python3 兜底子集）。无需 ESP-IDF。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKDIR="$(mktemp -d)"
+# MSYS/Git Bash 下 /tmp 是虚拟路径，Go 原生程序会把字面 "/tmp/..." 解析到
+# 当前盘根。data_dir 进配置文件前统一转混合盘符路径；Linux/macOS 无
+# cygpath 原样使用（与 check-governance.sh 同款兼容手法）。
+DATA_CFG="$WORKDIR/data"
+command -v cygpath >/dev/null && DATA_CFG="$(cygpath -m "$WORKDIR")/data"
 BIN_DIR="${ROOT}/bin"
 PASS=0
 FAIL=0
 FAIL_DESC=()
 
+# Git Bash 无 procps pkill（|| true 会静默吞掉 command-not-found 留下孤儿进程
+# 占住 17890/17891，毒化下一轮运行）：taskkill 按映像名兜底。
+# 注意：本脚本 go build -o 不带 .exe 后缀，Windows 映像名就是裸名
+# （tasklist 显示 "controlhub"），所以两个名字都要试。
+kill_by_pattern() { # $1=pkill 模式  $2...=候选 Windows 映像名
+  if command -v pkill >/dev/null; then
+    pkill -f "$1" 2>/dev/null || true
+  else
+    local n
+    for n in "${@:2}"; do
+      taskkill //F //IM "$n" >/dev/null 2>&1 || true
+    done
+  fi
+}
+
 cleanup() {
   echo "--- cleanup ---"
-  pkill -f 'controlhub.*-config' 2>/dev/null || true
-  pkill -f 'mock-device' 2>/dev/null || true
+  kill_by_pattern 'controlhub.*-config' controlhub.exe controlhub
+  kill_by_pattern 'mock-device' mock-device.exe mock-device
+  sleep 0.5  # taskkill 异步释放文件句柄，立刻 rm 会 Device busy
   rm -rf "$WORKDIR"
 }
 trap cleanup EXIT
+
+# jq 兜底：Git Bash / 精简机常无 jq（2026-09-18 Windows 本机即缺，
+# '.online // false' 永远落到 false → "device not online" 假失败）。
+# 用 python3 实现本脚本用到的语法子集：-r / --arg k v /
+# '.a.b' / '.a[0].b' / '.[$k]' / '// 字面量默认值'。
+# CI Linux 自带真 jq，此兜底不激活。
+# jq 兜底：Git Bash / 精简机常无 jq（2026-09-18 Windows 本机即缺，
+# '.online // false' 永远落到 false → "device not online" 假失败）。
+# 用 python3 实现本脚本用到的语法子集：-r / --arg k v /
+# '.a.b' / '.a[0].b' / '.[$k]' / '// 字面量默认值'。
+# 程序体存进变量经 -c 传入（不能用 `python3 - <<heredoc`：那样 stdin 被
+# 程序占用，json.load(sys.stdin) 永远读到 EOF）。CI Linux 自带真 jq，不激活。
+if ! command -v jq >/dev/null; then
+_JQ_SHIM="$(cat <<'JQPY'
+import json, re, sys
+args = sys.argv[1:]
+raw = False; named = {}; filt = None; i = 0
+while i < len(args):
+    a = args[i]
+    if a == '-r':
+        raw = True
+    elif a == '--arg':
+        named[args[i+1]] = args[i+2]; i += 2
+    elif filt is None:
+        filt = a
+    i += 1
+if filt is None:
+    sys.exit(2)
+default = None
+if '//' in filt:
+    filt, dflt = filt.split('//', 1)
+    filt, dflt = filt.strip(), dflt.strip()
+    if len(dflt) >= 2 and dflt[0] == dflt[-1] and dflt[0] in (chr(34), chr(39)):
+        dflt = dflt[1:-1]
+    default = dflt
+try:
+    cur = json.load(sys.stdin)
+except Exception:
+    cur = None
+ok = True
+# 语法子集：.name / .$var / ["key"] / [$var] / [0]（脚本不用单引号键，从简）
+tok = re.compile(r'\.(\$?[A-Za-z0-9_]+)|\[\s*(?:"([^"]*)"|\$([A-Za-z0-9_]+)|([0-9]+))\s*\]')
+for m in tok.finditer(filt):
+    if m.group(0).startswith('.'):
+        name = m.group(1)
+        if name.startswith('$'):
+            name = named.get(name[1:])
+        cur = cur.get(name) if isinstance(cur, dict) else None
+    elif m.group(3) is not None:          # [$var]
+        cur = cur.get(named.get(m.group(3))) if isinstance(cur, dict) else None
+    elif m.group(2) is not None:          # ["key"]
+        cur = cur.get(m.group(2)) if isinstance(cur, dict) else None
+    else:                                  # [0]
+        idx = int(m.group(4))
+        cur = cur[idx] if isinstance(cur, list) and idx < len(cur) else None
+    if cur is None:
+        ok = False; break
+val = cur if ok and cur is not None else default
+if val is None:
+    val = 'null'
+if isinstance(val, bool):
+    val = 'true' if val else 'false'
+print(val if (raw or not isinstance(val, str)) else json.dumps(val))
+JQPY
+)"
+jq() { python3 -c "$_JQ_SHIM" "$@"; }
+fi
 
 log()  { printf '\n\033[1;36m[F2]\033[0m %s\n' "$*"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; PASS=$((PASS+1)); }
@@ -53,6 +141,19 @@ ok "build controlhub + mock-device"
 
 # ---- 启动 ControlHub ----
 log "Starting ControlHub"
+# 端口预清：17890/17891 若被遗留实例占用，health 探活会打到旧实例上
+# "假通过"，而新实例静默 bind 失败退出（2026-09-18 Windows 联调期两次踩中）。
+port_busy() { netstat -ano 2>/dev/null | grep -E ":$1[[:space:]]" | grep -q LISTEN; }
+if port_busy 17890 || port_busy 17891; then
+  echo "WARN: 17890/17891 已被占用，尝试清理同名遗留实例..."
+  kill_by_pattern 'controlhub.*-config' controlhub.exe controlhub
+  sleep 1
+  if port_busy 17890 || port_busy 17891; then
+    echo "ERROR: 端口仍被占用（非本脚本实例？），请手动释放后重跑" >&2
+    netstat -ano | grep -E ":1789[01]" | grep LISTENING >&2 || true
+    exit 1
+  fi
+fi
 CFG="$WORKDIR/config.yaml"
 DATA="$WORKDIR/data"
 mkdir -p "$DATA"
@@ -66,7 +167,7 @@ mqtt:
   username: controlhub
   password: test-pass-f2
 api_key: ""
-data_dir: $DATA
+data_dir: "$DATA_CFG"
 log_level: info
 YAML
 "$BIN_DIR/controlhub" -config "$CFG" >"$WORKDIR/controlhub.log" 2>&1 &
@@ -74,8 +175,12 @@ YAML
 CH_PID=$!
 sleep 0.5
 
-# 等 health
+# 等 health；同时预检实例存活——health 可能被别的实例应答，
+# 但本实例若已退出（bind 失败等）必须立刻暴露，不能让探活假通过
 for i in $(seq 1 50); do
+  if ! kill -0 "$CH_PID" 2>/dev/null; then
+    fail "controlhub exited early"; cat "$WORKDIR/controlhub.log"; exit 1
+  fi
   if curl -sf http://127.0.0.1:17890/api/v1/health >/dev/null 2>&1; then break; fi
   sleep 0.1
 done
