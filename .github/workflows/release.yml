@@ -42,6 +42,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: smart-hid-controlhub/go.mod
+          cache: false
       - name: 构建 + 注入自证
         env:
           GOPROXY: https://proxy.golang.org,direct
@@ -74,6 +75,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: smart-hid-controlhub/go.mod
+          cache: false
       - name: 构建
         env:
           GOPROXY: https://proxy.golang.org,direct
@@ -114,12 +116,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: smart-hid-controlhub/go.mod
+          cache: false
 
       - name: 环境注入（idf + host gcc）
         run: |
           apt-get update -qq && apt-get install -y -qq gcc >/dev/null
           . $IDF_PATH/export.sh >/dev/null
-          echo "$IDF_PATH" >> "$GITHUB_ENV"  # 后续 step 仍需 IDF_PATH（export 不跨 step）
+          # env 文件命令必须 NAME=value 成对；裸值会被 runner 判 Invalid format
+          #（旧版此处 echo 裸 $IDF_PATH，首次真实运行即爆——v1.2.0 修正）
+          echo "IDF_PATH=$IDF_PATH" >> "$GITHUB_ENV"
 
       - name: 全量装配（固件 fullclean + manifest + SHA256，双平台二进制预构建）
         run: |
