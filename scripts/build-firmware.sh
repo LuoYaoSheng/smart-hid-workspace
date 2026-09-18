@@ -28,7 +28,7 @@ echo "==> idf.py set-target esp32s3 + build"
 idf.py set-target esp32s3 >/dev/null
 idf.py build
 
-VERSION="$(tr -d ' \n' < "$ROOT/VERSION" | sed 's/^v//')"
+VERSION="$(tr -d ' \r\n' < "$ROOT/VERSION" | sed 's/^v//')"  # \r：Windows CRLF 检出兼容
 mkdir -p "$OUT_DIR"
 cp build/bootloader/bootloader.bin            "$OUT_DIR/"
 cp build/partition_table/partition-table.bin  "$OUT_DIR/"

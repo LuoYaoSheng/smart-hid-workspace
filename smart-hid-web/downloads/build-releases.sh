@@ -26,7 +26,8 @@ cd "$ROOT"
 # 1) 前置检查：版本源 + dirty tree + 工具
 # ----------------------------------------------------------
 [ -f "$ROOT/VERSION" ] || { echo "ERROR: 缺少根 VERSION 文件（唯一版本事实源）" >&2; exit 1; }
-VERSION="$(tr -d ' \n' < "$ROOT/VERSION" | sed 's/^v//')"
+# \r：Windows autocrlf 检出下 VERSION 带 CRLF，不剥会污染 ldflags 与 manifest
+VERSION="$(tr -d ' \r\n' < "$ROOT/VERSION" | sed 's/^v//')"
 case "$VERSION" in
   [0-9]*.[0-9]*.[0-9]*) ;;
   *) echo "ERROR: VERSION 文件内容「${VERSION}」不是 x.y.z 形态" >&2; exit 1 ;;
@@ -66,11 +67,23 @@ mkdir -p "$DL/controlhub"
 GOOS=darwin  GOARCH=arm64 go build -ldflags "$LDF" -o "$DL/controlhub/controlhub-darwin-arm64"       ./smart-hid-controlhub/cmd/controlhub
 GOOS=windows GOARCH=amd64 go build -ldflags "$LDF" -o "$DL/controlhub/controlhub-windows-amd64.exe" ./smart-hid-controlhub/cmd/controlhub
 
-# 版本注入自证（本机可运行的平台）：防止 ldflags 拼写错误静默失效
-INJ="$( "$DL/controlhub/controlhub-darwin-arm64" -version )"
-echo "$INJ" | grep -q "version=$VERSION" || { echo "ERROR: 版本注入校验失败：$INJ" >&2; exit 1; }
-echo "$INJ" | grep -q "commit=$COMMIT"   || { echo "ERROR: commit 注入校验失败：$INJ" >&2; exit 1; }
-echo "   controlhub done（注入自证：${INJ}）"
+# 版本注入自证（防止 ldflags 拼写错误静默失效）：优先运行可在本机执行
+# 的产物（Windows 构建机跑 .exe，macOS 跑 darwin 二进制）。Linux CI 容器
+# 两者皆不可执行 → 降级软校验（go version -m 确认二进制含版本模块信息），
+# 严格校验由构建机本地跑过的那次保证。
+INJ=""
+for cand in "$DL/controlhub/controlhub-windows-amd64.exe" "$DL/controlhub/controlhub-darwin-arm64"; do
+  if OUT="$("$cand" -version 2>/dev/null)"; then INJ="$OUT"; break; fi
+done
+if [ -n "$INJ" ]; then
+  echo "$INJ" | grep -q "version=$VERSION" || { echo "ERROR: 版本注入校验失败：$INJ" >&2; exit 1; }
+  echo "$INJ" | grep -q "commit=$COMMIT"   || { echo "ERROR: commit 注入校验失败：$INJ" >&2; exit 1; }
+  echo "   controlhub done（注入自证：${INJ}）"
+else
+  echo "   ⚠ 本机无法执行任一产物（非 Windows/macOS），注入自证降级为软校验"
+  go version -m "$DL/controlhub/controlhub-windows-amd64.exe" >/dev/null 2>&1 \
+    || { echo "ERROR: go version -m 无法读取产物（构建损坏？）" >&2; exit 1; }
+fi
 
 # ----------------------------------------------------------
 # 3) 固件：fullclean 干净重建（绝不复制本机旧 build/）
@@ -193,9 +206,12 @@ Hardware NOT VERIFIED —— 未在任何真实 ESP32-S3 上烧录/验证
 
 USB HID 实效、BLE 配网真机链路、BIOS/登录界面均未做硬件验收（M2-G1 独立任务）。
 EOF_TMPL
-# 引用 heredoc 保护反引号/``` 围栏；占位符在此替换
-sed -i '' -e "s/@VERSION@/$VERSION/g" -e "s/@COMMIT@/$COMMIT/g" \
-  -e "s/@BUILD_TIME@/$BUILD_TIME/g" -e "s/@DIRTY@/$DIRTY/g" "$DL/README_RELEASE.md"
+# 引用 heredoc 保护反引号/``` 围栏；占位符在此替换。
+# 经临时文件替换而非 sed -i（BSD/GNU sed 的 -i 后缀语义互不兼容）。
+sed -e "s/@VERSION@/$VERSION/g" -e "s/@COMMIT@/$COMMIT/g" \
+  -e "s/@BUILD_TIME@/$BUILD_TIME/g" -e "s/@DIRTY@/$DIRTY/g" \
+  "$DL/README_RELEASE.md" > "$DL/README_RELEASE.md.tmp" \
+  && mv "$DL/README_RELEASE.md.tmp" "$DL/README_RELEASE.md"
 
 echo ""
 echo "完成。产物："
