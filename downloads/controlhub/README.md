@@ -1,6 +1,6 @@
 # Smart HID ControlHub 二进制
 
-Windows / macOS 预构建，开发构建 **v0.1.0-scaffold**（已 strip 符号，未签名）。
+Windows / macOS 预构建（已 strip 符号，未签名）。版本/commit/校验和见上级目录 `manifest.json`；`./controlhub-darwin-arm64 -version` 可查版本。
 
 | 文件 | 平台 | 大小 |
 |---|---|---|

@@ -7,7 +7,8 @@
 #   ./flash.sh /dev/cu.usbmodem1234   # macOS
 #
 # 前置：已安装 esptool（pip install esptool），ESP32-S3 通过 USB 连接。
-# 烧录地址来自 ESP-IDF build/flash_args，勿改。
+# 烧录地址来自 ESP-IDF partition table（smart-hid-firmware/partitions.csv），勿改：
+# otadata=0x11000 / factory app=0x20000（M1-G3 起 3×1536K 分区）。
 set -euo pipefail
 
 PORT="${1:-}"
@@ -30,8 +31,8 @@ esptool.py --chip esp32s3 --port "$PORT" --baud 460800 \
   write_flash \
   0x0     bootloader.bin \
   0x8000  partition-table.bin \
-  0xd000  ota_data_initial.bin \
-  0x10000 smart-hid-firmware.bin
+  0x11000 ota_data_initial.bin \
+  0x20000 smart-hid-firmware.bin
 
 echo ""
 echo "==> 烧录完成。设备将重启，状态 LED 亮起。"

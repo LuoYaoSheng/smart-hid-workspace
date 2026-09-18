@@ -100,10 +100,10 @@ chk_a1b2c3d4e5f6...      ← 记下后删除该文件</code></pre>
     <!-- provision -->
     <h2 id="provision">4. 配网配对</h2>
     <ol class="steps">
-      <li>手机打开 <strong>BLE Toolkit+</strong> 小程序，进入 <em>HID</em> Tab，点 <em>搜索 Smart HID</em>。</li>
-      <li>选到你的设备（广播名 <code>SHID-XXXXXX</code>），BLE 连接后读取 Device Info。</li>
-      <li>按引导配 <strong>Wi-Fi</strong>（设备需连入与 ControlHub 同一局域网）。</li>
-      <li>扫描 ControlHub 配对码（ControlHub Web 控制台或日志里的 QR），完成<strong>配对</strong>。</li>
+      <li>手机打开 <strong>BLE Toolkit+</strong> 小程序，在设备页扫描附近设备。</li>
+      <li>找到带 <strong>Smart HID</strong> 标识的设备（广播名 <code>SHID-XXXXXX</code>），点 <em>Smart HID 配网</em>；小程序会自动连接并读取 Device Info。</li>
+      <li>在同一页填写 <strong>Wi-Fi</strong> 和 ControlHub 地址，并扫描 ControlHub 控制台显示的一次性配对二维码。</li>
+      <li>点 <em>下发配置</em>，查看 Wi-Fi、ControlHub 配对、MQTT 与 Ready 状态。</li>
       <li>设备状态变为 <span class="pill ok">online · usb_hid_ready</span>。</li>
     </ol>
     <p>验证设备已上线：</p>

@@ -1,6 +1,6 @@
 # Smart HID 固件烧录包
 
-ESP32-S3 Smart HID 固件，开发构建 **v0.1.0-scaffold**。
+ESP32-S3 Smart HID 固件烧录包。版本/commit/校验和见上级目录 `manifest.json` 与 `firmware-SHA256SUMS`。
 
 ## 内容
 
@@ -8,8 +8,8 @@ ESP32-S3 Smart HID 固件，开发构建 **v0.1.0-scaffold**。
 |---|---|---|
 | `bootloader.bin` | `0x0` | ESP-IDF bootloader |
 | `partition-table.bin` | `0x8000` | 分区表 |
-| `ota_data_initial.bin` | `0xd000` | OTA 初始数据 |
-| `smart-hid-firmware.bin` | `0x10000` | 主固件（应用） |
+| `ota_data_initial.bin` | `0x11000` | OTA 初始数据 |
+| `smart-hid-firmware.bin` | `0x20000` | 主固件（应用） |
 | `flash.sh` | — | 一键烧录脚本 |
 | `SHA256SUMS` | — | 校验文件 |
 

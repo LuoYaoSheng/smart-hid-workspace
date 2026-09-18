@@ -2,23 +2,32 @@
 #
 # 事实源：本文件（ControlHub 私有 HTTP API）。
 # 协议公开定义（MQTT Command/Ack/Status）在 smart-ble/core/protocols/hid-command-schema.ts。
-# 依据：docs/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md §9-11
+# 依据：docs/archive/04_MQTT_AND_CONTROLHUB_API_PROTOCOL_V1.0.md §9-11
 #
 # 与实现对齐：internal/api/handlers.go（响应结构）+ internal/command/types.go（envelope 字段）。
 # 修改 API 时必须同步本文件，二者保持一致。
 #
 # Base URL: http://127.0.0.1:{port}/api/v1
-# Auth: 除 /health 外，控制 API 使用 Bearer API Key（默认只监听 127.0.0.1；LAN 需用户显式开启）。
+# Auth: Bearer API Key；本机回环可免 Key（X-ControlHub-Local 头，见 info.description；
+#       默认只监听 127.0.0.1；LAN 需用户显式开启）。
 
 openapi: 3.0.3
 info:
   title: Smart HID ControlHub HTTP API
-  version: 1.0.0
+  version: 1.2.0
   description: |
     ControlHub 本地控制 HTTP API。实时控制本地优先，不经过云。
 
-    **鉴权**：除 `GET /health` 外，所有端点要求 `Authorization: Bearer <api_key>`。
-    API Key 在 `config.yaml` 的 `http.api_key` 指定；留空则启动时随机生成并打印到日志（前缀 `chk_`）。
+    **鉴权**（除 `GET /health` 外，所有端点需通过以下任一方式）：
+
+    - `Authorization: Bearer <api_key>`——标准方式，LAN 访问必须使用。
+    - **本机回环免 Key**（2026-08-21 起）：来自 127.0.0.1/::1 的请求携带
+      `X-ControlHub-Local: 1` 头即免 Key。该头是 CSRF 防线——浏览器恶意网页
+      跨域发不出自定义头；回环裸请求（无头）仍退回 Bearer 校验（curl/脚本向后兼容）。
+      依据：能碰到回环的本机进程本就可读 key 文件，回环鉴权无安全价值。
+
+    API Key 首次启动自动生成（前缀 `chk_`），明文唯一交付点是数据目录下的
+    `initial-api-key.txt`（0600，**不进日志**）；托盘可复制/轮换，轮换后文件自动回写。
 
 servers:
   - url: http://127.0.0.1:{port}/api/v1
@@ -112,17 +121,47 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: not_found, message: "device not found" }
         '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      summary: 注销设备（撤销其 MQTT 凭据）
+      description: |
+        删除设备记录并撤销配对时签发的 MQTT 凭据——设备此后无法再连接本
+        ControlHub（已建立的连接保持到下次重连被拒）。该设备命令历史与
+        配对会话记录一并删除，不可恢复。
+      tags: [device]
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+      responses:
+        '200':
+          description: 已删除。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: string, description: 被删除的 device_id }
+        '404':
+          description: 设备未知。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: not_found, message: "device not found" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
   # -------------------------------------------------------------------------
   /devices/{device_id}/commands:
     post:
       summary: 下发 HID Command（同步返回终态 ACK 或 202）
       description: |
-        闭环：校验 → 设备就绪检查 → publish MQTT command(QoS1, retain=false) → 等终态 ACK（超时=TTL）。
+        闭环：校验（envelope + payload 深度）→ 幂等登记 → 设备就绪检查 →
+        持久化 → publish MQTT command(QoS1, retain=false) → 等终态 ACK（超时=TTL）。
         - TTL 内收到 executed/duplicate → 200
         - TTL 内收到 rejected → 422；expired → 504
         - TTL 内无终态 → 202（命令已发出）
         - 校验失败 / 设备未就绪 / publish 失败 → 400
+        request_id 是服务端幂等键（M1-G2）：
+        - 并发同 request_id 同命令 → join，等待同一结果（仅 publish 一次）
+        - 同 request_id 不同命令 → 409 request_id_conflict
+        - 终态后重放同 request_id 同命令 → 直接返回既有终态结果（不再执行 HID）
       tags: [command]
       parameters:
         - $ref: '#/components/parameters/DeviceIdPath'
@@ -194,7 +233,7 @@ paths:
               schema: { $ref: '#/components/schemas/AcceptedNotAcked' }
         '400':
           description: |
-            校验失败（envelope 字段非法 / 设备未就绪 / publish 失败）或请求体非法 JSON。
+            校验失败（envelope 字段非法 / payload 深度校验失败 / 设备未就绪 / publish 失败）或请求体非法 JSON。
             区分：validation_failed 含 fields 数组；bad_request 为 JSON 解析或路径不一致问题。
           content:
             application/json:
@@ -215,10 +254,24 @@ paths:
                     error: validation_failed
                     device_id: HID-00000001
                     fields: [{ field: device, message: "device HID-00000001 offline" }]
+                validation_payload_wheel:
+                  summary: payload 深度校验失败（wheel 超出 int8 范围）
+                  value:
+                    error: validation_failed
+                    device_id: HID-00000001
+                    fields: [{ field: payload.delta, message: "delta must be in [-127, 127], got 200" }]
                 bad_json:
                   summary: 请求体非合法 JSON
                   value: { error: bad_request, message: "invalid json: unexpected end of JSON input" }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: |
+            request_id 幂等冲突：该 request_id 已被一个不同内容的命令使用
+            （在途或已终态）。复用 request_id 必须保证命令内容一致。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: request_id_conflict, message: "request_id already used with a different command" }
         '422':
           description: 设备拒绝执行（如 target_boot_id 不匹配 → STALE_DEVICE_SESSION）。
           content:
@@ -230,6 +283,12 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SmartHidAck' }
+        '500':
+          description: 内部错误（如命令持久化失败）。命令不会被 publish。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: internal, message: "command engine error" }
 
   # -------------------------------------------------------------------------
   /commands/{request_id}:
@@ -371,6 +430,48 @@ paths:
               schema: { $ref: '#/components/schemas/PairingSession' }
         '404':
           description: 不存在
+    delete:
+      summary: 取消待配对会话（QR 立即作废）
+      description: 仅 pending 会话可取消；已消费/已过期返回 404。设备并发消费与取消互斥（CAS），不存在双态。
+      tags: [Pairing]
+      security: [{ BearerApiKey: [] }]
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 已取消。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cancelled: { type: boolean }
+        '404':
+          description: 不存在或不在 pending 态。
+
+  /pairing/sessions/{token}/qr.png:
+    get:
+      summary: 配对二维码 PNG（256px）
+      description: 渲染 shid://pair deep-link。仅 pending 会话可取；host 按请求解析（与创建一致）。
+      tags: [Pairing]
+      security: [{ BearerApiKey: [] }]
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: PNG 图像。
+          content:
+            image/png: {}
+        '404':
+          description: 不存在或不在 pending 态。
+        '503':
+          description: 无法解析设备可达地址。
 
   # =========================================================================
 # =========================================================================
@@ -379,7 +480,10 @@ components:
     BearerApiKey:
       type: http
       scheme: bearer
-      description: ControlHub 本地 API Key（可重新生成）。
+      description: >-
+        ControlHub 本地 API Key（可轮换）。本机回环请求可免 Key：
+        携带 X-ControlHub-Local: 1 头即等效通过（CSRF 防线 = 自定义头
+        浏览器跨域发不出；回环裸请求仍走 Bearer）。
 
   parameters:
     DeviceIdPath:
@@ -394,7 +498,7 @@ components:
 
   responses:
     Unauthorized:
-      description: 缺少或无效的 Bearer API Key。
+      description: 鉴权失败（回环需 X-ControlHub-Local 头或 Bearer；LAN 必须 Bearer）。
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -623,7 +727,11 @@ components:
       description: '配对成功响应，含一次性 MQTT 凭据。'
       required: [mqtt_host, mqtt_port, mqtt_username, mqtt_credential, device_id]
       properties:
-        mqtt_host: { type: string }
+        mqtt_host:
+          type: string
+          description: >-
+            ControlHub advertised broker 地址（按设备请求路径解析或 mqtt.advertise_host；
+            绝不为环回/通配——设备据此连接，M1-G3 网络模型）。
         mqtt_port: { type: integer }
         mqtt_username: { type: string, description: 'dev_<device_id>' }
         mqtt_credential: { type: string, description: '一次性明文密码（32 字节随机）' }
