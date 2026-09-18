@@ -65,7 +65,10 @@ func TestLoad_NonexistentPath(t *testing.T) {
 func TestLoad_ValidOverride(t *testing.T) {
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "data") // Load 会 MkdirAll
-	path := writeYAML(t, "http:\n  host: 0.0.0.0\n  port: 8080\nmqtt:\n  bind_host: 10.0.0.1\n  port: 1883\n  username: u\n  password: p\napi_key: my-secret-key\ndata_dir: \""+dataDir+"\"\nlog_level: debug\n")
+	// Windows 下 filepath.Join 产生反斜杠，YAML 双引号串里 "\" 是转义前缀
+	// （\U 等要求十六进制续接 → 解析失败）。统一转正斜杠：YAML 合法，
+	// Go 的路径 API 在 Windows 同样接受正斜杠。曾长期误记为 CRLF 问题。
+	path := writeYAML(t, "http:\n  host: 0.0.0.0\n  port: 8080\nmqtt:\n  bind_host: 10.0.0.1\n  port: 1883\n  username: u\n  password: p\napi_key: my-secret-key\ndata_dir: \""+filepath.ToSlash(dataDir)+"\"\nlog_level: debug\n")
 	c, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -201,7 +204,8 @@ func TestLoad_SanitizeFillsDefaults(t *testing.T) {
 func TestLoad_CreatesAndAbsDataDir(t *testing.T) {
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "nested", "deep", "data")
-	path := writeYAML(t, "data_dir: \""+dataDir+"\"\n")
+	// 反斜杠路径转正斜杠进 YAML（原因见 TestLoad_ValidOverride 注释）
+	path := writeYAML(t, "data_dir: \""+filepath.ToSlash(dataDir)+"\"\n")
 	c, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
