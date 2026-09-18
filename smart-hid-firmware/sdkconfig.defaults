@@ -51,3 +51,10 @@ CONFIG_BT_NIMBLE_NVS_PERSIST=y
 CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=256
 CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
 CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
+
+# === 电源管理（2026-09-18，HARDENING_BACKLOG 电源二件套） ===
+# USB 总线挂起/恢复回调：宿主睡眠 → 跟随转 Wi-Fi modem sleep；
+# 宿主恢复 → 回 WIFI_PS_NONE。开启后 esp_tinyusb 强实现
+# tud_suspend_cb/tud_resume_cb 并经 event_cb 派发（应用不得再自定义）。
+CONFIG_TINYUSB_SUSPEND_CALLBACK=y
+CONFIG_TINYUSB_RESUME_CALLBACK=y

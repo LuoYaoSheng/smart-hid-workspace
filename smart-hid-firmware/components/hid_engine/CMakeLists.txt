@@ -6,4 +6,5 @@ idf_component_register(
         smart_hid_protocol
         esp_tinyusb
         esp_timer
+        esp_wifi
 )

@@ -35,6 +35,7 @@
 #include "tusb.h"
 #include "class/hid/hid_device.h"
 #include "tinyusb.h"
+#include "esp_wifi.h"
 
 static const char *TAG = "hid_engine";
 
@@ -127,6 +128,54 @@ static const uint8_t s_configuration_descriptor[] = {
                        /* poll interval */ 10),
 };
 
+/* USB 设备事件：ATTACHED/DETACHED/SUSPENDED/RESUMED。
+ *
+ * 挂起 = 宿主睡眠/待机（SOF 停 3ms 以上）。本设备 USB 总线供电、无电池，
+ * 深度省电收益极小，但「宿主睡了 HID 无处生效」是唯一不破坏网络可达语义
+ * 的场景化休眠窗口：挂起期间跟随转入 Wi-Fi modem sleep（收包延迟升高可
+ * 接受），恢复即回 WIFI_PS_NONE（MIN_MODEM 下 MQTT 周期断连的真机教训见
+ * wifi_manager.c，正常运行态必须 NONE）。回调在 TinyUSB 任务上下文执行，
+ * 仅做轻量 API 调用与置位。
+ *
+ * SUSPENDED/RESUMED 事件需 CONFIG_TINYUSB_SUSPEND_CALLBACK/RESUME_CALLBACK=y
+ * （esp_tinyusb 层强实现 tud_suspend_cb/tud_resume_cb 后经 event_cb 派发，
+ * 应用不得再自定义这两个钩子，否则链接期重定义）。 */
+static volatile bool s_usb_suspended = false;
+
+static void hid_usb_event_cb(tinyusb_event_t *event, void *arg) {
+    (void)arg;
+    switch (event->id) {
+        case TINYUSB_EVENT_ATTACHED:
+        case TINYUSB_EVENT_DETACHED:
+            break;  /* 挂载状态由 tud_mounted() 实时反映，无需跟踪 */
+#ifdef CONFIG_TINYUSB_SUSPEND_CALLBACK
+        case TINYUSB_EVENT_SUSPENDED: {
+            s_usb_suspended = true;
+            ESP_LOGI(TAG, "USB suspended (remote_wakeup_en=%d) -> wifi MIN_MODEM",
+                     (int)event->suspended.remote_wakeup);
+            esp_err_t rc = esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+            if (rc != ESP_OK) {  /* Wi-Fi 未启动（配网模式）等场景，非致命 */
+                ESP_LOGW(TAG, "set wifi MIN_MODEM: %s", esp_err_to_name(rc));
+            }
+            break;
+        }
+#endif
+#ifdef CONFIG_TINYUSB_RESUME_CALLBACK
+        case TINYUSB_EVENT_RESUMED: {
+            s_usb_suspended = false;
+            ESP_LOGI(TAG, "USB resumed -> wifi PS_NONE");
+            esp_err_t rc = esp_wifi_set_ps(WIFI_PS_NONE);
+            if (rc != ESP_OK) {
+                ESP_LOGW(TAG, "set wifi PS_NONE: %s", esp_err_to_name(rc));
+            }
+            break;
+        }
+#endif
+        default:
+            break;
+    }
+}
+
 /* tinyusb_driver 配置（esp_tinyusb 2.x：tinyusb_config_t）*/
 static const tinyusb_config_t s_tusb_drv_cfg = {
     .port                      = TINYUSB_PORT_FULL_SPEED_0,
@@ -139,6 +188,7 @@ static const tinyusb_config_t s_tusb_drv_cfg = {
     .descriptor.string        = (const char **)s_string_descriptors,
     .descriptor.string_count  = sizeof(s_string_descriptors) / sizeof(s_string_descriptors[0]),
     .descriptor.full_speed_config = s_configuration_descriptor,
+    .event_cb                 = hid_usb_event_cb,
 };
 
 
@@ -189,6 +239,29 @@ static uint32_t now_ms(void) {
 
 static void ms_sleep(uint32_t ms) {
     vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+/* ----------------------------------------------------------------
+ * Remote Wakeup：总线挂起（宿主睡眠/待机）期间来令，先唤醒宿主再投递。
+ * 配置描述符自始声明 TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP，本函数是其兑现。
+ * tud_remote_wakeup() 由栈门控：须挂起中且宿主已 SET_FEATURE 远程唤醒。
+ * ---------------------------------------------------------------- */
+static bool wake_host(void) {
+    if (!tud_remote_wakeup()) {
+        ESP_LOGW(TAG, "remote wakeup unavailable (host disabled or not suspended)");
+        return false;
+    }
+    uint32_t t0 = now_ms();
+    while (!tud_ready()) {
+        if (now_ms() - t0 > 500) {  /* Windows 唤醒+总线恢复余量 */
+            ESP_LOGW(TAG, "host did not resume within 500ms");
+            return false;
+        }
+        ms_sleep(5);
+    }
+    ESP_LOGI(TAG, "host resumed in %u ms (remote wakeup)",
+             (unsigned)(now_ms() - t0));
+    return true;
 }
 
 /* ----------------------------------------------------------------
@@ -544,6 +617,19 @@ int hid_engine_execute(const smart_hid_command_t *cmd, uint32_t *exec_ms_out) {
             return SMART_HID_CODE_OK;
         }
         return SMART_HID_CODE_REJECTED_BAD_REQUEST;
+    }
+
+    if (!hid_engine_is_ready() && !tud_mounted()) {
+        ESP_LOGW(TAG, "USB not mounted, reject");
+        return SMART_HID_CODE_REJECTED_HID_BUSY;
+    }
+
+    /* 总线挂起（宿主睡眠/待机）：先 remote wakeup 唤醒宿主再投递报告；
+     * 宿主未授权远程唤醒或未在窗口内恢复 → 本条命令拒绝（HID_BUSY）。 */
+    if (tud_mounted() && tud_suspended()) {
+        if (!wake_host()) {
+            return SMART_HID_CODE_REJECTED_HID_BUSY;
+        }
     }
 
     if (!hid_engine_is_ready()) {
