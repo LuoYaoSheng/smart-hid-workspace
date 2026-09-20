@@ -18,7 +18,8 @@ M1-G3 ✅ DONE（2026-08-20，网络/配网：bind/advertise 拆分 + NVS 运行
 M1-G4 ✅ DONE（2026-08-20，CI/Release：VERSION 唯一源 + 质量门 workflows + 干净发布链）
 v1.2.0 ✅ 收口（2026-09-18：观测性 + 发布链可移植性修复 + 官网/openapi 对齐；
         首次真实执行 tag 驱动发布。非 Gate，属交付卫生）
-M2-G1 IN PROGRESS（硬件验收：Windows 基本链路 + F-AND 配网全链已过；桌面线/BIOS/三 OS/soak 未完）
+M2-G1 IN PROGRESS（硬件验收：Windows 基本链路 + F-AND 配网全链 + macOS 键鼠通路
+        （2026-09-20 客观验证）已过；桌面线/BIOS/Linux 键鼠/soak 未完）
 ```
 
 ## M1 — Product Foundation Hardening（产品化加固）

@@ -9,7 +9,7 @@ authority: canonical
 > 与代码冲突时，以 main 分支代码为准，并立即更新本文。
 > 历史设计资料在 `docs/archive/`，不得作为当前实现依据。
 
-最后核对：2026-09-18，v1.2.0 收口版本（观测性 + 发布链首发 + 官网/openapi 对齐）。
+最后核对：2026-09-20，v1.2.0 + keymap 标点键（macOS 键鼠通路真机客观验证回写）。
 
 ## 产品定位
 
@@ -102,6 +102,7 @@ DO NOT IMPLEMENT：
 - USB Composite HID：键盘 + 鼠标（TinyUSB）
 - 板载状态 LED：led_manager（WS2812 / 单色 / 无，Kconfig 可配）轮询 Wi-Fi/MQTT/USB 映射闪烁语义 + EXECUTED 命令脉冲（2026-08-20 真机验证：五态与命令脉冲表现正确）
 - 命令引擎：串行队列（32）／ request_id 去重（256）／ TTL ／ target_boot_id ／ lease 超时释放 ／ release_all
+- 键位表：字母/数字/修饰/功能/编辑键 + **标点 12 键**（MINUS…SLASH/NONUSHASH，8ec564f）；hub ValidatePayload 白名单镜像同步（注意：标点键固件已合入 main 但**尚未烧录真机**）
 - Fail-safe：MQTT / Wi-Fi 断开 → 设备端自动释放全部按键（LWT 语义）
 - **NVS 运行时配置（M1-G3）**：runtime_config 组件（active/pending 双 namespace、schema_version 守卫、generation、factory clear 底层能力）；Kconfig 网络参数仅 `SMART_HID_DEV_STATIC_CONFIG=y` 时作 DEV fallback（默认 OFF，绝不覆盖 NVS）
 - **配网状态机（M1-G3）**：BOOT→LOAD_CONFIG→UNPROVISIONED/PROVISIONING/CONNECTING_WIFI/PAIRING/CONNECTING_MQTT/READY/RECOVERY/ERROR；candidate 先 stage pending、成功才 promote（配网失败不变砖）；崩溃边界（token 已消费后掉电）由 complete-pending boot promote 收敛
@@ -138,9 +139,16 @@ DO NOT IMPLEMENT：
 - ControlHub（Windows exe）联调中途发生过一次进程退出，原因未查（重启后正常）。
   1.2.0 已补齐观测手段（日志落盘 + panic 防护 + 退出码约定 0/1/2），
   待复现即可归因；此前 stdout 无落盘、goroutine 裸奔，无证据可查
+- **macOS 键鼠通路（2026-09-20，客观验证通过）**：DEV 静态配置真机
+  （WiFi → hub @ macOS en0，设备 USB 接 macOS 宿主），系统 API 测量：
+  mouse move 两轴方向位移一致（幅值经指针加速放大属预期）、CapsLock
+  双向翻转（60ms 短按被 macOS 去抖吞、≥250ms 生效）。键盘设置助理
+  三步走完、识别记录写入（ANSI）后不再重弹。发现并修复 keymap 标点
+  缺口（8ec564f；新固件未烧入设备）、CDC 串口节点被 macOS 闲置回收
+  致无法远程烧录等 7 项，明细见 [HARDENING_BACKLOG](HARDENING_BACKLOG.md)
 - 真机**未**验证：桌面双线（Electron/Tauri）Smart HID 配网全链（WIN-007）、
   uniapp 线（U-AND 连接失败未修）、macOS 配网向导 step3 及以后、
   BIOS / 登录界面（描述符无 boot protocol，已知缺口）、
-  macOS / Linux 键鼠通路、断连 soak、长时间稳定性
+  Linux 键鼠通路（macOS 已于 2026-09-20 通过）、断连 soak、长时间稳定性
 - 真机配网闭环证据（F-AND，2026-09-05 E14）挂在 smart-ble 仓旧基线
   （3638f66），当前 HEAD 无同等证据——M2-G1 续做时需重刷重跑

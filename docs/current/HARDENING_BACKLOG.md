@@ -107,6 +107,22 @@ OTA / Recovery；Production Security（Secure Boot / Flash Encryption /
 |---|---|---|---|
 | 1 | **status_manager 谎报在线**：未配网、无 WiFi、无 MQTT 的设备每 10s 打 `status published online=1` | smart-ble `verification/windows-plan-v1/20260918-WIN-007/device-reboot-boot.log`：boot 即 `state=unprovisioned → provisioning mode`，第 11s 起稳定 `online=1` 心跳日志 | 双层缺陷：`status_manager.c:28` 心跳硬编码 `publish_now(true)`（`mqtt_manager_is_connected()` 现成未用）；`mqtt_manager.c:211` 未连接时静默 no-op 不返回失败，42 行日志无条件打 "published"。诊断误导实锤——本次验收即被引去排查了不存在的"幽灵 broker"。修法方向：online 取真值 + publish 失败可见 + 未配网期是否抑制心跳待定 |
 
+## 真机验收发现（2026-09-20，macOS 批次）
+
+> 环境：ESP32-S3（DEV 静态配置：WiFi → ControlHub @ macOS en0）+ macOS 26（darwin 25.5.0）。
+> 设备 USB 接 macOS 宿主，命令经 WiFi/MQTT 下发，全部系统 API 客观测量（CGEvent /
+> flagsState / hidutil / IORegistry），无肉眼判断。
+
+| # | 发现 | 证据 | 说明 |
+|---|---|---|---|
+| 1 | **macOS 鼠标通路已验证** | move dx=200/dy=-100 → CGEvent 光标 (-192,1305)→(347.8,1123.5)，两轴方向一致；幅值 ~2.7x 为 macOS 指针加速曲线所致（相对移动过系统弹道学，非 1:1 属预期） | M2-G1「macOS 键鼠通路」鼠标半项可勾 |
+| 2 | **macOS 键盘通路已验证** | CapsLock：false → tap(250ms) → true → tap → false（CGEventSource.flagsState 双向翻转 + 状态恢复） | 同上键盘半项可勾 |
+| 3 | **macOS 对第三方键盘 CapsLock 短按防误触去抖**：60ms hold 被系统吞掉（设备端报 executed 无任何报错），≥250ms 生效 | 同轮实测：60ms 无效、250ms 立即翻转；Windows 40ms 默认无此现象 | 面向 macOS 的调用方 CapsLock 建议 hold_ms≥250（web demo 默认 40 偏短）；文档/默认值候补 |
+| 4 | **keymap 无标点键（产品缺口，已修未烧）** | macOS 键盘设置助理第三步要求按「右 Shift 左侧键」（ANSI=SLASH/0x38），固件发不出 → 向导卡死 | 已修（8ec564f）：固件+hub 镜像补 12 标点键 + 单测；**新固件尚未烧入设备**（窗口见 #6） |
+| 5 | **未识别键盘发按键会重拉键盘设置助理**；识别记录写入后结束助理进程即不再复现 | 第一轮 Z+ENTER 未走完（ENTER 疑落「取消」），后续 CapsLock 测试触发重弹；`com.apple.keyboardtype.plist` 写入 40(ANSI) 后 killall + 两轮按键无复现 | 新键盘首弹属正常（每机器一次）；产品化方向：HID 描述符 **bCountryCode**（如 33=US）可能让系统免问，且应**注册唯一 USB VID/PID**——现用 Espressif 默认 0x303A:0x4001，与他家 TinyUSB 设备共享会串扰键盘类型记录 → 归属 M2-G3 或随下个固件小版本 |
+| 6 | **macOS 回收闲置 CDC 串口节点**：`/dev/cu.usbmodem*` 闲置后消失（USB 设备级 / HID / MQTT 均不受影响，IORegistry RegistryID 不变），idf.py flash 因端口消失失败 | 本轮烧录实测：设备在线 usb_hid_ready=true 但串口没了 | 恢复需物理重插/RST——**远程无法自救**；无 OTA（M2-G2）时是远程运维硬伤，OTA 优先级的又一佐证 |
+| 7 | ControlHub 裸启动不读 cwd 的 config.yaml（须 `-config` 显式传入） | 首启用内置默认（MQTT 凭据随机）→ DEV 固件认证失败，日志仅 `hub auth failed (bad pass)` | 低优先改进：启动日志打印配置来源（file:xx / built-in defaults）；BUILD.md 补一句 |
+
 ## 体验与工程提案（2026-08-21 登记，待评审排期）
 
 | # | 提案 | 背景 | 说明 |
