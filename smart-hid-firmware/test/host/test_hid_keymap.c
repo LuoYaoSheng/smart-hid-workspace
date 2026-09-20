@@ -70,6 +70,15 @@ void test_hid_keymap_all(void) {
     CHECK(hid_keymap_lookup("DIGIT1", &usage, &is_mod) && usage == 0x1E, "DIGIT1 → 0x1E");
     CHECK(hid_keymap_lookup("DIGIT9", &usage, &is_mod) && usage == 0x26, "DIGIT9 → 0x26");
 
+    /* --- 标点（usage 0x2D-0x38 + 0x64；macOS 布局识别探针 = SLASH） --- */
+    CHECK(hid_keymap_lookup("SLASH", &usage, &is_mod) && usage == 0x38 && !is_mod, "SLASH → 0x38");
+    CHECK(hid_keymap_lookup("MINUS", &usage, &is_mod) && usage == 0x2D, "MINUS → 0x2D");
+    CHECK(hid_keymap_lookup("BACKSLASH", &usage, &is_mod) && usage == 0x31, "BACKSLASH → 0x31");
+    CHECK(hid_keymap_lookup("GRAVE", &usage, &is_mod) && usage == 0x35, "GRAVE → 0x35");
+    CHECK(hid_keymap_lookup("PERIOD", &usage, &is_mod) && usage == 0x37, "PERIOD → 0x37");
+    CHECK(hid_keymap_lookup("NONUSHASH", &usage, &is_mod) && usage == 0x64, "NONUSHASH → 0x64");
+    CHECK(hid_keymap_lookup("slash", &usage, &is_mod) && usage == 0x38, "小写 slash");
+
     /* --- 大小写不敏感（strcasecmp） --- */
     CHECK(hid_keymap_lookup("enter", &usage, &is_mod) && usage == 0x28, "小写 enter");
     CHECK(hid_keymap_lookup("Enter", &usage, &is_mod) && usage == 0x28, "混合 Enter");

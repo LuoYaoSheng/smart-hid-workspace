@@ -71,6 +71,21 @@ static const keymap_entry_t kTable[] = {
     { "DIGIT4", 0x21, false }, { "DIGIT5", 0x22, false },
     { "DIGIT6", 0x23, false }, { "DIGIT7", 0x24, false },
     { "DIGIT8", 0x25, false }, { "DIGIT9", 0x26, false },
+
+    /* 标点（US ANSI，usage 0x2D-0x38 + 0x64）—— 键盘布局识别探针（macOS
+     * 键盘设置助理要求按"右 Shift 左侧键"= SLASH）与常规输入均需要 */
+    { "MINUS",     0x2D, false },  /* - _ */
+    { "EQUAL",     0x2E, false },  /* = + */
+    { "LBRACKET",  0x2F, false },  /* [ { */
+    { "RBRACKET",  0x30, false },  /* ] } */
+    { "BACKSLASH", 0x31, false },  /* \ | */
+    { "SEMICOLON", 0x33, false },  /* ; : */
+    { "QUOTE",     0x34, false },  /* ' " */
+    { "GRAVE",     0x35, false },  /* ` ~ */
+    { "COMMA",     0x36, false },  /* , < */
+    { "PERIOD",    0x37, false },  /* . > */
+    { "SLASH",     0x38, false },  /* / ? */
+    { "NONUSHASH", 0x64, false },  /* ISO 非 US #/~（布局识别用） */
 };
 
 bool hid_keymap_lookup(const char *name, uint8_t *usage_out, bool *is_modifier_out) {

@@ -43,6 +43,8 @@ func init() {
 		"INSERT", "INS", "HOME", "PAGEUP", "PGUP", "DELETE", "DEL", "END", "PAGEDOWN", "PGDN",
 		"DIGIT0", "DIGIT1", "DIGIT2", "DIGIT3", "DIGIT4",
 		"DIGIT5", "DIGIT6", "DIGIT7", "DIGIT8", "DIGIT9",
+		"MINUS", "EQUAL", "LBRACKET", "RBRACKET", "BACKSLASH",
+		"SEMICOLON", "QUOTE", "GRAVE", "COMMA", "PERIOD", "SLASH", "NONUSHASH",
 	} {
 		knownKeys[k] = struct{}{}
 	}
